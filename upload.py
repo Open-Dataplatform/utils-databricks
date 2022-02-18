@@ -6,12 +6,22 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import StructType
 from pyspark.sql.utils import AnalysisException
 
+from pyspark.context import SparkContext
+from pyspark.sql.session import SparkSession
+sc = SparkContext.getOrCreate()
+spark = SparkSession(sc)
+
+spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+
 ISO_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'"
 
 
 def _get_from_and_to_data_coverage(df_spark, timestamp_column, time_resolution):
-    """Extract from and to months in df_spark.
-    Example: If df_spark has a week of data in January 2021, the output would be from_month = datetime(2021, 1, 1) and to_month = datetime(2021, 1, 31, 23, 59, 59)"""
+    """Extracts time interval that the input dataframe covers. For time_resolution='year' e.g., the interval will be in
+    full years. 1 second is subtracted from to_date so that the datetime is inside the year/month/day.
+    Example for time_resolution='month': If df_spark has a week of data in January 2021, the output would be
+                                         from_date = datetime(2021, 1, 1) and
+                                         to_date = datetime(2021, 1, 31, 23, 59, 59)"""
     from_date, to_date = df_spark \
                              .withColumn('_datetime', F.to_timestamp(timestamp_column, ISO_FORMAT)) \
                              .select(F.min('_datetime'), F.max('_datetime')) \
