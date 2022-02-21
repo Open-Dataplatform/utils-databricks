@@ -4,6 +4,7 @@ def _get_environment(dbutils):
     try:
         env = dbutils.widgets.get('environment')
     except:
+        print("Environment is not set. Defaulting to test.")
         env = 'test'
 
     return env
@@ -39,6 +40,8 @@ def _construct_config_and_mount(dbutils):
     dbutils.fs.mount(source=f"abfss://{container}@{account_name}.dfs.core.windows.net/",
                      mount_point=mount_point,
                      extra_configs=configs)
+
+    print(f"Mount point ({mount_point = }) is ready")
 
 
 def mount(dbutils):
