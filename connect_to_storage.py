@@ -49,6 +49,6 @@ def mount(dbutils):
         pass
     else:
         print(f"Mounting {mount_point}...")
-        _construct_config_and_mount(mount_point, env)
+        _construct_config_and_mount(dbutils)
 
     return mount_point
