@@ -1,10 +1,13 @@
 # utils-databricks
 
 
-## Create wheel file
-You need to install wheel and setuptools
-`python -m pip install -U pip wheel setuptools`
+## Releasing a new version
 
-To create a wheel file, run
-`python setup.py bdist_wheel`
-and you will find the .whl file in dist/.
+For releasing new versions, see [this thorough guide]](https://py-pkgs.org/07-releasing-versioning.html).
+
+In simple terms, follow these steps:
+1. Merge your bug fixes or new features into the main branch (multiple commits to main since the last version are okay).
+2. Bump up the version in pyproject.toml
+3. Add and commit pyproject.toml
+4. Add a tag with `git tag -a <new_version_number> -m "<message>"`
+5. Push the tag with `git push origin --tags`.
