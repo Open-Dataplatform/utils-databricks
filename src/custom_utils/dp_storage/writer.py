@@ -6,13 +6,6 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import StructType
 from pyspark.sql.utils import AnalysisException
 
-from pyspark.context import SparkContext
-from pyspark.sql.session import SparkSession
-sc = SparkContext.getOrCreate()
-spark = SparkSession(sc)
-
-spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
-
 ISO_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'"
 
 
@@ -76,7 +69,7 @@ def add_time_columns(df_spark, timestamp_column, time_resolution):
     return df_spark
 
 
-def read_all_egress_data(egress_identifier, mount_point, schema: StructType):
+def read_all_egress_data(egress_identifier, mount_point, spark, schema: StructType):
     """Returns all egress data."""
     try:
         df_egress = spark.read.parquet(f'{mount_point}/{egress_identifier}')
@@ -86,9 +79,9 @@ def read_all_egress_data(egress_identifier, mount_point, schema: StructType):
     return df_egress
 
 
-def read_egress_data_that_overlaps_with_new_data(egress_identifier, df_egress_new, timestamp_column, time_resolution, mount_point):
+def read_egress_data_that_overlaps_with_new_data(egress_identifier, df_egress_new, timestamp_column, time_resolution, mount_point, spark):
     """Returns the egress data that overlaps (in years, months, or days depending on time_resolution) with the input df_egress_new."""
-    df_egress_existing = read_all_egress_data(egress_identifier, mount_point, df_egress_new.schema)
+    df_egress_existing = read_all_egress_data(egress_identifier, mount_point, spark, df_egress_new.schema)
 
     # TODO: Make this more efficient by selecting on year, month, day columns
     from_date, to_date = _get_from_and_to_data_coverage(df_egress_new, timestamp_column, time_resolution)
@@ -101,9 +94,9 @@ def read_egress_data_that_overlaps_with_new_data(egress_identifier, df_egress_ne
     return df_egress_existing
 
 
-def _merge_with_existing_egress(df_egress_new, egress_identifier, timestamp_column, index_columns, time_resolution, mount_point):
+def _merge_with_existing_egress(df_egress_new, egress_identifier, timestamp_column, index_columns, time_resolution, mount_point, spark):
     """Reads existing Egress data and merges it with df_egress_new."""
-    df_egress_existing = read_egress_data_that_overlaps_with_new_data(egress_identifier, df_egress_new, timestamp_column, time_resolution, mount_point)
+    df_egress_existing = read_egress_data_that_overlaps_with_new_data(egress_identifier, df_egress_new, timestamp_column, time_resolution, mount_point, spark)
 
     df_merged = (
         df_egress_new
@@ -128,12 +121,16 @@ def _get_partition_name_list(time_resolution):
     return partition_list
 
 
-def merge_and_upload_egress_data(df_egress_new, egress_identifier, timestamp_column, index_columns, time_resolution, mount_point):
+def merge_and_upload_egress_data(df_egress_new, egress_identifier, timestamp_column, index_columns, time_resolution, mount_point, spark):
     """Reads existing Egress data, merges with the new data and uploads."""
     df_egress_new = add_time_columns(df_egress_new, timestamp_column, time_resolution)
-    df_egress = _merge_with_existing_egress(df_egress_new, egress_identifier, timestamp_column, index_columns, time_resolution, mount_point)
+    df_egress = _merge_with_existing_egress(df_egress_new, egress_identifier, timestamp_column, index_columns, time_resolution, mount_point, spark)
 
     partition_name_list = _get_partition_name_list(time_resolution)
+
+    # Make sure that only folders with new data get overwritten
+    spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+
     df_egress \
         .write \
         .partitionBy(partition_name_list) \
