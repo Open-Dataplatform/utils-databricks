@@ -1,5 +1,7 @@
 """Code to mount storage to the Databricks file system"""
 
+from datetime import datetime
+
 def _get_environment(dbutils):
     try:
         env = dbutils.widgets.get('environment')
@@ -10,18 +12,41 @@ def _get_environment(dbutils):
     return env
 
 
-def _get_mount_point(dbutils):
-    env = _get_environment(dbutils)
-    mount_point = f"/mnt/dp_{env}"
+def _generate_test_mount_point():
+    return "/mnt/dp_test"
+
+
+def _generate_prod_mount_point(dbutils):
+    timestamp = datetime.strftime(datetime.utcnow(), '%y%m%dT%H%M%SZ')
+    notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+    notebook_name = notebook_path.split('/')[-1]
+
+    mount_point = f"/mnt/dp_prod_{timestamp}_{notebook_name}"
 
     return mount_point
+
+
+def _get_mount_point(dbutils):
+    env = _get_environment(dbutils)
+
+    if env == 'test':
+        mount_point = _generate_test_mount_point()
+    elif env == 'prod':
+        mount_point = _generate_prod_mount_point(dbutils)
+    else:
+        raise Exception(f'The environment {env =  } is invalid. It should be either "test" or "prod"!')
+
+    return mount_point
+
+
+def _is_test_mounted(dbutils):
+    mount_point = _generate_test_mount_point()
+    return any(mount.mountPoint == mount_point for mount in dbutils.fs.mounts())
 
 
 def _construct_config_and_mount(dbutils):
     """Checks environment, reads service principals, and mounts."""
     env = _get_environment(dbutils)
-    if env not in ['test', 'prod']:
-        raise Exception(f'The environment {env =  } is invalid. It should be either "test" or "prod"!')
 
     tenant_id = dbutils.secrets.get(scope="shared-key-vault",key="tenantid")
     client_id = dbutils.secrets.get(scope="shared-key-vault",key=f"clientid-databricks-sp-{env}")
@@ -42,16 +67,26 @@ def _construct_config_and_mount(dbutils):
                      extra_configs=configs)
 
     print(f"Mount point ({mount_point = }) is ready")
+    return mount_point
 
 
 def mount(dbutils):
     """Mounts storage to /mnt/dp_{env} if it is not yet mounted. Returns mount point."""
-    mount_point = _get_mount_point(dbutils)
+    env = _get_environment(dbutils)
 
-    if any(mount.mountPoint == mount_point for mount in dbutils.fs.mounts()):
-        pass
+    # If running in test environment and test storage is already mounted.
+    if (env == 'test') and _is_test_mounted(dbutils):
+        mount_point = _generate_test_mount_point()
     else:
-        print(f"Mounting {mount_point}...")
-        _construct_config_and_mount(dbutils)
+        print("Mounting...")
+        mount_point = _construct_config_and_mount(dbutils)
 
     return mount_point
+
+
+def unmount_if_prod(mount_point, dbutils):
+    """If running in prod, unmount storage"""
+    env = _get_environment(dbutils)
+
+    if env == 'prod':
+        dbutils.fs.unmount(mount_point)
