@@ -51,7 +51,7 @@ def add_time_columns(df_spark, timestamp_column, time_resolution):
             df_spark
             .withColumn('_datetime', F.to_timestamp(timestamp_column, ISO_FORMAT))
             .withColumn('year', F.year("_datetime"))
-            .withColumn('month', F.month("_datetime"))
+            .withColumn('month', F.lpad(F.month("_datetime"), 2, '0'))
             .drop('_datetime')
         )
     elif time_resolution == 'day':
@@ -59,8 +59,8 @@ def add_time_columns(df_spark, timestamp_column, time_resolution):
             df_spark
             .withColumn('_datetime', F.to_timestamp(timestamp_column, ISO_FORMAT))
             .withColumn('year', F.year("_datetime"))
-            .withColumn('month', F.month("_datetime"))
-            .withColumn('day', F.day("_datetime"))
+            .withColumn('month', F.lpad(F.month("_datetime"), 2, '0'))
+            .withColumn('day', F.lpad(F.dayofmonth("_datetime"), 2, '0'))
             .drop('_datetime')
         )
     else:
