@@ -1,6 +1,6 @@
 """Code to mount storage to the Databricks file system"""
 
-import uuid
+from datetime import datetime
 
 def _get_environment(dbutils):
     try:
@@ -16,8 +16,14 @@ def _generate_test_mount_point():
     return "/mnt/dp_test"
 
 
-def _generate_prod_mount_point():
-    return f"/mnt/dp_prod_{uuid.uuid4()}"
+def _generate_prod_mount_point(dbutils):
+    timestamp = datetime.strftime(datetime.utcnow(), '%y%m%dT%H%M%SZ')
+    notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+    notebook_name = notebook_path.split('/')[-1]
+
+    mount_point = f"/mnt/dp_prod_{timestamp}_{notebook_name}"
+
+    return mount_point
 
 
 def _get_mount_point(dbutils):
@@ -26,7 +32,7 @@ def _get_mount_point(dbutils):
     if env == 'test':
         mount_point = _generate_test_mount_point()
     elif env == 'prod':
-        mount_point = _generate_prod_mount_point()
+        mount_point = _generate_prod_mount_point(dbutils)
     else:
         raise Exception(f'The environment {env =  } is invalid. It should be either "test" or "prod"!')
 
