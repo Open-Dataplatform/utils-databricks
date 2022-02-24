@@ -70,3 +70,11 @@ def mount(dbutils):
         mount_point = _construct_config_and_mount(dbutils)
 
     return mount_point
+
+
+def unmount_if_prod(mount_point, dbutils):
+    """If running in prod, unmount storage"""
+    env = _get_environment(dbutils)
+
+    if env == 'prod':
+        dbutils.fs.unmount(mount_point)
