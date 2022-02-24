@@ -33,6 +33,11 @@ def _get_mount_point(dbutils):
     return mount_point
 
 
+def _is_test_mounted(dbutils):
+    mount_point = _generate_test_mount_point()
+    return any(mount.mountPoint == mount_point for mount in dbutils.fs.mounts())
+
+
 def _construct_config_and_mount(dbutils):
     """Checks environment, reads service principals, and mounts."""
     env = _get_environment(dbutils)
@@ -61,9 +66,10 @@ def _construct_config_and_mount(dbutils):
 
 def mount(dbutils):
     """Mounts storage to /mnt/dp_{env} if it is not yet mounted. Returns mount point."""
+    env = _get_environment(dbutils)
 
     # If running in test environment and test storage is already mounted.
-    if any(mount.mountPoint == _generate_test_mount_point() for mount in dbutils.fs.mounts()):
+    if (env == 'test') and _is_test_mounted(dbutils):
         pass
     else:
         print("Mounting...")
