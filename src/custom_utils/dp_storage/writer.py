@@ -51,7 +51,7 @@ def add_time_columns(df_spark, timestamp_column, time_resolution):
             df_spark
             .withColumn('_datetime', F.to_timestamp(timestamp_column, ISO_FORMAT))
             .withColumn('year', F.year("_datetime"))
-            .withColumn('month', F.month("_datetime"))
+            .withColumn('month', F.lpad(F.month("_datetime"), 2, '0'))
             .drop('_datetime')
         )
     elif time_resolution == 'day':
@@ -59,8 +59,8 @@ def add_time_columns(df_spark, timestamp_column, time_resolution):
             df_spark
             .withColumn('_datetime', F.to_timestamp(timestamp_column, ISO_FORMAT))
             .withColumn('year', F.year("_datetime"))
-            .withColumn('month', F.month("_datetime"))
-            .withColumn('day', F.day("_datetime"))
+            .withColumn('month', F.lpad(F.month("_datetime"), 2, '0'))
+            .withColumn('day', F.lpad(F.dayofmonth("_datetime"), 2, '0'))
             .drop('_datetime')
         )
     else:
@@ -132,6 +132,21 @@ def merge_and_upload_egress_data(df_egress_new, egress_identifier, timestamp_col
     spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
 
     df_egress \
+        .write \
+        .partitionBy(partition_name_list) \
+        .parquet(f'{mount_point}/{egress_identifier}', mode='overwrite')
+
+
+def upload_and_overwrite(df_egress_new, egress_identifier, timestamp_column, time_resolution, mount_point, spark):
+    """Reads existing Egress data, merges with the new data and uploads."""
+    df_egress_new = add_time_columns(df_egress_new, timestamp_column, time_resolution)
+
+    partition_name_list = _get_partition_name_list(time_resolution)
+
+    # Set mode to overwrite everything
+    spark.conf.set("spark.sql.sources.partitionOverwriteMode", "static")
+
+    df_egress_new \
         .write \
         .partitionBy(partition_name_list) \
         .parquet(f'{mount_point}/{egress_identifier}', mode='overwrite')
