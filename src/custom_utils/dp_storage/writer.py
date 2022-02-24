@@ -135,3 +135,18 @@ def merge_and_upload_egress_data(df_egress_new, egress_identifier, timestamp_col
         .write \
         .partitionBy(partition_name_list) \
         .parquet(f'{mount_point}/{egress_identifier}', mode='overwrite')
+
+
+def upload_and_overwrite(df_egress_new, egress_identifier, timestamp_column, time_resolution, mount_point, spark):
+    """Reads existing Egress data, merges with the new data and uploads."""
+    df_egress_new = add_time_columns(df_egress_new, timestamp_column, time_resolution)
+
+    partition_name_list = _get_partition_name_list(time_resolution)
+
+    # Set mode to overwrite everything
+    spark.conf.set("spark.sql.sources.partitionOverwriteMode", "static")
+
+    df_egress_new \
+        .write \
+        .partitionBy(partition_name_list) \
+        .parquet(f'{mount_point}/{egress_identifier}', mode='overwrite')
