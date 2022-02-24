@@ -76,7 +76,7 @@ def mount(dbutils):
 
     # If running in test environment and test storage is already mounted.
     if (env == 'test') and _is_test_mounted(dbutils):
-        pass
+        mount_point = _generate_test_mount_point()
     else:
         print("Mounting...")
         mount_point = _construct_config_and_mount(dbutils)
