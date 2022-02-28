@@ -65,7 +65,7 @@ def get_covered_partition_paths(df, time_resolution):
     return partition_paths
 
 
-def read_egress_data_that_overlaps_with_new_data(egress_identifier, df_egress_new, time_resolution, mount_point, spark):
+def read_egress_data_that_overlaps_with_new_data(df_egress_new, egress_identifier, time_resolution, mount_point, spark):
     """Reads data from all the partitions in egress that overlap with df_egress_new."""
 
     partition_paths = get_covered_partition_paths(df_egress_new, time_resolution)
@@ -82,7 +82,7 @@ def read_egress_data_that_overlaps_with_new_data(egress_identifier, df_egress_ne
 
 def _merge_with_existing_egress(df_egress_new, egress_identifier, index_columns, time_resolution, mount_point, spark):
     """Reads existing Egress data and merges it with df_egress_new."""
-    df_egress_existing = read_egress_data_that_overlaps_with_new_data(egress_identifier, df_egress_new, time_resolution, mount_point, spark)
+    df_egress_existing = read_egress_data_that_overlaps_with_new_data(df_egress_new, egress_identifier, time_resolution, mount_point, spark)
 
     df_merged = (
         df_egress_new
