@@ -126,7 +126,7 @@ def read_egress_data_that_overlaps_with_new_data_2(egress_identifier, df_egress_
     base_path = f'{mount_point}/{egress_identifier}'
     egress_paths = [f'{base_path}/{path}' for path in partition_paths]
     try:
-        df_egress = spark.read.option("basePath", base_path).parquet(egress_paths)
+        df_egress = spark.read.option("basePath", base_path).parquet(*egress_paths)
     except AnalysisException:  # Path does not exist
         # Define empty dataframe with same schema as Ingress data
         df_egress = spark.createDataFrame((), df_egress_new.schema)
