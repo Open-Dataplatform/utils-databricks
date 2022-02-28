@@ -94,6 +94,44 @@ def read_egress_data_that_overlaps_with_new_data(egress_identifier, df_egress_ne
     return df_egress_existing
 
 
+def get_covered_partitions(df, time_resolution):
+    """Looks up all combinations of year, month, day (depending on time_resolution) in df.
+    Returns list with rows (pyspark.sql.types.Row)."""
+    partition_names = _get_partition_name_list(time_resolution)
+
+    df_covered_partitions = df.select(*partition_names).distinct()
+    partition_list = list(df_covered_partitions.toLocalIterator())
+    return partition_list
+
+
+def get_covered_partition_paths(df, time_resolution):
+    """Generates relative paths to all partitons covered in df.
+    """
+    partition_list = get_covered_partitions(df, time_resolution)
+
+    if time_resolution == 'year':
+        partition_paths = [f'year={p.year}' for p in partition_list]
+    elif time_resolution == 'month':
+        partition_paths = [f'year={p.year}/month={p.month}' for p in partition_list]
+    elif time_resolution == 'day':
+        partition_paths = [f'year={p.year}/month={p.month}/day={p.day}' for p in partition_list]
+    return partition_paths
+
+
+def read_egress_data_that_overlaps_with_new_data_2(egress_identifier, df_egress_new, time_resolution, mount_point, spark):
+    """Reads data from all the partitions in egress that overlap with df_egress_new."""
+
+    partition_paths = get_covered_partition_paths(df_egress_new, time_resolution)
+
+    base_path = f'{mount_point}/{egress_identifier}'
+    egress_paths = [f'{base_path}/{path}' for path in partition_paths]
+    try:
+        df_egress = spark.read.option("basePath", base_path).parquet(egress_paths)
+    except AnalysisException:  # Path does not exist
+        # Define empty dataframe with same schema as Ingress data
+        df_egress = spark.createDataFrame((), df_egress_new.schema)
+    return df_egress
+
 def _merge_with_existing_egress(df_egress_new, egress_identifier, timestamp_column, index_columns, time_resolution, mount_point, spark):
     """Reads existing Egress data and merges it with df_egress_new."""
     df_egress_existing = read_egress_data_that_overlaps_with_new_data(egress_identifier, df_egress_new, timestamp_column, time_resolution, mount_point, spark)
