@@ -112,9 +112,9 @@ def get_covered_partition_paths(df, time_resolution):
     if time_resolution == 'year':
         partition_paths = [f'year={p.year}' for p in partition_list]
     elif time_resolution == 'month':
-        partition_paths = [f'year={p.year}/month={p.month}' for p in partition_list]
+        partition_paths = [f'year={p.year}/month={p.month:02}' for p in partition_list]
     elif time_resolution == 'day':
-        partition_paths = [f'year={p.year}/month={p.month}/day={p.day}' for p in partition_list]
+        partition_paths = [f'year={p.year}/month={p.month:02}/day={p.day:02}' for p in partition_list]
     return partition_paths
 
 
