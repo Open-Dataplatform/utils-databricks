@@ -7,9 +7,9 @@ For releasing new versions, see [this thorough guide](https://py-pkgs.org/07-rel
 
 In simple terms, follow these steps:
 1. Merge your bug fixes or new features into the main branch (multiple commits to main since the last version are okay).
-2. Bump up the version in setup.cfg
-3. Add and commit setup.cfg
-4. Add a tag with `git tag -a <new_version_number> -m "<message>"`
+2. Bump up the version in setup.cfg.
+3. Add, commit, and push the changes.
+4. Add a tag with `git tag -a <new_version_number> -m "<message>"`. (An example could be `git tag -a v1.1.0 -m "Version 1.1.0"`).
 5. Push the tag with `git push origin --tags`.
 
 Make sure to go through the next section after updating the version.
