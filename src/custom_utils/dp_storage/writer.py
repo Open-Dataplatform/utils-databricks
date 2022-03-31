@@ -35,6 +35,16 @@ def add_time_columns(df_spark, timestamp_column, time_resolution):
             .withColumn('day', F.lpad(F.dayofmonth("_datetime"), 2, '0'))
             .drop('_datetime')
         )
+    elif time_resolution == 'hour':
+        df_spark = (
+            df_spark
+            .withColumn('_datetime', F.to_timestamp(timestamp_column, ISO_FORMAT))
+            .withColumn('year', F.year("_datetime"))
+            .withColumn('month', F.lpad(F.month("_datetime"), 2, '0'))
+            .withColumn('day', F.lpad(F.dayofmonth("_datetime"), 2, '0'))
+            .withColumn('hour', F.lpad(F.hour("_datetime"), 2, '0'))
+            .drop('_datetime')
+        )
     else:
         raise Exception(f"The input {time_resolution = } is invalid!")
 
@@ -62,6 +72,9 @@ def get_covered_partition_paths(df, time_resolution):
         partition_paths = [f'year={p.year}/month={int(p.month):02}' for p in partition_list]
     elif time_resolution == 'day':
         partition_paths = [f'year={p.year}/month={int(p.month):02}/day={int(p.day):02}' for p in partition_list]
+    elif time_resolution == 'hour':
+        partition_paths = [f'year={p.year}/month={int(p.month):02}/day={int(p.day):02}/hour={int(p.hour):02}' for p in partition_list]
+
     return partition_paths
 
 
@@ -101,6 +114,8 @@ def _get_partition_name_list(time_resolution):
         partition_list = ['year', 'month']
     elif time_resolution == 'day':
         partition_list = ['year', 'month', 'day']
+    elif time_resolution == 'hour':
+        partition_list = ['year', 'month', 'day', 'hour']
     else:
         raise Exception(f"The input {time_resolution = } is invalid!")
 
