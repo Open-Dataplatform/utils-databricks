@@ -6,22 +6,24 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import StructType
 from pyspark.sql.utils import AnalysisException
 
-ISO_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'"
 
+def add_time_columns(df_spark, timestamp_column, time_resolution, time_format="yyyy-MM-dd'T'HH:mm:ss'Z'"):
+    """Adds year, month, and day columns depending on the input time_resolution.
 
-def add_time_columns(df_spark, timestamp_column, time_resolution):
-    """Adds year, month, and day columns depending on the input time_resolution."""
+    :param time_format: Time format in the case where timestamp_column is of type string. If it is a timestamp,
+    time_format is redundant and can be any string.
+    """
     if time_resolution == 'year':
         df_spark = (
             df_spark
-            .withColumn('_datetime', F.to_timestamp(timestamp_column, ISO_FORMAT))
+            .withColumn('_datetime', F.to_timestamp(timestamp_column, time_format))
             .withColumn('year', F.year("_datetime"))
             .drop('_datetime')
         )
     elif time_resolution == 'month':
         df_spark = (
             df_spark
-            .withColumn('_datetime', F.to_timestamp(timestamp_column, ISO_FORMAT))
+            .withColumn('_datetime', F.to_timestamp(timestamp_column, time_format))
             .withColumn('year', F.year("_datetime"))
             .withColumn('month', F.lpad(F.month("_datetime"), 2, '0'))
             .drop('_datetime')
@@ -29,7 +31,7 @@ def add_time_columns(df_spark, timestamp_column, time_resolution):
     elif time_resolution == 'day':
         df_spark = (
             df_spark
-            .withColumn('_datetime', F.to_timestamp(timestamp_column, ISO_FORMAT))
+            .withColumn('_datetime', F.to_timestamp(timestamp_column, time_format))
             .withColumn('year', F.year("_datetime"))
             .withColumn('month', F.lpad(F.month("_datetime"), 2, '0'))
             .withColumn('day', F.lpad(F.dayofmonth("_datetime"), 2, '0'))
@@ -38,7 +40,7 @@ def add_time_columns(df_spark, timestamp_column, time_resolution):
     elif time_resolution == 'hour':
         df_spark = (
             df_spark
-            .withColumn('_datetime', F.to_timestamp(timestamp_column, ISO_FORMAT))
+            .withColumn('_datetime', F.to_timestamp(timestamp_column, time_format))
             .withColumn('year', F.year("_datetime"))
             .withColumn('month', F.lpad(F.month("_datetime"), 2, '0'))
             .withColumn('day', F.lpad(F.dayofmonth("_datetime"), 2, '0'))
@@ -122,10 +124,11 @@ def _get_partition_name_list(time_resolution):
     return partition_list
 
 
-def merge_and_upload(df_egress_new, egress_identifier, timestamp_column, index_columns, time_resolution, mount_point, spark):
+def merge_and_upload(df_egress_new, egress_identifier, timestamp_column, index_columns, time_resolution, mount_point,
+        spark, time_format="yyyy-MM-dd'T'HH:mm:ss'Z'"):
     """Reads existing Egress data, merges with the new data and uploads."""
 
-    df_egress_new = add_time_columns(df_egress_new, timestamp_column, time_resolution)
+    df_egress_new = add_time_columns(df_egress_new, timestamp_column, time_resolution, time_format)
     df_egress = _merge_with_existing_egress(df_egress_new, egress_identifier, index_columns, time_resolution, mount_point, spark)
 
     partition_name_list = _get_partition_name_list(time_resolution)
@@ -139,9 +142,10 @@ def merge_and_upload(df_egress_new, egress_identifier, timestamp_column, index_c
         .parquet(f'{mount_point}/{egress_identifier}', mode='overwrite')
 
 
-def upload_and_overwrite(df_egress_new, egress_identifier, timestamp_column, time_resolution, mount_point, spark):
+def upload_and_overwrite(df_egress_new, egress_identifier, timestamp_column, time_resolution, mount_point, spark,
+        time_format="yyyy-MM-dd'T'HH:mm:ss'Z'"):
     """Reads existing Egress data, merges with the new data and uploads."""
-    df_egress_new = add_time_columns(df_egress_new, timestamp_column, time_resolution)
+    df_egress_new = add_time_columns(df_egress_new, timestamp_column, time_resolution, time_format)
 
     partition_name_list = _get_partition_name_list(time_resolution)
 
