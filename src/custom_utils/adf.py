@@ -18,6 +18,12 @@ def get_config_parameter(dbutils, parameter_name):
     return json.loads(json_str_config)
 
 
+def initialize_config_widgets(dbutils):
+    """Initializes text widgets for source and destination configs."""
+    dbutils.widgets.text('SourceConfig', DEFAULT_CONFIG_PARAMETER)
+    dbutils.widgets.text('DestinationConfig', DEFAULT_CONFIG_PARAMETER)
+
+
 def get_source_config(dbutils):
     """Gets the source configuration and verifies it."""
     source_config = get_config_parameter(dbutils, 'SourceConfig')
@@ -44,7 +50,7 @@ def _verify_config(config):
     :param config:  An example could be {"<dataset_identifier>": {"type":"adsl","dataset":"<dataset_name>","container":"landing"}}
     """
     if 'EXAMPLE' in config:
-        raise Exception('Your are using an example config. If developing in Databricks, fill out the text widget.')
+        raise Exception("It looks like you are using an example configuration. If developing in Databricks, manually fill out the source and destination configuration widgets and run the notebook again.")
 
     for dataset_config in config.values():
         _verify_dataset_config(dataset_config)
@@ -61,4 +67,4 @@ def _verify_dataset_config(dataset_config):
         assert 'dataset' in dataset_config
         assert 'container' in dataset_config
     else:
-        raise Exception(f'{dataset_config["type"]} is not a valid type.')
+        raise Exception(f'{dataset_config["type"]} is not a valid dataset type.')
