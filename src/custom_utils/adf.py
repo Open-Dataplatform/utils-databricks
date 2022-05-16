@@ -3,7 +3,7 @@
 import json
 
 
-DEFAULT_CONFIG_PARAMETER = '{"EXAMPLE":{"type":"adsl","dataset":"EXAMPLE","container":"EXAMPLE"}}'
+DEFAULT_CONFIG_PARAMETER = '{"EXAMPLE":{"type":"adls","dataset":"EXAMPLE","container":"EXAMPLE"}}'
 
 
 def get_parameter(dbutils, parameter_name, default_value=''):
@@ -47,7 +47,7 @@ def get_destination_config(dbutils):
 def _verify_config(config):
     """Runs through the dataset configs in a source/destination config and checks the schema.
 
-    :param config:  An example could be {"<dataset_identifier>": {"type":"adsl","dataset":"<dataset_name>","container":"landing"}}
+    :param config:  An example could be {"<dataset_identifier>": {"type":"adls","dataset":"<dataset_name>","container":"landing"}}
     """
     if 'EXAMPLE' in config:
         raise Exception("It looks like you are using an example configuration. If developing in Databricks, manually fill out the source and destination configuration widgets and run the notebook again.")
@@ -59,11 +59,11 @@ def _verify_config(config):
 def _verify_dataset_config(dataset_config):
     """Check the schema of a dataset config
 
-    :param dataset_config:  An example could be {"type":"adsl","dataset":"<dataset_name>","container":"landing"}
+    :param dataset_config:  An example could be {"type":"adls","dataset":"<dataset_name>","container":"landing"}
     """
     assert 'type' in dataset_config
 
-    if dataset_config['type'] == 'adsl':
+    if dataset_config['type'] == 'adls':
         assert 'dataset' in dataset_config
         assert 'container' in dataset_config
     else:
