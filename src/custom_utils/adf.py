@@ -3,9 +3,6 @@
 import json
 
 
-DEFAULT_CONFIG_PARAMETER = '{"EXAMPLE":{"type":"adls","dataset":"EXAMPLE","container":"EXAMPLE"}}'
-
-
 def get_parameter(dbutils, parameter_name, default_value=''):
     """Creates a text widget and gets parameter value. If ran from ADF, the value is taken from there."""
     dbutils.widgets.text(parameter_name, default_value)
@@ -25,12 +22,6 @@ def get_config_parameter(dbutils, parameter_name, default_config: dict):
     assert config == default_config, f'The config from ADF is not the same as the default config for {parameter_name}. From ADF: {config}. Expected: {default_config}'
 
     return config
-
-
-def initialize_config_widgets(dbutils):
-    """Initializes text widgets for source and destination configs."""
-    dbutils.widgets.text('SourceConfig', DEFAULT_CONFIG_PARAMETER)
-    dbutils.widgets.text('DestinationConfig', DEFAULT_CONFIG_PARAMETER)
 
 
 def get_source_config(dbutils, default_source_config):
