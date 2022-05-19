@@ -73,16 +73,16 @@ def _do_mount(dbutils, storage_account: str, container: str):
 def mount(dbutils, source_config, destination_config):
     """Mounts storage to /mnt/dp_{env} if it is not yet mounted. Returns mount point."""
 
-    containers_to_mount = list_containers_to_mount(source_config, destination_config)
-    mount_point_dict = mount_all_containers(dbutils, containers_to_mount)
+    containers_to_mount = _list_containers_to_mount(source_config, destination_config)
+    mount_point_dict = _mount_all_containers(dbutils, containers_to_mount)
 
-    source_config = add_mount_points_to_config(source_config, mount_point_dict)
-    destination_config = add_mount_points_to_config(destination_config, mount_point_dict)
+    source_config = _add_mount_points_to_config(source_config, mount_point_dict)
+    destination_config = _add_mount_points_to_config(destination_config, mount_point_dict)
 
     return source_config, destination_config
 
 
-def add_mount_points_to_config(config, mount_point_dict):
+def _add_mount_points_to_config(config, mount_point_dict):
     """Adds mount points to every dataset config in the input config"""
     for data_config in config.values():
         if data_config['type'] == 'adls':
@@ -91,7 +91,7 @@ def add_mount_points_to_config(config, mount_point_dict):
     return config
 
 
-def mount_all_containers(dbutils, containers_to_mount):
+def _mount_all_containers(dbutils, containers_to_mount):
     """"Mounts all containers and returns dictionary with {(<account>, <container>): <mount_points>, ...}."""
     env = _get_environment(dbutils)
 
@@ -110,7 +110,7 @@ def mount_all_containers(dbutils, containers_to_mount):
     return mount_points
 
 
-def list_containers_to_mount(source_config, destination_config):
+def _list_containers_to_mount(source_config, destination_config):
     """Returns list with ("<account>", "<container>") for all combinations of accounts/containers in the input configs."""
 
     containers_to_mount = set()
@@ -123,7 +123,7 @@ def list_containers_to_mount(source_config, destination_config):
     return list(containers_to_mount)
 
 
-def list_mount_points(source_config, destination_config):
+def _list_mount_points(source_config, destination_config):
     """Returns list with all mount points."""
 
     containers_to_mount = set()
@@ -141,6 +141,6 @@ def unmount_if_prod(dbutils, source_config, destination_config):
     env = _get_environment(dbutils)
 
     if env == 'prod':
-        mount_points = list_mount_points(source_config, destination_config)
+        mount_points = _list_mount_points(source_config, destination_config)
         for mount_point in mount_points:
             dbutils.fs.unmount(mount_point)
