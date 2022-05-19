@@ -85,7 +85,7 @@ def mount(dbutils, source_config, destination_config):
 
 def add_mount_points_to_config(config, mount_point_dict):
     """Adds mount points to every dataset config in the input config"""
-    for data_config in combined_configs.values():
+    for data_config in config.values():
         if data_config['type'] == 'adls':
             data_config['mount_point'] = mount_point_dict[(data_config['account'], data_config['container'])]
 
