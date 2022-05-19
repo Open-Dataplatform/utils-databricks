@@ -17,23 +17,23 @@ def _generate_test_mount_point(storage_account):
     return f'/mnt/{storage_account}test'
 
 
-def _generate_prod_mount_point(dbutils, data_config):
+def _generate_prod_mount_point(dbutils, storage_account: str):
     timestamp = datetime.strftime(datetime.utcnow(), '%y%m%dT%H%M%SZ')
     notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
     notebook_name = notebook_path.split('/')[-1]
 
-    mount_point = f'/mnt/{data_config["account"]}prod_{timestamp}_{notebook_name}'
+    mount_point = f'/mnt/{storage_account}prod_{timestamp}_{notebook_name}'
 
     return mount_point
 
 
-def _get_mount_point(dbutils, data_config):
+def _get_mount_point(dbutils, storage_account: str):
     env = _get_environment(dbutils)
 
     if env == 'test':
-        mount_point = _generate_test_mount_point(data_config)
+        mount_point = _generate_test_mount_point(storage_account)
     elif env == 'prod':
-        mount_point = _generate_prod_mount_point(dbutils, data_config)
+        mount_point = _generate_prod_mount_point(dbutils, storage_account)
     else:
         raise Exception(f'The environment {env =  } is invalid. It should be either "test" or "prod"!')
 
@@ -45,15 +45,14 @@ def _is_test_mounted(dbutils, storage_account):
     return any(mount.mountPoint == mount_point for mount in dbutils.fs.mounts())
 
 
-def _do_mount(dbutils, data_config):
+def _do_mount(dbutils, storage_account: str, container: str):
     """Checks environment, reads service principals, and mounts."""
     env = _get_environment(dbutils)
 
     tenant_id = dbutils.secrets.get(scope="shared-key-vault",key="tenantid")
     client_id = dbutils.secrets.get(scope="shared-key-vault",key=f"clientid-databricks-sp-{env}")
     client_secret =  dbutils.secrets.get(scope="shared-key-vault",key=f"pwd-databricks-sp-{env}")
-    account_name = f'{data_config["account"]}{env}'
-    container = data_config["container"]
+    account_name = f'{storage_account}{env}'
 
     configs = {"fs.azure.account.auth.type": "OAuth",
                "fs.azure.account.oauth.provider.type": "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider",
@@ -61,7 +60,7 @@ def _do_mount(dbutils, data_config):
                "fs.azure.account.oauth2.client.secret": client_secret,
                "fs.azure.account.oauth2.client.endpoint": f"https://login.microsoftonline.com/{tenant_id}/oauth2/token"}
 
-    mount_point = _get_mount_point(dbutils, data_config)
+    mount_point = _get_mount_point(dbutils, storage_account)
 
     dbutils.fs.mount(source=f"abfss://{container}@{account_name}.dfs.core.windows.net/",
                      mount_point=mount_point,
