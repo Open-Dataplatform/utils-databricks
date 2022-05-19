@@ -19,8 +19,6 @@ def get_config_parameter(dbutils, parameter_name, default_config: dict):
     except:
         config = default_config
 
-    assert config == default_config, f'The config from ADF is not the same as the default config for {parameter_name}. From ADF: {config}. Expected: {default_config}'
-
     return config
 
 
