@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+
 def _get_environment(dbutils):
     try:
         env = dbutils.widgets.get('environment')
@@ -12,47 +13,47 @@ def _get_environment(dbutils):
     return env
 
 
-def _generate_test_mount_point():
-    return "/mnt/dp_test"
+def _generate_test_mount_point(storage_account):
+    return f'/mnt/{storage_account}test'
 
 
-def _generate_prod_mount_point(dbutils):
+def _generate_prod_mount_point(dbutils, data_config):
     timestamp = datetime.strftime(datetime.utcnow(), '%y%m%dT%H%M%SZ')
     notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
     notebook_name = notebook_path.split('/')[-1]
 
-    mount_point = f"/mnt/dp_prod_{timestamp}_{notebook_name}"
+    mount_point = f'/mnt/{data_config["account"]}prod_{timestamp}_{notebook_name}'
 
     return mount_point
 
 
-def _get_mount_point(dbutils):
+def _get_mount_point(dbutils, data_config):
     env = _get_environment(dbutils)
 
     if env == 'test':
-        mount_point = _generate_test_mount_point()
+        mount_point = _generate_test_mount_point(data_config)
     elif env == 'prod':
-        mount_point = _generate_prod_mount_point(dbutils)
+        mount_point = _generate_prod_mount_point(dbutils, data_config)
     else:
         raise Exception(f'The environment {env =  } is invalid. It should be either "test" or "prod"!')
 
     return mount_point
 
 
-def _is_test_mounted(dbutils):
-    mount_point = _generate_test_mount_point()
+def _is_test_mounted(dbutils, storage_account):
+    mount_point = _generate_test_mount_point(storage_account)
     return any(mount.mountPoint == mount_point for mount in dbutils.fs.mounts())
 
 
-def _construct_config_and_mount(dbutils):
+def _do_mount(dbutils, data_config):
     """Checks environment, reads service principals, and mounts."""
     env = _get_environment(dbutils)
 
     tenant_id = dbutils.secrets.get(scope="shared-key-vault",key="tenantid")
     client_id = dbutils.secrets.get(scope="shared-key-vault",key=f"clientid-databricks-sp-{env}")
     client_secret =  dbutils.secrets.get(scope="shared-key-vault",key=f"pwd-databricks-sp-{env}")
-    account_name = dbutils.secrets.get(scope="shared-key-vault",key=f"accountname-storage-{env}")
-    container = "datasets"
+    account_name = f'{data_config["account"]}{env}'
+    container = data_config["container"]
 
     configs = {"fs.azure.account.auth.type": "OAuth",
                "fs.azure.account.oauth.provider.type": "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider",
@@ -60,7 +61,7 @@ def _construct_config_and_mount(dbutils):
                "fs.azure.account.oauth2.client.secret": client_secret,
                "fs.azure.account.oauth2.client.endpoint": f"https://login.microsoftonline.com/{tenant_id}/oauth2/token"}
 
-    mount_point = _get_mount_point(dbutils)
+    mount_point = _get_mount_point(dbutils, data_config)
 
     dbutils.fs.mount(source=f"abfss://{container}@{account_name}.dfs.core.windows.net/",
                      mount_point=mount_point,
@@ -70,23 +71,77 @@ def _construct_config_and_mount(dbutils):
     return mount_point
 
 
-def mount(dbutils):
+def mount(dbutils, source_config, destination_config):
     """Mounts storage to /mnt/dp_{env} if it is not yet mounted. Returns mount point."""
+
+    containers_to_mount = list_containers_to_mount(source_config, destination_config)
+    mount_point_dict = mount_all_containers(dbutils, containers_to_mount)
+
+    source_config = add_mount_points_to_config(source_config, mount_point_dict)
+    destination_config = add_mount_points_to_config(destination_config, mount_point_dict)
+
+    return source_config, destination_config
+
+
+def add_mount_points_to_config(config, mount_point_dict):
+    """Adds mount points to every dataset config in the input config"""
+    for data_config in combined_configs.values():
+        if data_config['type'] == 'adls':
+            data_config['mount_point'] = mount_point_dict[(data_config['account'], data_config['container'])]
+
+    return config
+
+
+def mount_all_containers(dbutils, containers_to_mount):
+    """"Mounts all containers and returns dictionary with {(<account>, <container>): <mount_points>, ...}."""
     env = _get_environment(dbutils)
 
-    # If running in test environment and test storage is already mounted.
-    if (env == 'test') and _is_test_mounted(dbutils):
-        mount_point = _generate_test_mount_point()
-    else:
-        print("Mounting...")
-        mount_point = _construct_config_and_mount(dbutils)
+    mount_points = {}
+    for storage_account, container in containers_to_mount:
 
-    return mount_point
+        # If running in test environment and test storage is already mounted.
+        if (env == 'test') and _is_test_mounted(dbutils, storage_account):
+            mount_point = _generate_test_mount_point(storage_account)
+        else:
+            print("Mounting...")
+            mount_point = _do_mount(dbutils)
+
+        mount_points[(storage_account, container)] = mount_point
+
+    return mount_points
 
 
-def unmount_if_prod(mount_point, dbutils):
+def list_containers_to_mount(source_config, destination_config):
+    """Returns list with ("<account>", "<container>") for all combinations of accounts/containers in the input configs."""
+
+    containers_to_mount = set()
+
+    combined_configs = {**source_config, **destination_config}
+    for data_config in combined_configs.values():
+        if data_config['type'] == 'adls':
+            containers_to_mount.add((data_config['account'], data_config["container"]))
+
+    return list(containers_to_mount)
+
+
+def list_mount_points(source_config, destination_config):
+    """Returns list with all mount points."""
+
+    containers_to_mount = set()
+
+    combined_configs = {**source_config, **destination_config}
+    for data_config in combined_configs.values():
+        if data_config['type'] == 'adls':
+            containers_to_mount.add(data_config['mount_point'])
+
+    return list(containers_to_mount)
+
+
+def unmount_if_prod(dbutils, source_config, destination_config):
     """If running in prod, unmount storage"""
     env = _get_environment(dbutils)
 
     if env == 'prod':
-        dbutils.fs.unmount(mount_point)
+        mount_points = list_mount_points(source_config, destination_config)
+        for mount_point in mount_points:
+            dbutils.fs.unmount(mount_point)
