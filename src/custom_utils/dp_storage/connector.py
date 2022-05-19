@@ -103,7 +103,7 @@ def mount_all_containers(dbutils, containers_to_mount):
             mount_point = _generate_test_mount_point(storage_account)
         else:
             print("Mounting...")
-            mount_point = _do_mount(dbutils)
+            mount_point = _do_mount(dbutils, storage_account, container)
 
         mount_points[(storage_account, container)] = mount_point
 
