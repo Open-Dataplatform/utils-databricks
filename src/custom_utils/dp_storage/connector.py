@@ -116,8 +116,8 @@ def list_containers_to_mount(source_config, destination_config):
 
     containers_to_mount = set()
 
-    combined_configs = {**source_config, **destination_config}
-    for data_config in combined_configs.values():
+    dataset_configs = list(source_config.values()) + list(destination_config.values())
+    for data_config in dataset_configs:
         if data_config['type'] == 'adls':
             containers_to_mount.add((data_config['account'], data_config["container"]))
 
