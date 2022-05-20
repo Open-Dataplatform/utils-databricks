@@ -124,7 +124,7 @@ def _list_containers_to_mount(source_config, destination_config: dict) -> List[t
     return list(containers_to_mount)
 
 
-def _list_mount_points(source_config, destination_config: dict) -> List(str):
+def _list_mount_points(source_config, destination_config: dict) -> List[str]:
     """Returns list with all mount points."""
 
     containers_to_mount = set()
