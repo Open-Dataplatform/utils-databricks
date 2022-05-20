@@ -3,13 +3,13 @@
 import json
 
 
-def get_parameter(dbutils, parameter_name, default_value=''):
+def get_parameter(dbutils, parameter_name: str, default_value='') -> str:
     """Creates a text widget and gets parameter value. If ran from ADF, the value is taken from there."""
     dbutils.widgets.text(parameter_name, default_value)
     return dbutils.widgets.get(parameter_name)
 
 
-def get_config_parameter(dbutils, parameter_name, default_config: dict):
+def get_config_parameter(dbutils, parameter_name: str, default_config: dict) -> dict:
     """Gets the config and converts it to a dict. If ran in Databricks, default_config is used. If executed from ADF,
     it is checked whether the config from ADF is the same as default_config."""
 
@@ -22,7 +22,7 @@ def get_config_parameter(dbutils, parameter_name, default_config: dict):
     return config
 
 
-def get_source_config(dbutils, default_source_config):
+def get_source_config(dbutils, default_source_config: dict) -> dict:
     """Gets the source configuration and verifies it."""
     source_config = get_config_parameter(dbutils, 'SourceConfig', default_source_config)
     _verify_config(source_config)
@@ -30,7 +30,7 @@ def get_source_config(dbutils, default_source_config):
     return source_config
 
 
-def get_destination_config(dbutils, default_destination_config):
+def get_destination_config(dbutils, default_destination_config: dict) -> dict:
     """Gets the destination configuration and verifies it."""
     destination_config = get_config_parameter(dbutils, 'DestinationConfig', default_destination_config)
 
@@ -42,7 +42,7 @@ def get_destination_config(dbutils, default_destination_config):
     return destination_config
 
 
-def _verify_config(config):
+def _verify_config(config: dict):
     """Runs through the dataset configs in a source/destination config and checks the schema.
 
     :param config:  An example could be {"<dataset_identifier>": {"type":"adls", "dataset":"<dataset_name>", "container":"landing", "account":"dplandingstorage"}}
@@ -52,7 +52,7 @@ def _verify_config(config):
         _verify_dataset_config(dataset_config)
 
 
-def _verify_dataset_config(dataset_config):
+def _verify_dataset_config(dataset_config: dict):
     """Check the schema of a dataset config
 
     :param dataset_config:  An example could be {"type":"adls", "dataset":"<dataset_name>", "container":"landing", "account":"dplandingstorage"}

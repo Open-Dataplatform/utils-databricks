@@ -1,14 +1,16 @@
 """Functions related to writing to the Delta lake"""
 
+from typing import Tuple
 
-def get_destination_path(destination_config):
+
+def get_destination_path(destination_config: dict) -> str:
     """Extracts destination path from destination_config"""
     data_config = list(destination_config.values())[0]
     destination_path = f'{data_config["mount_point"]}/{data_config["dataset"]}'
     return destination_path
 
 
-def get_databricks_table_info(destination_config):
+def get_databricks_table_info(destination_config: dict) -> Tuple[str, str]:
     """Constructs database and table names to be used in Databricks."""
     data_config = list(destination_config.values())[0]
     

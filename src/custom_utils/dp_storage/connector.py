@@ -1,9 +1,10 @@
 """Code to mount storage to the Databricks file system"""
 
 from datetime import datetime
+from typing import Tuple, List
 
 
-def _get_environment(dbutils):
+def _get_environment(dbutils) -> str:
     try:
         env = dbutils.widgets.get('environment')
     except:
@@ -13,11 +14,11 @@ def _get_environment(dbutils):
     return env
 
 
-def _generate_test_mount_point(storage_account):
+def _generate_test_mount_point(storage_account: str) -> str:
     return f'/mnt/{storage_account}test'
 
 
-def _generate_prod_mount_point(dbutils, storage_account: str):
+def _generate_prod_mount_point(dbutils, storage_account: str) -> str:
     timestamp = datetime.strftime(datetime.utcnow(), '%y%m%dT%H%M%SZ')
     notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
     notebook_name = notebook_path.split('/')[-1]
@@ -27,7 +28,7 @@ def _generate_prod_mount_point(dbutils, storage_account: str):
     return mount_point
 
 
-def _get_mount_point(dbutils, storage_account: str):
+def _get_mount_point(dbutils, storage_account: str) -> str:
     env = _get_environment(dbutils)
 
     if env == 'test':
@@ -40,12 +41,12 @@ def _get_mount_point(dbutils, storage_account: str):
     return mount_point
 
 
-def _is_test_mounted(dbutils, storage_account):
+def _is_test_mounted(dbutils, storage_account: str) -> bool:
     mount_point = _generate_test_mount_point(storage_account)
     return any(mount.mountPoint == mount_point for mount in dbutils.fs.mounts())
 
 
-def _do_mount(dbutils, storage_account: str, container: str):
+def _do_mount(dbutils, storage_account: str, container: str) -> str:
     """Checks environment, reads service principals, and mounts."""
     env = _get_environment(dbutils)
 
@@ -70,7 +71,7 @@ def _do_mount(dbutils, storage_account: str, container: str):
     return mount_point
 
 
-def mount(dbutils, source_config, destination_config):
+def mount(dbutils, source_config: dict, destination_config: dict) -> Tuple[dict, dict]:
     """Mounts storage to /mnt/dp_{env} if it is not yet mounted. Returns mount point."""
 
     containers_to_mount = _list_containers_to_mount(source_config, destination_config)
@@ -82,7 +83,7 @@ def mount(dbutils, source_config, destination_config):
     return source_config, destination_config
 
 
-def _add_mount_points_to_config(config, mount_point_dict):
+def _add_mount_points_to_config(config, mount_point_dict: dict) -> dict:
     """Adds mount points to every dataset config in the input config"""
     for data_config in config.values():
         if data_config['type'] == 'adls':
@@ -91,7 +92,7 @@ def _add_mount_points_to_config(config, mount_point_dict):
     return config
 
 
-def _mount_all_containers(dbutils, containers_to_mount):
+def _mount_all_containers(dbutils, containers_to_mount: List[tuple]) -> dict:
     """"Mounts all containers and returns dictionary with {(<account>, <container>): <mount_points>, ...}."""
     env = _get_environment(dbutils)
 
@@ -110,7 +111,7 @@ def _mount_all_containers(dbutils, containers_to_mount):
     return mount_points
 
 
-def _list_containers_to_mount(source_config, destination_config):
+def _list_containers_to_mount(source_config, destination_config: dict) -> List[tuple]:
     """Returns list with ("<account>", "<container>") for all combinations of accounts/containers in the input configs."""
 
     containers_to_mount = set()
@@ -123,7 +124,7 @@ def _list_containers_to_mount(source_config, destination_config):
     return list(containers_to_mount)
 
 
-def _list_mount_points(source_config, destination_config):
+def _list_mount_points(source_config, destination_config: dict) -> List(str):
     """Returns list with all mount points."""
 
     containers_to_mount = set()
@@ -136,7 +137,7 @@ def _list_mount_points(source_config, destination_config):
     return list(containers_to_mount)
 
 
-def unmount_if_prod(dbutils, source_config, destination_config):
+def unmount_if_prod(dbutils, source_config: dict, destination_config: dict):
     """If running in prod, unmount storage"""
     env = _get_environment(dbutils)
 

@@ -3,7 +3,7 @@
 import os
 
 
-def get_path_to_triggering_file(folder_path, filename, config_for_triggered_dataset):
+def get_path_to_triggering_file(folder_path: str, filename: str, config_for_triggered_dataset: dict) -> str:
     """Returns path to file that triggered a storage event in Azure.
 
     :param folder_path:     @triggerBody().folderPath from ADF
@@ -20,7 +20,7 @@ def get_path_to_triggering_file(folder_path, filename, config_for_triggered_data
     return file_path
 
 
-def verify_source_path_and_source_config(folder_path, config_for_triggered_dataset: dict):
+def verify_source_path_and_source_config(folder_path: str, config_for_triggered_dataset: dict):
     """Verify that config and trigger parameters are aligned
 
     :param folder_path:                     @triggerBody().folderPath from ADF
