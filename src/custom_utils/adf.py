@@ -10,13 +10,12 @@ def get_parameter(dbutils, parameter_name: str, default_value='') -> str:
 
 
 def get_config_parameter(dbutils, parameter_name: str, default_config: dict) -> dict:
-    """Gets the config and converts it to a dict. If ran in Databricks, default_config is used. If executed from ADF,
-    it is checked whether the config from ADF is the same as default_config."""
+    """Gets the config parameter from ADF and converts it to a dict. If ran in Databricks, default_config is used."""
 
-    try:
+    if is_executed_by_adf(dbutils):
         json_str_config = dbutils.widgets.get(parameter_name)
         config = json.loads(json_str_config)
-    except:
+    else:
         config = default_config
 
     return config
@@ -45,7 +44,9 @@ def get_destination_config(dbutils, default_destination_config: dict) -> dict:
 def _verify_config(config: dict):
     """Runs through the dataset configs in a source/destination config and checks the schema.
 
-    :param config:  An example could be {"<dataset_identifier>": {"type":"adls", "dataset":"<dataset_name>", "container":"landing", "account":"dplandingstorage"}}
+    :param config:  An example could be {"<dataset_identifier>":
+                                            {"type": "adls", "dataset": "<dataset_name>", "container": "landing", "account": "dplandingstorage"}
+                                        }
     """
 
     for dataset_config in config.values():
@@ -55,7 +56,7 @@ def _verify_config(config: dict):
 def _verify_dataset_config(dataset_config: dict):
     """Check the schema of a dataset config
 
-    :param dataset_config:  An example could be {"type":"adls", "dataset":"<dataset_name>", "container":"landing", "account":"dplandingstorage"}
+    :param dataset_config:  An example could be {"type": "adls", "dataset": "<dataset_name>", "container": "landing", "account": "dplandingstorage"}
     """
     assert 'type' in dataset_config
 
@@ -64,4 +65,10 @@ def _verify_dataset_config(dataset_config: dict):
         assert 'container' in dataset_config
         assert 'account' in dataset_config
     else:
-        raise Exception(f'{dataset_config["type"]} is not a valid dataset type.')
+        raise ValueError(f'{dataset_config["type"]} is not a valid dataset type.')
+
+
+def is_executed_by_adf(dbutils):
+    """Checks whether notebook is executed by ADF"""
+    is_ran_manually_from_databricks = dbutils.notebook.entry_point.getDbutils().notebook().getContext().userName().get().endswith("@energinet.dk")
+    return not is_ran_manually_from_databricks
