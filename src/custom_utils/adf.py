@@ -13,7 +13,7 @@ def get_config_parameter(dbutils, parameter_name: str, default_config: dict) -> 
     """Gets the config parameter from ADF and converts it to a dict. If ran in Databricks, default_config is used."""
 
     if is_executed_by_adf(dbutils):
-        json_str_config = dbutils.widgets.get(parameter_name)
+        json_str_config = get_parameter(dbutils, parameter_name)
         config = json.loads(json_str_config)
     else:
         config = default_config
