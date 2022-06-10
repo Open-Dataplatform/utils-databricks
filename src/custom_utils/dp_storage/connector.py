@@ -48,8 +48,16 @@ def _get_mount_config(dbutils) -> dict:
     return config
 
 
+def _check_account_or_container_name(name):
+    if ('<' in name) or ('>' in name):
+        raise ValueError(f'{name} is not a valid storage account or container. Make sure to update the source and destination configs.')
+
+
 def _do_mount(dbutils, storage_account: str, container: str) -> str:
     """Reads service principals and mounts storage_account."""
+
+    _check_account_or_container_name(storage_account)
+    _check_account_or_container_name(container)
 
     mount_config = _get_mount_config(dbutils)
     mount_point = get_mount_point_name(storage_account)
