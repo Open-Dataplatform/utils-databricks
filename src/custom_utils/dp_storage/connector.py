@@ -77,7 +77,7 @@ def mount(dbutils, source_config: dict, destination_config: dict):
     _mount_all_containers(dbutils, containers_to_mount)
 
 
-def _mount_all_containers(dbutils, containers_to_mount: List[tuple]) -> dict:
+def _mount_all_containers(dbutils, containers_to_mount: List[tuple]):
     """"Mounts all containers and returns dictionary with {(<account>, <container>): <mount_points>, ...}."""
 
     for storage_account, container in containers_to_mount:
