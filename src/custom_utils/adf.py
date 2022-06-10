@@ -44,9 +44,10 @@ def get_destination_config(dbutils, default_destination_config: dict) -> dict:
 def _verify_config(config: dict):
     """Runs through the dataset configs in a source/destination config and checks the schema.
 
-    :param config:  An example could be {"<dataset_identifier>":
-                                            {"type": "adls", "dataset": "<dataset_name>", "container": "landing", "account": "dplandingstorage"}
-                                        }
+    :param config:  Format: {"<dataset_identifier>":
+                                {"type": "adls", "dataset": "<dataset_name>", "container": "<container>", "account": "<storage_account>"},
+                                ...
+                            }
     """
 
     for dataset_config in config.values():
@@ -56,7 +57,7 @@ def _verify_config(config: dict):
 def _verify_dataset_config(dataset_config: dict):
     """Check the schema of a dataset config
 
-    :param dataset_config:  An example could be {"type": "adls", "dataset": "<dataset_name>", "container": "landing", "account": "dplandingstorage"}
+    :param dataset_config:  Format: {"type": "adls", "dataset": "<dataset_name>", "container": "<container>", "account": "<storage_account>"}
     """
     assert 'type' in dataset_config
 
