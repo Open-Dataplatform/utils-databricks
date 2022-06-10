@@ -8,8 +8,8 @@ def get_path_to_triggering_file(folder_path: str, filename: str, config_for_trig
 
     :param folder_path:     @triggerBody().folderPath from ADF
     :param filename:        @triggerBody().fileName from ADF
-    :param config_for_triggered_dataset:    Example: {"type": "adls", "dataset": "<dataset_name>", "container": "landing",
-                                                      "account": "dplandingstorage", "mount_point": "/mnt/dplandingstoragetest"}.
+    :param config_for_triggered_dataset:    Format: {"type": "adls", "dataset": "<dataset_name>", "container": "<container>",
+                                                      "account": "<storage_account>", "mount_point": "/mnt/<storage_account>"}.
     """
 
     verify_source_path_and_source_config(folder_path, config_for_triggered_dataset)
