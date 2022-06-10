@@ -2,7 +2,7 @@
 
 import os
 
-from connector import get_mount_point_name
+from .connector import get_mount_point_name
 
 
 def get_dataset_path(data_config: dict) -> str:

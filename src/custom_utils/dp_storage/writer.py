@@ -2,7 +2,7 @@
 
 from typing import Tuple
 
-from connector import get_mount_point_name
+from .connector import get_mount_point_name
 
 
 def get_destination_path(destination_config: dict) -> str:
