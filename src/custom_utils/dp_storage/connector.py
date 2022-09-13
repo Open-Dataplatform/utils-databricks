@@ -22,7 +22,8 @@ def _get_environment(dbutils) -> str:
 
 
 def get_mount_point_name(storage_account: str) -> str:
-    return f'/mnt/{storage_account}'
+    """Returns the mount point name for a given storage account."""
+    return f"/mnt/{storage_account}"
 
 
 def _is_mounted(dbutils, storage_account: str) -> bool:
@@ -49,9 +50,10 @@ def _get_mount_config(dbutils) -> dict:
 
 
 def _check_account_or_container_name(name):
-    if ('<' in name) or ('>' in name):
-        raise ValueError(f'{name} is not a valid storage account or container. Make sure to update the source and destination configs.')
-
+    """Checks whether the name is valid."""
+    assert name.isalnum(), f"Name '{name}' should only contain alphanumeric characters. Make sure to update the source and destination configs."
+    assert len(name) <= 24, f"Name '{name}' should be at most 24 characters long. Make sure to update the source and destination configs."
+    assert name[0].isalpha(), f"Name '{name}' should start with a letter. Make sure to update the source and destination configs."
 
 def _do_mount(dbutils, storage_account: str, container: str) -> str:
     """Reads service principals and mounts storage_account."""
@@ -89,8 +91,7 @@ def _mount_all_containers(dbutils, containers_to_mount: List[tuple]):
 
 
 def _list_containers_to_mount(source_config, destination_config: dict) -> List[tuple]:
-    """Returns list with ("<account>", "<container>") for all combinations of accounts/containers in the input
-    configs."""
+    """Returns list with ("<account>", "<container>") for all combinations of accounts/containers in the input configs."""
 
     containers_to_mount = set()
 
