@@ -1,6 +1,7 @@
 """Functions to modify Pyspark dataframes"""
 
 from pyspark.sql.types import ArrayType, StructType
+import pyspark.sql.functions as F
 
 
 def _get_array_and_struct_fields(df):
