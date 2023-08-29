@@ -54,7 +54,6 @@ def flatten_all(df, layer_separator='_'):
     while len(complex_fields) != 0:
 
         column_name, data_type = complex_fields[0]
-        print(f"Processing: {column_name}, Type: {data_type}")
 
         if data_type == StructType:
             df = flatten_struct(df, column_name, layer_separator)
