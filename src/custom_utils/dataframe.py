@@ -1,5 +1,7 @@
 """Functions to modify Pyspark dataframes"""
 
+from typing import List
+
 from pyspark.sql.types import ArrayType, StructType
 import pyspark.sql.functions as F
 
@@ -83,7 +85,7 @@ def rename_columns(df, replacements={'.': '_'}):
     return df
 
 
-def add_columns_that_are_not_in_df(df, column_names: list[str]):
+def add_columns_that_are_not_in_df(df, column_names: List[str]):
     """Add columns in column_names that are not already in dataframe.
 
     The new columns are empty. This function can be used before a CAST statement to ensure that all
