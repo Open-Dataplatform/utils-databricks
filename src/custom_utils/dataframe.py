@@ -11,22 +11,22 @@ def _get_array_and_struct_columns(df):
         data_type = type(field.dataType)
         if data_type == ArrayType or data_type == StructType:
             complex_columns.append((field.name, data_type))
-    
+
     return complex_columns
 
 
 def _get_expanded_columns_with_aliases(df, column_name, layer_separator='_'):
     """Return list of nested columns (pyspark.sql.column.Column) in a column struct. To be used in df.select().
-    
+
     layer_separator is used as the seperator in the new column name between the column and nested column names.
     """
     expanded_columns = []
     for nested_column in df.select(f'`{column_name}`.*').columns:
         expanded_column = f"`{column_name}`.`{nested_column}`"
         expanded_column_alias = f"{column_name}{layer_separator}{nested_column}"
-        
+
         expanded_columns.append(F.col(expanded_column).alias(expanded_column_alias))
-    
+
     return expanded_columns
 
 
@@ -48,7 +48,10 @@ def flatten_struct_column(df, column_name, layer_separator='_'):
 
 
 def flatten(df, layer_separator='_'):
-    """Return dataframe with flattened arrays and structs"""
+    """Return dataframe with flattened arrays and structs.
+
+    Written with inspiration from https://www.youtube.com/watch?v=jD8JIw1FVVg.
+    """
     complex_columns = _get_array_and_struct_columns(df)
 
     while len(complex_columns) != 0:
@@ -59,9 +62,9 @@ def flatten(df, layer_separator='_'):
             df = flatten_struct_column(df, column_name, layer_separator)
         elif data_type == ArrayType:
             df = flatten_array_column(df, column_name)
-        
+
         complex_columns = _get_array_and_struct_columns(df)
-    
+
     return df
 
 
@@ -69,7 +72,7 @@ def _string_replace(s: str, replacements: dict):
     """Return string with multiple replacements."""
     for string_before, string_after in replacements.items():
         s = s.replace(string_before, string_after)
-    
+
     return s
 
 
