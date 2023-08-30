@@ -81,3 +81,16 @@ def rename_columns(df, replacements={'.': '_'}):
     for column_name in df.columns:
         df = df.withColumnRenamed(column_name, _string_replace(column_name, replacements))
     return df
+
+
+def add_columns_that_are_not_in_df(df, column_names: list[str]):
+    """Add columns in column_names that are not already in dataframe.
+
+    The new columns are empty. This function can be used before a CAST statement to ensure that all
+    expected columns are included in dataframe.
+    """
+    for column_name in column_names:
+        if column_name not in df.columns:
+            df = df.withColumn(column_name, F.lit(None))
+            print(f'Column "{column_name}" was added.')
+    return df
