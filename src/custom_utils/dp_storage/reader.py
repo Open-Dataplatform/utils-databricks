@@ -1,9 +1,7 @@
 """Functions related to reading from storage"""
 
 import os
-
 from .connector import get_mount_point_name
-
 
 def get_dataset_path(data_config: dict) -> str:
     """Extracts path to mounted dataset
@@ -14,7 +12,6 @@ def get_dataset_path(data_config: dict) -> str:
     mount_point = get_mount_point_name(data_config["account"])
     dataset_path = f'{mount_point}/{data_config["dataset"]}'
     return dataset_path
-
 
 def get_path_to_triggering_file(folder_path: str, filename: str, config_for_triggered_dataset: dict) -> str:
     """Returns path to file that triggered a storage event in Azure.
@@ -27,13 +24,14 @@ def get_path_to_triggering_file(folder_path: str, filename: str, config_for_trig
 
     verify_source_path_and_source_config(folder_path, config_for_triggered_dataset)
 
-    directory = '/'.join(folder_path.split('/')[1:])  # Remember that folderPath from an ADF trigger has the format "<container>/<directory>"
+    # Keep the whole folder path instead of removing the first part
+    # directory = '/'.join(folder_path.split('/')[1:]) 
+    directory = folder_path  # Use the full folder_path as it is
     mount_point = get_mount_point_name(config_for_triggered_dataset['account'])
 
     file_path = os.path.join(mount_point, directory, filename)
 
     return file_path
-
 
 def verify_source_path_and_source_config(folder_path: str, config_for_triggered_dataset: dict):
     """Verify that config and trigger parameters are aligned
@@ -46,3 +44,4 @@ def verify_source_path_and_source_config(folder_path: str, config_for_triggered_
 
     assert container_from_trigger == config_for_triggered_dataset['container']
     assert identifier_from_trigger == config_for_triggered_dataset['dataset']
+
