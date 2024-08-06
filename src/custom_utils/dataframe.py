@@ -3,7 +3,8 @@
 from typing import List
 
 from pyspark.sql.types import ArrayType, StructType
-from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame
 from pyspark.sql.functions import to_json, col, input_file_name, lit
 import pyspark.sql.functions as F
 
