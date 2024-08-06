@@ -5,7 +5,6 @@ from typing import List
 from pyspark.sql.types import ArrayType, StructType
 from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
-import framework_module
 
 
 def _get_array_and_struct_columns(df):
