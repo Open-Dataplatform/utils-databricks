@@ -15,6 +15,22 @@ def get_destination_path(destination_config: dict) -> str:
     return destination_path
 
 
+def get_destination_path_extended(storage_account: str, datasetidentifier: str) -> str:
+    """Extracts destination path from storage account and dataset identifier.
+
+    Args:
+        storage_account (str): Storage account name.
+        datasetidentifier (str): Dataset identifier.
+
+    Returns:
+        str: The destination path.
+    """
+    mount_point = get_mount_point_name(storage_account)
+    destination_path = f'{mount_point}/{datasetidentifier}'
+
+    return destination_path
+
+
 def get_databricks_table_info(destination_config: dict) -> Tuple[str, str]:
     """Constructs database and table names to be used in Databricks."""
 
@@ -23,5 +39,22 @@ def get_databricks_table_info(destination_config: dict) -> Tuple[str, str]:
     
     database_name = mount_point.split('/')[-1]
     table_name = data_config['dataset']
+    
+    return database_name, table_name
+
+def get_databricks_table_info_extended(storage_account: str, datasetidentifier: str) -> Tuple[str, str]:
+    """Constructs database and table names to be used in Databricks.
+
+    Args:
+        storage_account (str): Storage account name.
+        datasetidentifier (str): Dataset identifier.
+
+    Returns:
+        Tuple[str, str]: The database name and table name.
+    """
+    mount_point = get_mount_point_name(storage_account)
+    
+    database_name = mount_point.split('/')[-1]
+    table_name = datasetidentifier
     
     return database_name, table_name
