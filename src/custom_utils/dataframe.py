@@ -4,7 +4,7 @@ from typing import List
 
 from pyspark.sql.types import ArrayType, StructType
 from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import col, to_json, input_file_name, lit
+from pyspark.sql.functions import to_json, col, input_file_name, lit
 import pyspark.sql.functions as F
 
 
