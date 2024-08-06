@@ -77,6 +77,47 @@ def _string_replace(s: str, replacements: dict):
 
     return s
 
+def flatten_extended(df: DataFrame, col_types: dict, flatten_completely: bool = True) -> DataFrame:
+    """Flatten the DataFrame. If `flatten_completely` is True, fully explode all nested columns.
+    Args:
+        df (DataFrame): Input DataFrame to flatten.
+        col_types (dict): Dictionary of column names and their corresponding data types.
+        flatten_completely (bool): Flag to control complete flattening.
+    Returns:
+        DataFrame: Flattened DataFrame.
+    """
+    
+    if flatten_completely:
+        df = dataframe.flatten(df)
+    else:
+        for col_name, col_type in dataframe._get_array_and_struct_columns(df):
+            df = df.withColumn(col_name, to_json(col(col_name)))
+
+    # Add input_file_name column
+    df = df.withColumn("input_file_name", input_file_name().cast("string"))
+    cols_typed = ['cast(input_file_name() as string) as input_file_name']
+
+    # Ensure columns are present with correct data types
+    for c, dtype in col_types.items():
+        if c not in df.columns:
+            print(f"Adding missing column {c} as {dtype}")
+            df = df.withColumn(c, lit(None).cast('string'))
+        else:
+            df = df.withColumn(c, col(c).cast(dtype))
+        cols_typed.append(f"cast({c} as {dtype}) as {c}")
+
+    df = df.selectExpr(*cols_typed)
+    
+    # Rename columns
+    df = dataframe.rename_columns(df, replacements={'__': '_'})
+    df = dataframe.rename_columns(df, replacements={'.': '_'})
+
+    # Print columns and their types after type enforcement
+    columns_and_types = [(col_name, col_type) for col_name, col_type in df.dtypes]
+    # print("Columns after type enforcement:", columns_and_types)
+
+    return df
+
 
 def rename_columns(df, replacements={'.': '_'}):
     """Return dataframe with columns renamed according to replacement dict."""
