@@ -1,5 +1,7 @@
 """Helper common functions"""
 
+from custom_utils import adf
+
 def write_message(message):
     """Log or print a message."""
     print(message)
