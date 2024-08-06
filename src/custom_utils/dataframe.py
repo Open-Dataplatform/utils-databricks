@@ -3,8 +3,7 @@
 from typing import List
 
 from pyspark.sql.types import ArrayType, StructType
-from pyspark.sql import SparkSession
-from pyspark.sql import DataFrame
+from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import to_json, col, input_file_name, lit
 import pyspark.sql.functions as F
 
@@ -91,9 +90,9 @@ def flatten_extended(df: DataFrame, col_types: dict, flatten_completely: bool = 
     """
     
     if flatten_completely:
-        df = dataframe.flatten(df)
+        df = flatten(df)
     else:
-        for col_name, col_type in dataframe._get_array_and_struct_columns(df):
+        for col_name, col_type in _get_array_and_struct_columns(df):
             df = df.withColumn(col_name, to_json(col(col_name)))
 
     # Add input_file_name column
@@ -112,8 +111,8 @@ def flatten_extended(df: DataFrame, col_types: dict, flatten_completely: bool = 
     df = df.selectExpr(*cols_typed)
     
     # Rename columns
-    df = dataframe.rename_columns(df, replacements={'__': '_'})
-    df = dataframe.rename_columns(df, replacements={'.': '_'})
+    df = rename_columns(df, replacements={'__': '_'})
+    df = rename_columns(df, replacements={'.': '_'})
 
     # Print columns and their types after type enforcement
     columns_and_types = [(col_name, col_type) for col_name, col_type in df.dtypes]
