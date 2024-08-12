@@ -4,7 +4,7 @@ from typing import List
 from pyspark.sql.types import ArrayType, StructType, StringType
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, explode_outer, to_json, input_file_name
 
 
 def _get_array_and_struct_columns(df):
