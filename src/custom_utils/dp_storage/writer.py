@@ -170,3 +170,48 @@ def add_input_file_name_column(df: DataFrame) -> (DataFrame, str):
     df_with_filename = df_with_filename.select(cols)
     
     return df_with_filename, columns_of_interest_str
+
+
+def read_json_from_binary(spark, schema, data_file_path):
+    """
+    Reads a file as binary, validates the JSON content, and parses it as JSON.
+    If the JSON content is valid, it directly loads it; otherwise, it attempts
+    to convert it from binary.
+
+    Args:
+        spark (SparkSession): The Spark session.
+        schema (StructType): The schema to enforce on the JSON data.
+        data_file_path (str): The path to the data file.
+
+    Returns:
+        DataFrame: The DataFrame parsed from the JSON content.
+    """
+    # Read the binary file
+    binary_df = spark.read.format("binaryFile").load(data_file_path)
+
+    # Select the content column, convert it to a string, and alias it as 'json_string'
+    content_df = binary_df.select(col("content").cast("string").alias("json_string"))
+
+    # Collect the JSON strings for validation
+    json_strings = content_df.rdd.map(lambda row: row.json_string).collect()
+
+    # Initialize a list to hold valid JSON strings
+    valid_json_strings = []
+    
+    for i, json_str in enumerate(json_strings):
+        try:
+            # Try to parse the JSON string to ensure it's valid
+            json.loads(json_str)
+            valid_json_strings.append(json_str)
+        except json.JSONDecodeError:
+            print(f"JSON string at index {i} is invalid and will be skipped.")
+
+    if not valid_json_strings:
+        print("No valid JSON strings found. Returning an empty DataFrame.")
+        return spark.createDataFrame([], schema)
+
+    # Convert the list of valid JSON strings to an RDD and then to a DataFrame
+    rdd = spark.sparkContext.parallelize(valid_json_strings)
+    df = spark.read.schema(schema).json(rdd)
+
+    return df
