@@ -1,13 +1,11 @@
 """Functions related to writing to the Delta lake"""
 
-from pyspark.sql.types import StructType, StringType, IntegerType, ArrayType, StructField, BooleanType, DoubleType
-
+from pyspark.sql.types import (
+    StructType, StringType, IntegerType, ArrayType, StructField, BooleanType, DoubleType
+)
 from typing import Tuple
-
 from .connector import get_mount_point_name
-
 from pyspark.sql.functions import input_file_name, col
-
 from pyspark.sql import DataFrame
 
 
