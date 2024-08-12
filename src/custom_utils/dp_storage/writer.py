@@ -1,8 +1,12 @@
 """Functions related to writing to the Delta lake"""
 
+from pyspark.sql.types import *
+
 from typing import Tuple
 
 from .connector import get_mount_point_name
+
+from pyspark.sql.functions import input_file_name, col
 
 
 def get_destination_path(destination_config: dict) -> str:
