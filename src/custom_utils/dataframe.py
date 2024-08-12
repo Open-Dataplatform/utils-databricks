@@ -1,11 +1,8 @@
 """Functions to modify Pyspark dataframes"""
 
 from typing import List
-
-from pyspark.sql.types import ArrayType, StructType
-
+from pyspark.sql.types import ArrayType, StructType, StringType
 import pyspark.sql.functions as F
-
 from pyspark.sql import DataFrame
 
 
