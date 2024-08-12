@@ -8,6 +8,8 @@ from .connector import get_mount_point_name
 
 from pyspark.sql.functions import input_file_name, col
 
+from pyspark.sql import DataFrame
+
 
 def get_destination_path(destination_config: dict) -> str:
     """Extracts destination path from destination_config"""
