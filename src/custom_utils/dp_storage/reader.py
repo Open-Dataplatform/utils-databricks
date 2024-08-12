@@ -1,9 +1,10 @@
 """Functions related to reading from storage"""
 
 import os
-
-from pyspark.sql.types import *  # Convenient and common in PySpark scripts
-
+from pyspark.sql.types import (
+    StringType, BooleanType, DoubleType, IntegerType, LongType, TimestampType, DecimalType,
+    DateType, BinaryType, StructType
+)
 from .connector import get_mount_point_name
 
 
