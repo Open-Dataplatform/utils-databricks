@@ -134,14 +134,14 @@ def get_type_mapping() -> dict:
     return {
         "string": StringType(),
         "boolean": BooleanType(),
-        "number": DoubleType(),
+        "number": FloatType(),
         "integer": IntegerType(),
         "long": LongType(),
-        "double": DoubleType(),
+        "double": FloatType(),
         "array": StringType(),
         "object": StringType(),
         "datetime": TimestampType(),
-        "decimal": DecimalType(38, 10),
+        "decimal": FloatType(),
         "date": DateType(),
         "time": StringType(),
         "binary": BinaryType()
