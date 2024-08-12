@@ -15,6 +15,20 @@ def get_destination_path(destination_config: dict) -> str:
     return destination_path
 
 
+def get_destination_path_extended(storage_account: str, datasetidentifier: str) -> str:
+    """Extracts destination path from storage account and dataset identifier.
+    Args:
+        storage_account (str): Storage account name.
+        datasetidentifier (str): Dataset identifier.
+    Returns:
+        str: The destination path.
+    """
+    mount_point = get_mount_point_name(storage_account)
+    destination_path = f'{mount_point}/{datasetidentifier}'
+
+    return destination_path
+
+
 def get_databricks_table_info(destination_config: dict) -> Tuple[str, str]:
     """Constructs database and table names to be used in Databricks."""
 
