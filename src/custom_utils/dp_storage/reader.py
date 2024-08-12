@@ -1,10 +1,8 @@
 """Functions related to reading from storage"""
 
 import os
-import json  # For handling JSON data
 
 from .connector import get_mount_point_name
-from pyspark.sql import SparkSession
 
 
 def get_dataset_path(data_config: dict) -> str:
@@ -36,12 +34,69 @@ def get_path_to_triggering_file(folder_path: str, filename: str, config_for_trig
 
     return file_path
 
-def get_path_to_triggering_file_extended(folder_path: str, filename: str, storage_account: str, source_container: str, source_datasetidentifier: str) -> str:
-    """Returns path to file that triggered a storage event in Azure."""
-    verify_source_path_and_source_config_extended(folder_path, source_container, source_datasetidentifier)
-    directory = '/'.join(folder_path.split('/')[1:])  # Format "<container>/<directory>"
-    mount_point = get_mount_point_name(storage_account)
-    return os.path.join(mount_point, directory, filename)
+
+def get_path_to_triggering_file_extended(folder_path: str, filename: str, storage_account: str, container: str, datasetidentifier: str, schema: bool = False) -> str:
+    """
+    Returns the path to the file that triggered a storage event in Azure.
+    If 'schema' is True, the path will start with '/dbfs/'.
+    
+    Args:
+        folder_path (str): The folder path.
+        filename (str): The filename.
+        storage_account (str): The storage account name.
+        container (str): The container name.
+        datasetidentifier (str): The dataset identifier.
+        schema (bool, optional): Whether the path is for a schema file. Defaults to False.
+    
+    Returns:
+        str: The full path to the triggering file.
+    """
+    verify_source_path_and_source_config_extended(folder_path, container, datasetidentifier)
+    directory = '/'.join(folder_path.split('/')[1:])
+    base_path = f"/dbfs{get_mount_point_name(storage_account)}" if schema else get_mount_point_name(storage_account)
+    full_path = os.path.join(base_path, directory, filename)
+    return full_path
+
+def verify_source_path_and_source_config_extended(folder_path: str, container: str, datasetidentifier: str):
+    """
+    Verifies that the config and trigger parameters are aligned.
+    
+    Args:
+        folder_path (str): The folder path.
+        container (str): The container name.
+        datasetidentifier (str): The dataset identifier.
+    
+    Raises:
+        AssertionError: If the container or dataset identifier does not match.
+    """
+    container_from_trigger = folder_path.split('/')[0]
+    identifier_from_trigger = folder_path.split('/')[2] if "schemachecks" in folder_path else folder_path.split('/')[1]
+
+    if container_from_trigger != container:
+        raise AssertionError(f"Expected container '{container}', but got '{container_from_trigger}'")
+    if identifier_from_trigger != datasetidentifier:
+        raise AssertionError(f"Expected dataset identifier '{datasetidentifier}', but got '{identifier_from_trigger}'")
+
+
+def verify_source_path_and_source_config_extended(folder_path: str, container: str, datasetidentifier: str):
+    """
+    Verifies that the config and trigger parameters are aligned.
+    
+    Args:
+        folder_path (str): The folder path.
+        container (str): The container name.
+        datasetidentifier (str): The dataset identifier.
+    
+    Raises:
+        AssertionError: If the container or dataset identifier does not match.
+    """
+    container_from_trigger = folder_path.split('/')[0]
+    identifier_from_trigger = folder_path.split('/')[2] if "schemachecks" in folder_path else folder_path.split('/')[1]
+
+    if container_from_trigger != container:
+        raise AssertionError(f"Expected container '{container}', but got '{container_from_trigger}'")
+    if identifier_from_trigger != datasetidentifier:
+        raise AssertionError(f"Expected dataset identifier '{datasetidentifier}', but got '{identifier_from_trigger}'")
 
 
 def verify_source_path_and_source_config(folder_path: str, config_for_triggered_dataset: dict):
@@ -56,72 +111,56 @@ def verify_source_path_and_source_config(folder_path: str, config_for_triggered_
     assert container_from_trigger == config_for_triggered_dataset['container']
     assert identifier_from_trigger == config_for_triggered_dataset['dataset']
 
-def verify_source_path_and_source_config_extended(folder_path: str, container: str, datasetidentifier: str):
-    """Verify that config and trigger parameters are aligned."""
-    container_from_trigger = folder_path.split('/')[0]
-    identifier_from_trigger = folder_path.split('/')[2] if "schemachecks" in folder_path else folder_path.split('/')[1]
 
-    if container_from_trigger != container:
-        raise AssertionError(f"Expected container '{container}', but got '{container_from_trigger}'")
-    if identifier_from_trigger != datasetidentifier:
-        raise AssertionError(f"Expected dataset identifier '{datasetidentifier}', but got '{identifier_from_trigger}'")
+def get_json_depth(json_schema, current_depth=0, definitions=None) -> int:
+    """
+    Recursively determines the maximum depth of a JSON schema, including handling references.
+    
+    Args:
+        json_schema (dict): A JSON schema represented as a dictionary.
+        current_depth (int): The current depth level (used internally).
+        definitions (dict, optional): Definitions from the JSON schema to resolve $ref references. Defaults to None.
+    
+    Returns:
+        int: The maximum depth level of the JSON schema.
+    """
+    if definitions is None:
+        definitions = json_schema.get('definitions', {})
+        
+    if isinstance(json_schema, dict):
+        if '$ref' in json_schema:
+            ref_schema = definitions.get(json_schema['$ref'].split('/')[-1], {})
+            return get_json_depth(ref_schema, current_depth, definitions)
+        
+        if 'properties' in json_schema:
+            return max(get_json_depth(v, current_depth + 1, definitions) for v in json_schema['properties'].values())
+        
+        if 'items' in json_schema:
+            return get_json_depth(json_schema['items'], current_depth + 1, definitions)
+        
+        return current_depth
+    return current_depth
 
-def read_json_schema(spark: SparkSession, file_path: str) -> dict:
-    """Reads a JSON schema from a given path using Spark."""
-    text_df = spark.read.text(file_path)
-    json_str = ''.join(text_df.select('value').rdd.flatMap(lambda x: x).collect())
-    return json.loads(json_str)
 
-def get_col_types_from_schema(schema: dict, prefix: str = '', type_mapping: dict = None, flatten_completely: bool = True) -> dict:
-    """Convert JSON schema to column definitions."""
-    if type_mapping is None:
-        type_mapping = {
-            "string": "string",
-            "boolean": "boolean",
-            "number": "float",
-            "integer": "int",
-            "long": "bigint",
-            "double": "float",
-            "array": "string",  # Could be expanded to handle arrays differently if needed
-            "object": "string",  # Default for complex/nested types
-            "datetime": "timestamp",  # Handle datetime type explicitly
-            "decimal": "decimal(38, 10)",  # For high precision decimal numbers
-            "date": "date",  # For date-only fields
-            "time": "time",  # For time-only fields
-            "binary": "binary"  # For binary data
-        }
-
-    def handle_field(field_name: str, field_info: dict, col_types: dict):
-        """Handle a single field in the schema."""
-        col_type = field_info.get("type", "string")
-        if isinstance(col_type, list):
-            col_type = col_type[0]  # Handle the first type in the list for simplicity
-
-        if flatten_completely and col_type in ["object", "array"]:
-            return
-        col_types[field_name] = type_mapping.get(col_type, "string")
-
-    def expand_properties(properties: dict, prefix: str, col_types: dict):
-        """Expand properties to get their data types."""
-        for field, field_info in properties.items():
-            field_name = f"{prefix}{field}"
-            handle_field(field_name, field_info, col_types)
-            if flatten_completely:
-                if field_info.get("type") == "object" and "properties" in field_info:
-                    expand_properties(field_info["properties"], f"{field_name}_", col_types)
-                if field_info.get("type") == "array" and "items" in field_info:
-                    item_info = field_info["items"]
-                    if "properties" in item_info:
-                        expand_properties(item_info["properties"], f"{field_name}_", col_types)
-
-    col_types = {}
-    expand_properties(schema.get("properties", {}), prefix, col_types)
-
-    if flatten_completely and "definitions" in schema:
-        for def_key, def_val in schema["definitions"].items():
-            expand_properties(def_val.get("properties", {}), f"{def_key}_", col_types)
-
-    if flatten_completely:
-        col_types = {k: v for k, v in col_types.items() if not v.startswith('array')}
-
-    return col_types
+def get_type_mapping() -> dict:
+    """
+    Returns a dictionary mapping JSON data types to PySpark SQL types.
+    
+    Returns:
+        dict: A dictionary where keys are JSON data types as strings and values are PySpark SQL data types.
+    """
+    return {
+        "string": StringType(),
+        "boolean": BooleanType(),
+        "number": DoubleType(),
+        "integer": IntegerType(),
+        "long": LongType(),
+        "double": DoubleType(),
+        "array": StringType(),
+        "object": StringType(),
+        "datetime": TimestampType(),
+        "decimal": DecimalType(38, 10),
+        "date": DateType(),
+        "time": StringType(),
+        "binary": BinaryType()
+    }
