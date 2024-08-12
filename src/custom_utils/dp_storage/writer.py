@@ -1,6 +1,6 @@
 """Functions related to writing to the Delta lake"""
 
-from pyspark.sql.types import *
+from pyspark.sql.types import StructType, StringType, IntegerType, ArrayType, StructField, BooleanType, DoubleType
 
 from typing import Tuple
 
