@@ -3,8 +3,6 @@
 from typing import List
 
 from pyspark.sql.types import ArrayType, StructType
-from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import to_json, col, input_file_name, lit
 import pyspark.sql.functions as F
 
 
@@ -72,53 +70,57 @@ def flatten(df, layer_separator='_'):
     return df
 
 
+def flatten_df(df: DataFrame, depth_level=None, current_level=0, max_depth=1, type_mapping: dict = None) -> DataFrame:
+    """
+    Flattens complex fields in a DataFrame up to a specified depth level, applying type mapping.
+    
+    Args:
+        df (DataFrame): A PySpark DataFrame.
+        depth_level (int or None): The maximum depth level to flatten. If None, max_depth is used.
+        current_level (int): The current depth level (used internally).
+        max_depth (int): The maximum depth calculated from the schema.
+        type_mapping (dict, optional): A dictionary mapping original types to desired Spark SQL types. Defaults to None.
+    
+    Returns:
+        DataFrame: A flattened DataFrame with custom types applied.
+    """
+    if depth_level is None or depth_level == '':
+        depth_level = max_depth
+
+    if current_level >= depth_level:
+        return df
+
+    if type_mapping is not None:
+        df = df.select([col(c).cast(type_mapping.get(df.schema[c].dataType.simpleString(), df.schema[c].dataType)) for c in df.columns])
+
+    complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
+
+    while complex_fields:
+        for col_name, data_type in complex_fields.items():
+            if current_level + 1 == depth_level:
+                df = df.withColumn(col_name, to_json(col(col_name)))
+            else:
+                if isinstance(data_type, ArrayType):
+                    df = df.withColumn(col_name, explode_outer(col(col_name)))
+                if isinstance(data_type, StructType):
+                    expanded = [col(f"{col_name}.{k}").alias(f"{col_name}_{k}") for k in data_type.fieldNames()]
+                    df = df.select("*", *expanded).drop(col_name)
+
+        complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
+        current_level += 1
+
+    if current_level >= depth_level:
+        df = df.select([col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else col(c) for c in df.columns])
+
+    return df
+
+
 def _string_replace(s: str, replacements: dict):
     """Return string with multiple replacements."""
     for string_before, string_after in replacements.items():
         s = s.replace(string_before, string_after)
 
     return s
-
-def flatten_extended(df: DataFrame, col_types: dict, flatten_completely: bool = True) -> DataFrame:
-    """Flatten the DataFrame. If `flatten_completely` is True, fully explode all nested columns.
-    Args:
-        df (DataFrame): Input DataFrame to flatten.
-        col_types (dict): Dictionary of column names and their corresponding data types.
-        flatten_completely (bool): Flag to control complete flattening.
-    Returns:
-        DataFrame: Flattened DataFrame.
-    """
-    
-    if flatten_completely:
-        df = flatten(df)
-    else:
-        for col_name, col_type in _get_array_and_struct_columns(df):
-            df = df.withColumn(col_name, to_json(col(col_name)))
-
-    # Add input_file_name column
-    df = df.withColumn("input_file_name", input_file_name().cast("string"))
-    cols_typed = ['cast(input_file_name() as string) as input_file_name']
-
-    # Ensure columns are present with correct data types
-    for c, dtype in col_types.items():
-        if c not in df.columns:
-            print(f"Adding missing column {c} as {dtype}")
-            df = df.withColumn(c, lit(None).cast('string'))
-        else:
-            df = df.withColumn(c, col(c).cast(dtype))
-        cols_typed.append(f"cast({c} as {dtype}) as {c}")
-
-    df = df.selectExpr(*cols_typed)
-    
-    # Rename columns
-    df = rename_columns(df, replacements={'__': '_'})
-    df = rename_columns(df, replacements={'.': '_'})
-
-    # Print columns and their types after type enforcement
-    columns_and_types = [(col_name, col_type) for col_name, col_type in df.dtypes]
-    # print("Columns after type enforcement:", columns_and_types)
-
-    return df
 
 
 def rename_columns(df, replacements={'.': '_'}):
