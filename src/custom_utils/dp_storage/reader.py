@@ -3,7 +3,7 @@
 import os
 from pyspark.sql.types import (
     StringType, BooleanType, DoubleType, IntegerType, LongType, TimestampType, DecimalType,
-    DateType, BinaryType, StructType
+    DateType, BinaryType, StructType, FloatType
 )
 from .connector import get_mount_point_name
 
