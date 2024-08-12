@@ -5,7 +5,7 @@ from typing import List
 from pyspark.sql.types import ArrayType, StructType, StringType
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, explode_outer, to_json
+from pyspark.sql.functions import col, explode_outer, to_json, lit
 
 
 def _get_array_and_struct_columns(df):
@@ -163,28 +163,12 @@ def read_json_from_binary(spark, schema, data_file_path):
     binary_df = spark.read.format("binaryFile").load(data_file_path)
 
     # Select the content column, convert it to a string, and alias it as 'json_string'
-    content_df = binary_df.select(col("content").cast("string").alias("json_string"))
+    content_df = binary_df.select(col("content").cast("string").alias("json_string"), col("path"))
 
-    # Collect the JSON strings for validation
-    json_strings = content_df.rdd.map(lambda row: row.json_string).collect()
+    # Convert the string to a JSON DataFrame using the schema
+    df = spark.read.schema(schema).json(content_df.rdd.map(lambda row: row.json_string))
 
-    # Initialize a list to hold valid JSON strings
-    valid_json_strings = []
-    
-    for i, json_str in enumerate(json_strings):
-        try:
-            # Try to parse the JSON string to ensure it's valid
-            json.loads(json_str)
-            valid_json_strings.append(json_str)
-        except json.JSONDecodeError:
-            print(f"JSON string at index {i} is invalid and will be skipped.")
+    # Add the input_file_name column to the DataFrame using the path from content_df
+    df_with_filename = df.withColumn("input_file_name", lit(data_file_path))
 
-    if not valid_json_strings:
-        print("No valid JSON strings found. Returning an empty DataFrame.")
-        return spark.createDataFrame([], schema)
-
-    # Convert the list of valid JSON strings to an RDD and then to a DataFrame
-    rdd = spark.sparkContext.parallelize(valid_json_strings)
-    df = spark.read.schema(schema).json(rdd)
-
-    return df
+    return df_with_filename
