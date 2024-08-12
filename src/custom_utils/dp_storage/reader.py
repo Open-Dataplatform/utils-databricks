@@ -2,6 +2,8 @@
 
 import os
 
+from pyspark.sql.types import *  # Convenient and common in PySpark scripts
+
 from .connector import get_mount_point_name
 
 
@@ -56,27 +58,6 @@ def get_path_to_triggering_file_extended(folder_path: str, filename: str, storag
     base_path = f"/dbfs{get_mount_point_name(storage_account)}" if schema else get_mount_point_name(storage_account)
     full_path = os.path.join(base_path, directory, filename)
     return full_path
-
-def verify_source_path_and_source_config_extended(folder_path: str, container: str, datasetidentifier: str):
-    """
-    Verifies that the config and trigger parameters are aligned.
-    
-    Args:
-        folder_path (str): The folder path.
-        container (str): The container name.
-        datasetidentifier (str): The dataset identifier.
-    
-    Raises:
-        AssertionError: If the container or dataset identifier does not match.
-    """
-    container_from_trigger = folder_path.split('/')[0]
-    identifier_from_trigger = folder_path.split('/')[2] if "schemachecks" in folder_path else folder_path.split('/')[1]
-
-    if container_from_trigger != container:
-        raise AssertionError(f"Expected container '{container}', but got '{container_from_trigger}'")
-    if identifier_from_trigger != datasetidentifier:
-        raise AssertionError(f"Expected dataset identifier '{datasetidentifier}', but got '{identifier_from_trigger}'")
-
 
 def verify_source_path_and_source_config_extended(folder_path: str, container: str, datasetidentifier: str):
     """
