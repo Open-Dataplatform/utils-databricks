@@ -1,5 +1,6 @@
 """Functions related to writing to the Delta lake"""
 
+import json
 from pyspark.sql.types import (
     StructType, StringType, IntegerType, ArrayType, StructField, BooleanType, DoubleType
 )
