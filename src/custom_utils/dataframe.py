@@ -132,6 +132,34 @@ def rename_columns(df, replacements={'.': '_'}):
     return df
 
 
+def rename_columns_extended(df, column_mapping=None, replacements={'.': '_'}, cast_type_mapping=None):
+    """
+    Return dataframe with columns renamed according to the replacement dict or specific column mappings.
+    
+    Args:
+        df (DataFrame): The DataFrame whose columns need to be renamed.
+        column_mapping (dict, optional): Specific column names to be renamed. 
+                                         Example: {"Timestamp": "EventTimestamp"}
+        replacements (dict, optional): Replacement dictionary for substring replacements in column names.
+        cast_type_mapping (dict, optional): Dictionary to cast columns to specific data types. 
+                                             Example: {"EventTimestamp": "timestamp"}
+    
+    Returns:
+        DataFrame: DataFrame with renamed and possibly casted columns.
+    """
+    if column_mapping:
+        for old_name, new_name in column_mapping.items():
+            if old_name in df.columns:
+                df = df.withColumnRenamed(old_name, new_name)
+    if cast_type_mapping:
+        for col_name, new_type in cast_type_mapping.items():
+            if col_name in df.columns:
+                df = df.withColumn(col_name, col(col_name).cast(new_type))
+    for column_name in df.columns:
+        df = df.withColumnRenamed(column_name, _string_replace(column_name, replacements))
+    return df
+
+
 def add_columns_that_are_not_in_df(df, column_names: List[str]):
     """Add columns in column_names that are not already in dataframe.
 
