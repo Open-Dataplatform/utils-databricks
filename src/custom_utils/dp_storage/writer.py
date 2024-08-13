@@ -1,6 +1,5 @@
 """Functions related to writing to the Delta lake"""
 
-import json
 from pyspark.sql.types import (
     StructType, StringType, IntegerType, ArrayType, StructField, BooleanType, DoubleType
 )
@@ -64,17 +63,21 @@ def get_databricks_table_info_extended(storage_account: str, datasetidentifier: 
     return database_name, table_name
 
 
-def json_schema_to_spark_struct(json_schema, definitions=None) -> StructType:
+def json_schema_to_spark_struct(schema_file_path, definitions=None):
     """
-    Converts a JSON schema (as a dict) to a PySpark StructType, with enhanced null handling.
-    
+    Reads a JSON schema file, parses it, and converts it to a PySpark StructType.
+
     Args:
-        json_schema (dict): The JSON schema.
+        schema_file_path (str): Path to the JSON schema file.
         definitions (dict, optional): The schema definitions. Defaults to None.
-    
+
     Returns:
-        StructType: The corresponding PySpark StructType.
+        tuple: A tuple containing the original JSON schema and the corresponding PySpark StructType.
     """
+    # Read and parse the schema JSON file
+    with open(schema_file_path, 'r') as f:
+        json_schema = json.load(f)
+    
     if definitions is None:
         definitions = json_schema.get('definitions', {})
 
@@ -121,7 +124,8 @@ def json_schema_to_spark_struct(json_schema, definitions=None) -> StructType:
         fields = [StructField(field_name, parse_type(field_props), True) for field_name, field_props in properties.items()]
         return StructType(fields)
 
-    return parse_properties(json_schema.get('properties', {}))
+    # Return both the JSON schema dictionary and the StructType
+    return json_schema, parse_properties(json_schema.get('properties', {}))
 
 
 def apply_type_mapping(schema: StructType, type_mapping: dict) -> StructType:
