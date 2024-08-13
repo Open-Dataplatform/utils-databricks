@@ -193,7 +193,4 @@ def read_json_from_binary(spark, schema, data_file_path):
     # Convert the string to a JSON DataFrame using the schema
     df = spark.read.schema(schema).json(content_df.rdd.map(lambda row: row.json_string))
 
-    # Add the input_file_name column to the DataFrame using the path from content_df
-    df_with_filename = df.withColumn("input_file_name", lit(data_file_path))
-
-    return df_with_filename
+    return df
