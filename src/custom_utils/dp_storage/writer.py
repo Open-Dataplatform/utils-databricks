@@ -65,7 +65,7 @@ def get_databricks_table_info_extended(storage_account: str, datasetidentifier: 
 
 def json_schema_to_spark_struct(json_schema, definitions=None) -> StructType:
     """
-    Converts a JSON schema to a PySpark StructType, with enhanced null handling.
+    Converts a JSON schema (as a dict) to a PySpark StructType, with enhanced null handling.
     
     Args:
         json_schema (dict): The JSON schema.
