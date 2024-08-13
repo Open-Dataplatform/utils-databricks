@@ -132,15 +132,14 @@ def rename_columns(df, replacements={'.': '_'}):
     return df
 
 
-def rename_columns_extended(df, column_mapping=None, replacements={'.': '_'}, cast_type_mapping=None):
+def rename_and_cast_columns(df, column_mapping=None, cast_type_mapping=None):
     """
-    Return dataframe with columns renamed according to the replacement dict or specific column mappings.
+    Rename columns and optionally cast them to a different type.
     
     Args:
-        df (DataFrame): The DataFrame whose columns need to be renamed.
+        df (DataFrame): The DataFrame whose columns need to be renamed and cast.
         column_mapping (dict, optional): Specific column names to be renamed. 
                                          Example: {"Timestamp": "EventTimestamp"}
-        replacements (dict, optional): Replacement dictionary for substring replacements in column names.
         cast_type_mapping (dict, optional): Dictionary to cast columns to specific data types. 
                                              Example: {"EventTimestamp": "timestamp"}
     
@@ -155,8 +154,6 @@ def rename_columns_extended(df, column_mapping=None, replacements={'.': '_'}, ca
         for col_name, new_type in cast_type_mapping.items():
             if col_name in df.columns:
                 df = df.withColumn(col_name, col(col_name).cast(new_type))
-    for column_name in df.columns:
-        df = df.withColumnRenamed(column_name, _string_replace(column_name, replacements))
     return df
 
 
