@@ -1,12 +1,12 @@
 """Functions related to reading from storage"""
 
 import os
+from pyspark.sql import DataFrame
 from pyspark.sql.types import (
     StringType, BooleanType, DoubleType, IntegerType, LongType, TimestampType, DecimalType,
     DateType, BinaryType, StructType, FloatType
 )
 from .connector import get_mount_point_name
-from pyspark.sql import DataFrame
 
 
 def get_dataset_path(data_config: dict) -> str:
