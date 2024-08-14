@@ -6,6 +6,7 @@ from pyspark.sql.types import (
     DateType, BinaryType, StructType, FloatType
 )
 from .connector import get_mount_point_name
+from pyspark.sql import DataFrame
 
 
 def get_dataset_path(data_config: dict) -> str:
