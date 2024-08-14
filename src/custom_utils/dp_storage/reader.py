@@ -146,3 +146,22 @@ def get_type_mapping() -> dict:
         "time": StringType(),
         "binary": BinaryType()
     }
+
+def get_columns_of_interest(df: DataFrame) -> str:
+    """
+    Returns the columns of interest as a string, excluding 'input_file_name'.
+    
+    Args:
+        df (DataFrame): A PySpark DataFrame after flattening.
+    
+    Returns:
+        str: A string of columns of interest, excluding 'input_file_name'.
+    """
+    # Exclude 'input_file_name' from the list of columns of interest
+    columns_of_interest = [col for col in df.columns if col != 'input_file_name']
+    columns_of_interest_str = ', '.join(columns_of_interest)
+    
+    # Print the columns of interest for verification
+    print(f"Columns of interest (excluding 'input_file_name'): {columns_of_interest_str}")
+    
+    return columns_of_interest_str
