@@ -172,25 +172,37 @@ def add_columns_that_are_not_in_df(df, column_names: List[str]):
 
 def read_json_from_binary(spark, schema, data_file_path):
     """
-    Reads a file as binary, validates the JSON content, and parses it as JSON.
-    If the JSON content is valid, it directly loads it; otherwise, it attempts
-    to convert it from binary.
+    Reads files as binary, parses the JSON content, and ensures that the `input_file_name` is correctly
+    associated with each row in the resulting DataFrame.
 
     Args:
         spark (SparkSession): The Spark session.
         schema (StructType): The schema to enforce on the JSON data.
-        data_file_path (str): The path to the data file.
+        data_file_path (str): The path to the data file(s).
 
     Returns:
-        DataFrame: The DataFrame parsed from the JSON content.
+        DataFrame: The DataFrame parsed from the JSON content, with `input_file_name` as the first column.
     """
-    # Read the binary file
+    # Load all files as binary
     binary_df = spark.read.format("binaryFile").load(data_file_path)
 
-    # Select the content column, convert it to a string, and alias it as 'json_string'
-    content_df = binary_df.select(col("content").cast("string").alias("json_string"), col("path"))
+    # Extract the file path and content, and add an ID column
+    df_with_filename = binary_df.withColumn("json_string", F.col("content").cast("string")) \
+                                .withColumn("input_file_name", F.col("path")) \
+                                .withColumn("id", F.monotonically_increasing_id())
 
-    # Convert the string to a JSON DataFrame using the schema
-    df = spark.read.schema(schema).json(content_df.rdd.map(lambda row: row.json_string))
+    # Parse JSON content using the schema
+    df_parsed = spark.read.schema(schema).json(df_with_filename.select("json_string").rdd.map(lambda row: row.json_string)) \
+                          .withColumn("id", F.monotonically_increasing_id())
 
-    return df
+    # Join the parsed DataFrame with the original DataFrame on the id column
+    df_final_with_filename = df_parsed.join(df_with_filename, on="id", how="inner")
+
+    # Drop unnecessary columns including `json_string`, `content`, `path`, `modificationTime`, `length`, and `id`
+    df_final_with_filename = df_final_with_filename.drop("json_string", "content", "path", "modificationTime", "length", "id")
+
+    # Reorder the columns to have `input_file_name` as the first column
+    columns = ["input_file_name"] + [col for col in df_final_with_filename.columns if col != "input_file_name"]
+    df_final_with_filename = df_final_with_filename.select(columns)
+
+    return df_final_with_filename
