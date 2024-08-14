@@ -151,28 +151,3 @@ def apply_type_mapping(schema: StructType, type_mapping: dict) -> StructType:
         return StructField(field.name, mapped_type, field.nullable)
 
     return StructType([map_field(field) for field in schema.fields])
-
-
-def add_input_file_name_column(df: DataFrame) -> (DataFrame, str):
-    """
-    Adds a column 'input_file_name' to the DataFrame and positions it as the first column.
-    Returns a DataFrame with 'input_file_name' column added as the first column,
-    and also returns the columns of interest as a string.
-    
-    Args:
-        df (DataFrame): A PySpark DataFrame after flattening.
-    
-    Returns:
-        DataFrame: A DataFrame with 'input_file_name' column added as the first column.
-        str: A string of columns of interest, excluding 'input_file_name'.
-    """
-    df_with_filename = df.withColumn("input_file_name", input_file_name().cast("string"))
-    columns_of_interest = [col for col in df_with_filename.columns if col != 'input_file_name']
-    columns_of_interest_str = ', '.join(columns_of_interest)
-    
-    print(f"Columns of interest (excluding 'input_file_name'): {columns_of_interest_str}")
-    
-    cols = ['input_file_name'] + columns_of_interest
-    df_with_filename = df_with_filename.select(cols)
-    
-    return df_with_filename, columns_of_interest_str
