@@ -162,7 +162,4 @@ def get_columns_of_interest(df: DataFrame) -> str:
     columns_of_interest = [col for col in df.columns if col != 'input_file_name']
     columns_of_interest_str = ', '.join(columns_of_interest)
     
-    # Print the columns of interest for verification
-    print(f"Columns of interest (excluding 'input_file_name'): {columns_of_interest_str}")
-    
     return columns_of_interest_str
