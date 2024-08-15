@@ -93,3 +93,42 @@ def verify_paths_and_files(dbutils, config, helper):
 
     # Return the validated schema file path and data file path
     return schema_file_path, data_file_path
+
+def initialize_config(dbutils, helper, source_environment, destination_environment, source_container, source_datasetidentifier, 
+                      source_filename='*', key_columns='', feedback_column='', schema_folder_name='schemachecks', depth_level=None):
+    """
+    Initialize the Config class with input parameters and return the config object.
+    
+    This function provides a centralized way to manage configuration settings needed for your Databricks notebook.
+    It allows both required and optional parameters to be easily defined, with sensible defaults where applicable.
+
+    Args:
+        dbutils (object): The Databricks utility object used for interacting with DBFS, widgets, secrets, and other operations.
+        helper (object): A helper object responsible for logging messages and fetching parameters.
+        source_environment (str): The source storage account/environment where the input data is stored.
+        destination_environment (str): The destination storage account/environment for storing processed data.
+        source_container (str): The container within the storage account where source files are stored.
+        source_datasetidentifier (str): The dataset identifier, usually a folder or dataset name that’s being processed.
+        source_filename (str, optional): The pattern or name of the source files. Defaults to '*' to read all files.
+        key_columns (str, optional): Comma-separated key columns used to identify unique records in the dataset. Defaults to ''.
+        feedback_column (str, optional): The column used for feedback or timestamp tracking within the data. Defaults to ''.
+        schema_folder_name (str, optional): The folder where schema validation files are stored. Defaults to 'schemachecks'.
+        depth_level (int, optional): The depth level for processing and flattening JSON structures. Can be left as None.
+
+    Returns:
+        Config: An instance of the Config class containing all the initialized parameters.
+    """
+    # Create and return an instance of the Config class with all parameters
+    return Config(
+        dbutils=dbutils,
+        helper=helper,
+        source_environment=source_environment,
+        destination_environment=destination_environment,
+        source_container=source_container,
+        source_datasetidentifier=source_datasetidentifier,
+        source_filename=source_filename,
+        key_columns=key_columns,
+        feedback_column=feedback_column,
+        schema_folder_name=schema_folder_name,
+        depth_level=depth_level
+    )
