@@ -74,7 +74,8 @@ def flatten(df, layer_separator='_'):
 
 def flatten_df(df: DataFrame, depth_level=None, current_level=0, max_depth=1, type_mapping: dict = None) -> DataFrame:
     """
-    Flattens complex fields in a DataFrame up to a specified depth level, applying type mapping.
+    Flattens complex fields in a DataFrame up to a specified depth level, applying type mapping,
+    and renames columns by replacing '__' and '.' with '_'.
     
     Args:
         df (DataFrame): A PySpark DataFrame.
@@ -84,7 +85,7 @@ def flatten_df(df: DataFrame, depth_level=None, current_level=0, max_depth=1, ty
         type_mapping (dict, optional): A dictionary mapping original types to desired Spark SQL types. Defaults to None.
     
     Returns:
-        DataFrame: A flattened DataFrame with custom types applied.
+        DataFrame: A flattened DataFrame with custom types applied and column names adjusted.
     """
     if depth_level is None or depth_level == '':
         depth_level = max_depth
@@ -113,6 +114,10 @@ def flatten_df(df: DataFrame, depth_level=None, current_level=0, max_depth=1, ty
 
     if current_level >= depth_level:
         df = df.select([col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else col(c) for c in df.columns])
+
+    # Rename columns by replacing '__' and '.' with '_'
+    df = rename_columns(df, replacements={'__': '_'})
+    df = rename_columns(df, replacements={'.': '_'})
 
     return df
 
