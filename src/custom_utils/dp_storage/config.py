@@ -1,13 +1,14 @@
+from custom_utils import helper
+
 class Config:
-    def __init__(self, dbutils, helper, source_environment, destination_environment, source_container, source_datasetidentifier, source_filename, key_columns, feedback_column, schema_folder_name, depth_level):
+    def __init__(self, dbutils, helper, source_environment, destination_environment, source_container, source_datasetidentifier, 
+                 source_filename='*', key_columns='', feedback_column='', schema_folder_name='schemachecks', depth_level=None):
         """
         Initialize the Config class and fetch necessary parameters.
         
         Parameters fetched using _get_param can be dynamically overridden by default values.
         """
-
         # Fetch parameters with default values where applicable
-        # Only defaults need to be added here, if the parameters are not provided via the widget or ADF.
         self.source_environment = self._get_param(helper, dbutils, 'SourceStorageAccount', source_environment, required=True)
         self.destination_environment = self._get_param(helper, dbutils, 'DestinationStorageAccount', destination_environment, required=True)
         self.source_container = self._get_param(helper, dbutils, 'SourceContainer', source_container, required=True)
@@ -45,8 +46,8 @@ class Config:
         for param, value in vars(self).items():
             print(f"{param}: {value}")
 
-# Function to initialize the Config class with input parameters
-def initialize_config(dbutils, helper, source_environment, destination_environment, source_container, source_datasetidentifier, source_filename='*', key_columns='', feedback_column='', schema_folder_name='schemachecks', depth_level=None):
+def initialize_config(dbutils, helper, source_environment, destination_environment, source_container, source_datasetidentifier, 
+                      source_filename='*', key_columns='', feedback_column='', schema_folder_name='schemachecks', depth_level=None):
     """
     Function to initialize the Config class with input parameters and return the config object.
     
@@ -56,7 +57,7 @@ def initialize_config(dbutils, helper, source_environment, destination_environme
     - source_filename, key_columns, feedback_column, schema_folder_name: Optional settings with default values.
     - depth_level: Can be left as None if not provided, defaults will be handled in the class.
     """
-    config = Config(
+    return Config(
         dbutils=dbutils,
         helper=helper,
         source_environment=source_environment,
@@ -69,5 +70,4 @@ def initialize_config(dbutils, helper, source_environment, destination_environme
         schema_folder_name=schema_folder_name,
         depth_level=depth_level
     )
-    
-    return config
+
