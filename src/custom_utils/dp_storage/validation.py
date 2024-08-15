@@ -10,8 +10,8 @@ def verify_paths_and_files(dbutils, config, helper):
         config (object): Configuration object containing paths and settings.
         helper (object): Helper object for logging messages.
 
-    Raises:
-        Exception: If any of the required paths or files are missing.
+    Returns:
+        str: The file extension of the schema file (e.g., '.json' or '.xsd').
     """
 
     # Step 1: Filter and find the mount point that contains the config.source_environment
@@ -30,12 +30,17 @@ def verify_paths_and_files(dbutils, config, helper):
         expected_schema_filename = f"{config.source_datasetidentifier}_schema"
         expected_schema_formats = [".json", ".xsd"]
 
+        # Initialize the variable to store the schema file extension
+        schema_file_extension = None
+
         # Check for the expected schema file in .json or .xsd formats
         found_schema_file = None
         for file in schema_files:
-            if any(file.name == f"{expected_schema_filename}{ext}" for ext in expected_schema_formats):
-                found_schema_file = file.name
-                break
+            for ext in expected_schema_formats:
+                if file.name == f"{expected_schema_filename}{ext}":
+                    found_schema_file = file.name
+                    schema_file_extension = ext
+                    break
 
         # Print expected and found schema names
         print(f"Expected schema file: {expected_schema_filename}.json or {expected_schema_filename}.xsd")
@@ -83,3 +88,6 @@ def verify_paths_and_files(dbutils, config, helper):
 
     # Log success if all checks pass
     helper.write_message("All paths and files verified successfully. Proceeding with notebook execution.")
+
+    # Return the schema file extension
+    return schema_file_extension
