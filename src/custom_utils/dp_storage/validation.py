@@ -3,7 +3,7 @@ from pyspark.sql.utils import AnalysisException
 def verify_paths_and_files(dbutils, config, helper):
     """
     Verifies that the schema folder, schema file, and source folder exist and contain the expected files.
-    Returns the schema file path and data file path for further processing.
+    Returns the schema file path, data file path, and file type (e.g., JSON or XML) for further processing.
 
     Args:
         dbutils (object): Databricks utility object to interact with DBFS.
@@ -11,7 +11,7 @@ def verify_paths_and_files(dbutils, config, helper):
         helper (object): Helper object for logging messages.
 
     Returns:
-        tuple: A tuple containing the schema file path and the data file path.
+        tuple: A tuple containing the schema file path, data file path, and file type.
     """
 
     # Step 1: Filter and find the mount point that contains the config.source_environment
@@ -31,16 +31,21 @@ def verify_paths_and_files(dbutils, config, helper):
     try:
         schema_files = dbutils.fs.ls(schema_directory_path)
         expected_schema_filename = f"{config.source_datasetidentifier}_schema"
-        expected_schema_formats = [".json", ".xsd"]
+        schema_format_mapping = {
+            ".json": "json",
+            ".xsd": "xml"
+        }
 
-        # Check for the expected schema file in .json or .xsd formats
+        # Determine the expected data file extension based on the schema format
         found_schema_file = None
         schema_file_extension = None
+        file_type = None
         for file in schema_files:
-            for ext in expected_schema_formats:
+            for ext, ftype in schema_format_mapping.items():
                 if file.name == f"{expected_schema_filename}{ext}":
                     found_schema_file = file.name
                     schema_file_extension = ext
+                    file_type = ftype
                     break
 
         # Print expected and found schema names
@@ -73,11 +78,7 @@ def verify_paths_and_files(dbutils, config, helper):
         print(f"Actual number of files found: {number_of_files}")
 
         if config.source_filename == "*":
-            # If the schema file is .xsd, the data files are expected to be .xml
-            if schema_file_extension == ".xsd":
-                data_file_path = f"{source_directory_path}/*.xml"
-            else:
-                data_file_path = f"{source_directory_path}/*"
+            data_file_path = f"{source_directory_path}/*"
         else:
             # Ensure that a specific file pattern is matched (if it's not "*")
             matched_files = [file for file in source_files if config.source_filename in file.name]
@@ -87,13 +88,8 @@ def verify_paths_and_files(dbutils, config, helper):
                 helper.write_message(f"No files matching '{config.source_filename}' found in {source_directory_path}.")
                 raise Exception(f"No files matching '{config.source_filename}' found in {source_directory_path}.")
 
-            # Adjust the extension if the schema is .xsd (expect .xml for data)
-            data_file_name = matched_files[0].name
-            if schema_file_extension == ".xsd":
-                data_file_name = data_file_name.replace(".json", ".xml")
-
             # Construct the full data file path with the exact file name
-            data_file_path = f"{source_directory_path}/{data_file_name}"
+            data_file_path = f"{source_directory_path}/{matched_files[0].name}"
 
     except Exception as e:
         helper.write_message(f"Failed to access source folder: {str(e)}")
@@ -102,5 +98,5 @@ def verify_paths_and_files(dbutils, config, helper):
     # Log success if all checks pass
     helper.write_message("All paths and files verified successfully. Proceeding with notebook execution.")
 
-    # Return the schema file path and data file path
-    return schema_file_path, data_file_path
+    # Return the schema file path, data file path, and file type
+    return schema_file_path, data_file_path, file_type
