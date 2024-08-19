@@ -92,26 +92,26 @@ def flatten_df(df: DataFrame, depth_level=None, current_level=0, max_depth=1, ty
         return df
 
     if type_mapping is not None:
-        df = df.select([col(c).cast(type_mapping.get(df.schema[c].dataType.simpleString(), df.schema[c].dataType)) for c in df.columns])
+        df = df.select([F.col(c).cast(type_mapping.get(df.schema[c].dataType.simpleString(), df.schema[c].dataType)) for c in df.columns])
 
     complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
 
     while complex_fields:
         for col_name, data_type in complex_fields.items():
             if current_level + 1 == depth_level:
-                df = df.withColumn(col_name, to_json(col(col_name)))
+                df = df.withColumn(col_name, to_json(F.col(col_name)))
             else:
                 if isinstance(data_type, ArrayType):
-                    df = df.withColumn(col_name, explode_outer(col(col_name)))
+                    df = df.withColumn(col_name, explode_outer(F.col(col_name)))
                 if isinstance(data_type, StructType):
-                    expanded = [col(f"{col_name}.{k}").alias(f"{col_name}_{k}") for k in data_type.fieldNames()]
+                    expanded = [F.col(f"{col_name}.{k}").alias(f"{col_name}_{k}") for k in data_type.fieldNames()]
                     df = df.select("*", *expanded).drop(col_name)
 
         complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
         current_level += 1
 
     if current_level >= depth_level:
-        df = df.select([col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else col(c) for c in df.columns])
+        df = df.select([F.col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else F.col(c) for c in df.columns])
 
     # Rename columns by replacing '__' and '.' with '_'
     df = rename_columns(df, replacements={'__': '_'})
@@ -156,7 +156,7 @@ def rename_and_cast_columns(df, column_mapping=None, cast_type_mapping=None):
     if cast_type_mapping:
         for col_name, new_type in cast_type_mapping.items():
             if col_name in df.columns:
-                df = df.withColumn(col_name, col(col_name).cast(new_type))
+                df = df.withColumn(col_name, F.col(col_name).cast(new_type))
     return df
 
 
@@ -205,7 +205,7 @@ def read_json_from_binary(spark, schema, data_file_path):
     df_final_with_filename = df_final_with_filename.drop("json_string", "content", "path", "modificationTime", "length", "id")
 
     # Reorder the columns to have `input_file_name` as the first column
-    columns = ["input_file_name"] + [col for col in df_final_with_filename.columns if col != "input_file_name"]
+    columns = ["input_file_name"] + [F.col for F.col in df_final_with_filename.columns if F.col != "input_file_name"]
     df_final_with_filename = df_final_with_filename.select(columns)
 
     return df_final_with_filename
