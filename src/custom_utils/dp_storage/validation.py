@@ -1,5 +1,3 @@
-from pyspark.sql.utils import AnalysisException
-
 def verify_paths_and_files(dbutils, config, helper):
     """
     Verifies that the schema folder, schema file, and source folder exist and contain the expected files.
