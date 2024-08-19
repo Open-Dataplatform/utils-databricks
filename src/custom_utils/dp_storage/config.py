@@ -71,11 +71,11 @@ class Config:
         """
         Print all configuration parameters for easy debugging and verification.
         """
-        print("\nConfiguration Parameters:")
-        print("-" * 30)
+        helper.write_message("\nConfiguration Parameters:")
+        helper.write_message("-" * 30)
         for param, value in vars(self).items():
-            print(f"{param}: {value}")
-        print("-" * 30)
+            helper.write_message(f"{param}: {value}")
+        helper.write_message("-" * 30)
 
 def initialize_config(dbutils, helper, source_environment, destination_environment, source_container, source_datasetidentifier, 
                       source_filename='*', key_columns='', feedback_column='', schema_folder_name='schemachecks', depth_level=None):
