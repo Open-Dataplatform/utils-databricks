@@ -26,7 +26,7 @@ def verify_paths_and_files(dbutils, config, helper):
 
     # Step 2: Verify the Schema Folder and Schema File
     schema_directory_path = f"{mount_point}/{config.schema_folder_name}/{config.source_datasetidentifier}"
-    print(f"Schema directory path: {schema_directory_path}")
+    helper.write_message(f"Schema directory path: {schema_directory_path}")
 
     try:
         schema_files = dbutils.fs.ls(schema_directory_path)
@@ -49,8 +49,8 @@ def verify_paths_and_files(dbutils, config, helper):
                     break
 
         # Print expected and found schema names
-        print(f"Expected schema file: {expected_schema_filename}.json or {expected_schema_filename}.xsd")
-        print(f"Found schema file: {found_schema_file if found_schema_file else 'None'}")
+        helper.write_message(f"Expected schema file: {expected_schema_filename}.json or {expected_schema_filename}.xsd")
+        helper.write_message(f"Found schema file: {found_schema_file if found_schema_file else 'None'}")
 
         # Assertion: Ensure the found schema matches the expected name and format
         if not found_schema_file:
@@ -66,7 +66,7 @@ def verify_paths_and_files(dbutils, config, helper):
 
     # Step 3: Verify the Source Folder and Check for Files
     source_directory_path = f"{mount_point}/{config.source_datasetidentifier}"
-    print(f"Source directory path: {source_directory_path}")
+    helper.write_message(f"Source directory path: {source_directory_path}")
 
     try:
         source_files = dbutils.fs.ls(source_directory_path)
@@ -74,8 +74,8 @@ def verify_paths_and_files(dbutils, config, helper):
         
         # Print expected and actual number of files
         expected_min_files = 1
-        print(f"Expected minimum files: {expected_min_files}")
-        print(f"Actual number of files found: {number_of_files}")
+        helper.write_message(f"Expected minimum files: {expected_min_files}")
+        helper.write_message(f"Actual number of files found: {number_of_files}")
 
         if config.source_filename == "*":
             data_file_path = f"{source_directory_path}/*"
@@ -83,7 +83,7 @@ def verify_paths_and_files(dbutils, config, helper):
             # Ensure that a specific file pattern is matched (if it's not "*")
             matched_files = [file for file in source_files if config.source_filename in file.name]
             number_of_files = len(matched_files)
-            print(f"Number of matching files found: {number_of_files}")
+            helper.write_message(f"Number of matching files found: {number_of_files}")
             if not matched_files:
                 helper.write_message(f"No files matching '{config.source_filename}' found in {source_directory_path}.")
                 raise Exception(f"No files matching '{config.source_filename}' found in {source_directory_path}.")
