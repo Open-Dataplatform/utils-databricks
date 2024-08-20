@@ -1,7 +1,11 @@
 """Functions related to reading from storage"""
 
 import os
-
+from pyspark.sql import DataFrame
+from pyspark.sql.types import (
+    StringType, BooleanType, DoubleType, IntegerType, LongType, TimestampType, DecimalType,
+    DateType, BinaryType, StructType, FloatType
+)
 from .connector import get_mount_point_name
 
 
@@ -46,3 +50,73 @@ def verify_source_path_and_source_config(folder_path: str, config_for_triggered_
 
     assert container_from_trigger == config_for_triggered_dataset['container']
     assert identifier_from_trigger == config_for_triggered_dataset['dataset']
+
+
+def get_json_depth(json_schema, current_depth=0, definitions=None) -> int:
+    """
+    Recursively determines the maximum depth of a JSON schema, including handling references.
+    
+    Args:
+        json_schema (dict): A JSON schema represented as a dictionary.
+        current_depth (int): The current depth level (used internally).
+        definitions (dict, optional): Definitions from the JSON schema to resolve $ref references. Defaults to None.
+    
+    Returns:
+        int: The maximum depth level of the JSON schema.
+    """
+    if definitions is None:
+        definitions = json_schema.get('definitions', {})
+        
+    if isinstance(json_schema, dict):
+        if '$ref' in json_schema:
+            ref_schema = definitions.get(json_schema['$ref'].split('/')[-1], {})
+            return get_json_depth(ref_schema, current_depth, definitions)
+        
+        if 'properties' in json_schema:
+            return max(get_json_depth(v, current_depth + 1, definitions) for v in json_schema['properties'].values())
+        
+        if 'items' in json_schema:
+            return get_json_depth(json_schema['items'], current_depth + 1, definitions)
+        
+        return current_depth
+    return current_depth
+
+
+def get_type_mapping() -> dict:
+    """
+    Returns a dictionary mapping JSON data types to PySpark SQL types.
+    
+    Returns:
+        dict: A dictionary where keys are JSON data types as strings and values are PySpark SQL data types.
+    """
+    return {
+        "string": StringType(),
+        "boolean": BooleanType(),
+        "number": FloatType(),
+        "integer": IntegerType(),
+        "long": LongType(),
+        "double": FloatType(),
+        "array": StringType(),
+        "object": StringType(),
+        "datetime": TimestampType(),
+        "decimal": FloatType(),
+        "date": DateType(),
+        "time": StringType(),
+        "binary": BinaryType()
+    }
+
+def get_columns_of_interest(df: DataFrame) -> str:
+    """
+    Returns the columns of interest as a string, excluding 'input_file_name'.
+    
+    Args:
+        df (DataFrame): A PySpark DataFrame after flattening.
+    
+    Returns:
+        str: A string of columns of interest, excluding 'input_file_name'.
+    """
+    # Exclude 'input_file_name' from the list of columns of interest
+    columns_of_interest = [col for col in df.columns if col != 'input_file_name']
+    columns_of_interest_str = ', '.join(columns_of_interest)
+    
+    return columns_of_interest_str
