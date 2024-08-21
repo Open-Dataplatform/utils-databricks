@@ -131,7 +131,13 @@ def display_newly_merged_data(spark, database_name, table_name, pre_merge_versio
 
     try:
         merged_data_df = spark.sql(merged_data_sql)
-        display(merged_data_df.limit(10))  # Limit the output to 10 rows for clarity
+        
+        # Check if the result has any rows
+        if merged_data_df.count() == 0:
+            if helper:
+                helper.write_message("Query returned no results.")
+        else:
+            display(merged_data_df.limit(10))  # Limit the output to 10 rows for clarity
     except Exception as e:
         if helper:
             helper.write_message(f"Error displaying merged data: {e}")
