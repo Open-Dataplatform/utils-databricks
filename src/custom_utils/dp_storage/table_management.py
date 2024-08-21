@@ -1,17 +1,19 @@
 from custom_utils.dp_storage import writer  # Import writer module
 
-def get_destination_details(spark, helper=None):
+def get_destination_details(spark, destination_environment, source_datasetidentifier, helper=None):
     """
     Retrieves the destination path, database name, and table name for the given environment and dataset identifier.
 
     Args:
         spark (SparkSession): The active Spark session.
+        destination_environment (str): The destination environment.
+        source_datasetidentifier (str): The dataset identifier (usually a folder or dataset name).
         helper (optional): An optional logging helper object for writing messages.
 
     Returns:
         tuple: A tuple containing the destination path, database name, and table name.
     """
-    # Fetching global variables for destination details
+    # Fetching destination details using the provided parameters
     destination_path = writer.get_destination_path_extended(destination_environment, source_datasetidentifier)
     database_name, table_name = writer.get_databricks_table_info_extended(destination_environment, source_datasetidentifier)
     
@@ -80,16 +82,18 @@ def create_table_if_not_exists(spark, database_name, table_name, destination_pat
             helper.write_message(f"Error creating table {database_name}.{table_name}: {str(e)}")
         raise
 
-def manage_table_creation(spark, helper=None):
+def manage_table_creation(spark, destination_environment, source_datasetidentifier, helper=None):
     """
     Orchestrates the process of managing table creation in Databricks based on the dataset and environment.
 
     Args:
         spark (SparkSession): The active Spark session.
+        destination_environment (str): The destination environment.
+        source_datasetidentifier (str): The dataset identifier (usually a folder or dataset name).
         helper (optional): A logging helper object for writing messages.
     """
     # Fetch the destination details
-    destination_path, database_name, table_name = get_destination_details(spark, helper)
+    destination_path, database_name, table_name = get_destination_details(spark, destination_environment, source_datasetidentifier, helper)
 
     # Check if the table exists
     table_exists = check_if_table_exists(spark, database_name, table_name, helper)
