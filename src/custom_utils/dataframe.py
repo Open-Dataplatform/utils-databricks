@@ -293,53 +293,45 @@ def read_json_from_binary(spark, schema, data_file_path):
         raise RuntimeError(f"Error processing binary JSON files: {str(e)}")
 
 
-def process_and_flatten_json(helper=None, depth_level=None, type_mapping=None) -> tuple:
+def process_and_flatten_json(config, helper=None, depth_level=None, type_mapping=None) -> tuple:
     """
     Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
 
-    The function uses global variables for configuration, which are set by `initialize_config()`.
-    Optional parameters allow overriding the default configurations.
-
     Args:
+        config (Config): The configuration object containing all necessary parameters.
         helper (optional): An optional logging helper object. Defaults to None.
-        depth_level (int, optional): The maximum depth level for flattening. Overrides the global value if provided.
-        type_mapping (dict, optional): A dictionary for custom data type conversions. Overrides the global value if provided.
+        depth_level (int, optional): The maximum depth level for flattening. Overrides the config value if provided.
+        type_mapping (dict, optional): A dictionary for custom data type conversions. Overrides the config value if provided.
                                        If explicitly set to None, no type mapping will be applied.
 
     Returns:
         tuple: A tuple containing:
             - df_schema (DataFrame): The original DataFrame with the schema applied.
             - df_flattened (DataFrame): The fully processed and flattened PySpark DataFrame.
+            - columns_of_interest (list): A list of columns that are important for further processing.
+            - view_name (str): The name of the temporary view created for the flattened DataFrame.
     """
-    # Use the provided depth_level or fallback to the global value
-    depth_level = (
-        depth_level if depth_level is not None else globals().get("depth_level")
-    )
+    # Use the provided depth_level or fallback to the config value
+    depth_level = depth_level if depth_level is not None else config.depth_level
 
     # If type_mapping is None (default), use reader.get_type_mapping()
     if type_mapping is None:
         type_mapping = reader.get_type_mapping()
 
     # Initialize Spark session
-    spark = SparkSession.builder.appName(
-        f"Flatten DataFrame: {source_datasetidentifier}"
-    ).getOrCreate()
+    spark = SparkSession.builder.appName(f"Flatten DataFrame: {config.source_datasetidentifier}").getOrCreate()
 
     # Convert the JSON schema to PySpark StructType and retrieve the original JSON schema
-    schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
+    schema_json, schema = writer.json_schema_to_spark_struct(config.source_schema_folder_path)
 
     # Read and parse the JSON data with binary fallback
-    df = dataframe.read_json_from_binary(spark, schema, data_file_path)
+    df = dataframe.read_json_from_binary(spark, schema, config.source_folder_path)
 
     # Determine the maximum depth of the JSON schema
-    max_depth = reader.get_json_depth(
-        schema_json, helper=helper, depth_level=depth_level
-    )
+    max_depth = reader.get_json_depth(schema_json, helper=helper, depth_level=depth_level)
 
     # Flatten the DataFrame based on the depth level
-    df_flattened = dataframe.flatten_df(
-        df, depth_level=depth_level, max_depth=max_depth, type_mapping=type_mapping
-    )
+    df_flattened = dataframe.flatten_df(df, depth_level=depth_level, max_depth=max_depth, type_mapping=type_mapping)
 
     # Drop the "input_file_name" column from the DataFrame
     df = df.drop("input_file_name")
@@ -357,7 +349,7 @@ def process_and_flatten_json(helper=None, depth_level=None, type_mapping=None) -
     columns_of_interest = reader.get_columns_of_interest(df_flattened, helper=helper)
 
     # Create temporary view with the flattened DataFrame
-    view_name = source_datasetidentifier
+    view_name = config.source_datasetidentifier
     df_flattened.createOrReplaceTempView(view_name)
 
     # Return both the schema DataFrame and the flattened DataFrame
