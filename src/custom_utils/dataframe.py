@@ -290,3 +290,74 @@ def read_json_from_binary(spark, schema, data_file_path):
     except Exception as e:
         # Handle and log any errors during processing
         raise RuntimeError(f"Error processing binary JSON files: {str(e)}")
+
+
+def process_and_flatten_json(helper=None, depth_level=None, type_mapping=None) -> tuple:
+    """
+    Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
+
+    The function uses global variables for configuration, which are set by `initialize_config()`.
+    Optional parameters allow overriding the default configurations.
+
+    Args:
+        helper (optional): An optional logging helper object. Defaults to None.
+        depth_level (int, optional): The maximum depth level for flattening. Overrides the global value if provided.
+        type_mapping (dict, optional): A dictionary for custom data type conversions. Overrides the global value if provided.
+                                       If explicitly set to None, no type mapping will be applied.
+
+    Returns:
+        tuple: A tuple containing:
+            - df_schema (DataFrame): The original DataFrame with the schema applied.
+            - df_flattened (DataFrame): The fully processed and flattened PySpark DataFrame.
+    """
+    # Use the provided depth_level or fallback to the global value
+    depth_level = (
+        depth_level if depth_level is not None else globals().get("depth_level")
+    )
+
+    # If type_mapping is None (default), use reader.get_type_mapping()
+    if type_mapping is None:
+        type_mapping = reader.get_type_mapping()
+
+    # Initialize Spark session
+    spark = SparkSession.builder.appName(
+        f"Flatten DataFrame: {source_datasetidentifier}"
+    ).getOrCreate()
+
+    # Convert the JSON schema to PySpark StructType and retrieve the original JSON schema
+    schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
+
+    # Read and parse the JSON data with binary fallback
+    df = dataframe.read_json_from_binary(spark, schema, data_file_path)
+
+    # Determine the maximum depth of the JSON schema
+    max_depth = reader.get_json_depth(
+        schema_json, helper=helper, depth_level=depth_level
+    )
+
+    # Flatten the DataFrame based on the depth level
+    df_flattened = dataframe.flatten_df(
+        df, depth_level=depth_level, max_depth=max_depth, type_mapping=type_mapping
+    )
+
+    # Drop the "input_file_name" column from the DataFrame
+    df = df.drop("input_file_name")
+
+    # Rename "Timestamp" to "EventTimestamp" and cast it to timestamp for accurate datetime operations,
+    # avoiding SQL conflicts with the reserved keyword "Timestamp".
+    if "Timestamp" in df_flattened.columns:
+        df_flattened = dataframe.rename_and_cast_columns(
+            df_flattened,
+            column_mapping={"Timestamp": "EventTimestamp"},
+            cast_type_mapping={"EventTimestamp": "timestamp"},
+        )
+
+    # Extract columns of interest and optionally log the output
+    columns_of_interest = reader.get_columns_of_interest(df_flattened, helper=helper)
+
+    # Create temporary view with the flattened DataFrame
+    view_name = source_datasetidentifier
+    df_flattened.createOrReplaceTempView(view_name)
+
+    # Return both the schema DataFrame and the flattened DataFrame
+    return df, df_flattened, columns_of_interest, view_name
