@@ -122,11 +122,16 @@ def get_json_depth(
             ]
             max_depth = max(max_depth, *list_depths)
 
-        # Log the depth once if the helper is provided
-        if helper:
-            helper.write_message(f"Maximum depth level of the JSON schema: {max_depth}; Flattened depth level of the JSON file: {depth_level}")
-        
         return max_depth
+
+    # Calculate the maximum depth using the recursive helper function
+    max_depth = calculate_depth(json_schema, current_depth, definitions)
+
+    # Log the depth once if the helper is provided
+    if helper:
+        helper.write_message(f"Maximum depth level of the JSON schema: {max_depth}; Flattened depth level of the JSON file: {depth_level}")
+
+    return max_depth
 
 
 def get_type_mapping() -> dict:
