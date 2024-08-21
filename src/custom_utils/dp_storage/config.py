@@ -6,8 +6,6 @@ class Config:
                  source_filename='*', key_columns='', feedback_column='', schema_folder_name='schemachecks', depth_level=None):
         """
         Initializes and fetches configuration parameters.
-
-        This class retrieves parameters either from Databricks widgets or uses default values, and handles any missing required parameters.
         """
         self.helper = helper
         self.dbutils = dbutils
@@ -33,29 +31,29 @@ class Config:
 
     def _get_param(self, param_name: str, default_value=None, required: bool = False):
         """
-        Fetches a parameter value, either from ADF (Azure Data Factory) or defaults.
-
-        Args:
-            param_name (str): The name of the parameter to fetch.
-            default_value: The default value if the parameter is not found.
-            required (bool): If True, raises an exception if the parameter is missing.
-
-        Returns:
-            The parameter value or the default value.
+        Fetches a parameter value, either from Databricks widgets, environment variables, or defaults.
         """
+        value = None
+
+        # Fetch from widgets if dbutils is available
         if self.dbutils:
-            value = self.helper.get_adf_parameter(self.dbutils, param_name)
-        else:
-            # Fallback: Fetch from environment variables or use provided default
+            try:
+                value = self.dbutils.widgets.get(param_name)
+            except Exception as e:
+                self.helper.write_message(f"Could not retrieve widget '{param_name}': {str(e)}")
+
+        # Fallback to environment variables if widget value is not found
+        if not value:
             value = os.getenv(param_name.upper(), default_value)
-        
+
         if not value and required:
             raise ValueError(f"Required parameter '{param_name}' is missing.")
-        return value or default_value
+        
+        return value
 
     def print_params(self):
         """Log all configuration parameters except helper and dbutils."""
-        excluded_params = {"helper", "dbutils"}  # Parameters to exclude from printing
+        excluded_params = {"helper", "dbutils"}
         self.helper.write_message("\nConfiguration Parameters:")
         self.helper.write_message("-" * 30)
         for param, value in vars(self).items():
