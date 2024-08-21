@@ -1,4 +1,5 @@
 from pyspark.sql.utils import AnalysisException
+from custom_utils.helper import get_key_columns_list
 
 def build_duplicate_check_query(view_name: str, key_columns_list: list) -> str:
     """
@@ -71,7 +72,7 @@ def perform_quality_check(spark, helper=None) -> None:
         raise ValueError("ERROR: No KeyColumns defined in the global context!")
 
     # Get the list of key columns
-    key_columns_list = helper.get_key_columns_list(key_columns)
+    key_columns_list = get_key_columns_list(key_columns)
 
     # Retrieve the view name from the global context
     view_name = globals().get('source_datasetidentifier')
