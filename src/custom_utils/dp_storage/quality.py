@@ -1,4 +1,4 @@
-from pyspark.sql import AnalysisException
+from pyspark.sql.utils import AnalysisException
 
 def build_duplicate_check_query(view_name: str, key_columns_list: list) -> str:
     """
