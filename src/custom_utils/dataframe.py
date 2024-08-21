@@ -342,15 +342,20 @@ def process_and_flatten_json(config, schema_file_path, data_file_path, helper=No
     return df, df_flattened, columns_of_interest, view_name
 
 def create_temp_view_with_most_recent_records(
+    view_name: str,  # Explicitly pass the view name
     order_by_columns: list = ["input_file_name DESC"],  # Default order by input_file_name in descending order
     helper=None  # Optional helper for logging
 ) -> None:
     """
     Creates a temporary view with the most recent version of records based on key columns and ordering logic.
 
+    The function retrieves all configuration settings from global variables, making it easier to call without needing
+    to pass redundant parameters.
+
     Args:
+        view_name (str): The name of the temporary view containing the data.
         order_by_columns (list, optional): List of column names used in the ORDER BY clause.
-                                           Defaults to ["input_file_name DESC"].
+                                           Defaults to ["t.input_file_name DESC"].
         helper (optional): A logging helper object for writing messages. Defaults to None.
 
     Raises:
@@ -365,8 +370,7 @@ def create_temp_view_with_most_recent_records(
         # Create a list of key columns and trim any extra whitespace
         key_columns_list = [col.strip() for col in key_columns.split(',')]
 
-        # Dynamically determine the view name and columns of interest from global variables
-        view_name = source_datasetidentifier
+        # Dynamically determine the columns of interest from global variables
         columns_of_interest_str = columns_of_interest
 
         # Construct the SQL query to create the temporary view
@@ -390,6 +394,9 @@ def create_temp_view_with_most_recent_records(
         spark.sql(new_data_sql)
         if helper:
             helper.write_message(f"Temporary view temp_{view_name} created successfully.")
+
+        # Optionally: Display the DataFrame to verify the result (useful in Databricks or Jupyter)
+        # display(spark.sql(f"SELECT * FROM temp_{view_name}"))
 
     except ValueError as ve:
         if helper:
