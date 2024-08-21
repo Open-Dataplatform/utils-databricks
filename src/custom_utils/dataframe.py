@@ -293,23 +293,9 @@ def read_json_from_binary(spark, schema, data_file_path):
         raise RuntimeError(f"Error processing binary JSON files: {str(e)}")
 
 
-def process_and_flatten_json(config, helper=None, depth_level=None, type_mapping=None) -> tuple:
+def process_and_flatten_json(config, schema_file_path, data_file_path, helper=None, depth_level=None, type_mapping=None) -> tuple:
     """
     Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
-
-    Args:
-        config (Config): The configuration object containing all necessary parameters.
-        helper (optional): An optional logging helper object. Defaults to None.
-        depth_level (int, optional): The maximum depth level for flattening. Overrides the config value if provided.
-        type_mapping (dict, optional): A dictionary for custom data type conversions. Overrides the config value if provided.
-                                       If explicitly set to None, no type mapping will be applied.
-
-    Returns:
-        tuple: A tuple containing:
-            - df_schema (DataFrame): The original DataFrame with the schema applied.
-            - df_flattened (DataFrame): The fully processed and flattened PySpark DataFrame.
-            - columns_of_interest (list): A list of columns that are important for further processing.
-            - view_name (str): The name of the temporary view created for the flattened DataFrame.
     """
     # Use the provided depth_level or fallback to the config value
     depth_level = depth_level if depth_level is not None else config.depth_level
@@ -322,10 +308,10 @@ def process_and_flatten_json(config, helper=None, depth_level=None, type_mapping
     spark = SparkSession.builder.appName(f"Flatten DataFrame: {config.source_datasetidentifier}").getOrCreate()
 
     # Convert the JSON schema to PySpark StructType and retrieve the original JSON schema
-    schema_json, schema = writer.json_schema_to_spark_struct(config.source_schema_folder_path)
+    schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
 
     # Read and parse the JSON data with binary fallback
-    df = dataframe.read_json_from_binary(spark, schema, config.source_folder_path)
+    df = dataframe.read_json_from_binary(spark, schema, data_file_path)
 
     # Determine the maximum depth of the JSON schema
     max_depth = reader.get_json_depth(schema_json, helper=helper, depth_level=depth_level)
