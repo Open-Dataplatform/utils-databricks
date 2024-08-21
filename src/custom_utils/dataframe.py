@@ -342,6 +342,7 @@ def process_and_flatten_json(config, schema_file_path, data_file_path, helper=No
     return df, df_flattened, columns_of_interest, view_name
 
 def create_temp_view_with_most_recent_records(
+    spark,  # Pass the Spark session as the first parameter
     view_name: str,
     key_columns: str,  # Explicitly pass key_columns as a comma-separated string
     columns_of_interest: str,  # Explicitly pass columns_of_interest as a comma-separated string
@@ -352,6 +353,7 @@ def create_temp_view_with_most_recent_records(
     Creates a temporary view with the most recent version of records based on key columns and ordering logic.
 
     Args:
+        spark (SparkSession): The active Spark session.
         view_name (str): The name of the temporary view containing the data.
         key_columns (str): A comma-separated string of key columns.
         columns_of_interest (str): A comma-separated string of columns to be included in the final view.
