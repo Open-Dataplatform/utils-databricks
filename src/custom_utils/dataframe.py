@@ -340,3 +340,63 @@ def process_and_flatten_json(config, schema_file_path, data_file_path, helper=No
 
     # Return both the schema DataFrame and the flattened DataFrame
     return df, df_flattened, columns_of_interest, view_name
+
+def create_temp_view_with_most_recent_records(
+    order_by_columns: list = ["input_file_name DESC"],  # Default order by input_file_name in descending order
+    helper=None  # Optional helper for logging
+) -> None:
+    """
+    Creates a temporary view with the most recent version of records based on key columns and ordering logic.
+
+    Args:
+        order_by_columns (list, optional): List of column names used in the ORDER BY clause.
+                                           Defaults to ["input_file_name DESC"].
+        helper (optional): A logging helper object for writing messages. Defaults to None.
+
+    Raises:
+        ValueError: If there is an issue with the key_columns variable.
+        Exception: If there is an error executing the SQL query.
+    """
+    try:
+        # Check if key columns are defined globally
+        if not key_columns:
+            raise ValueError("ERROR: No KeyColumns defined!")
+
+        # Create a list of key columns and trim any extra whitespace
+        key_columns_list = [col.strip() for col in key_columns.split(',')]
+
+        # Dynamically determine the view name and columns of interest from global variables
+        view_name = source_datasetidentifier
+        columns_of_interest_str = columns_of_interest
+
+        # Construct the SQL query to create the temporary view
+        new_data_sql = f"""
+        CREATE OR REPLACE TEMPORARY VIEW temp_{view_name} AS
+        SELECT {columns_of_interest_str}
+        FROM (
+            SELECT t.*, 
+                   row_number() OVER (PARTITION BY {', '.join(key_columns_list)} 
+                                      ORDER BY {', '.join(order_by_columns)}) AS rnr
+            FROM {view_name} t
+        ) x
+        WHERE rnr = 1;
+        """
+
+        # Log the constructed SQL query for debugging, if helper is available
+        if helper:
+            helper.write_message(f"Constructed SQL query: {new_data_sql}")
+
+        # Execute the SQL query to create the temporary view
+        spark.sql(new_data_sql)
+        if helper:
+            helper.write_message(f"Temporary view temp_{view_name} created successfully.")
+
+    except ValueError as ve:
+        if helper:
+            helper.write_message(f"Configuration Error: {ve}")
+        raise
+
+    except Exception as e:
+        if helper:
+            helper.write_message(f"Error creating temporary view temp_{view_name}: {e}")
+        raise
