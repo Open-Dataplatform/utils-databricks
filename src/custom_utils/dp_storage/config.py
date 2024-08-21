@@ -75,19 +75,23 @@ def get_dbutils():
     except KeyError:
         return None  # Safely return None if dbutils is not available
 
-def initialize_config(depth_level=None):
+def initialize_config(dbutils=None, helper=None, depth_level=None):
     """
     Initializes the Config class and returns the config object.
 
     This function fetches parameters dynamically and handles default values.
 
     Args:
+        dbutils (optional): The Databricks dbutils object, if available.
+        helper (optional): The helper object used for logging and parameter fetching.
         depth_level (int, optional): The depth level for processing JSON structures.
 
     Returns:
         Config: An instance of the Config class with all parameters set.
     """
-    dbutils = get_dbutils()
+    # If dbutils is not provided, try to get it from the global scope
+    if dbutils is None:
+        dbutils = get_dbutils()
 
     # Initialize Config with fallback to environment variables if dbutils is not available
     return Config(
