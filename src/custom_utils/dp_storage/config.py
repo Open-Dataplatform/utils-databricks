@@ -1,12 +1,12 @@
 from custom_utils import helper
 
 class Config:
-    def __init__(self, dbutils, helper, source_environment, destination_environment, source_container, source_datasetidentifier, 
+    def __init__(self, dbutils, helper, source_environment=None, destination_environment=None, source_container=None, source_datasetidentifier=None, 
                  source_filename='*', key_columns='', feedback_column='', schema_folder_name='schemachecks', depth_level=None):
         """
-        Initialize the Config class and fetch necessary parameters.
-        
-        This class fetches parameters either from widgets or default values and handles any missing required parameters.
+        Initializes and fetches configuration parameters.
+
+        This class retrieves parameters either from Databricks widgets or uses default values, and handles any missing required parameters.
 
         Args:
             dbutils: Databricks utility object to interact with DBFS, widgets, secrets, etc.
@@ -26,81 +26,90 @@ class Config:
             source_folder_path (str): The full path to the source files based on the container and dataset identifier.
             source_schema_folder_path (str): The full path to the schema files.
         """
-        # Fetch parameters with default values where applicable
-        self.source_environment = self._get_param(helper, dbutils, 'SourceStorageAccount', source_environment, required=True)
-        self.destination_environment = self._get_param(helper, dbutils, 'DestinationStorageAccount', destination_environment, required=True)
-        self.source_container = self._get_param(helper, dbutils, 'SourceContainer', source_container, required=True)
-        self.source_datasetidentifier = self._get_param(helper, dbutils, 'SourceDatasetidentifier', source_datasetidentifier, required=True)
-        self.source_filename = self._get_param(helper, dbutils, 'SourceFileName', source_filename)
-        self.key_columns = self._get_param(helper, dbutils, 'KeyColumns', key_columns, required=True).replace(' ', '')  # Remove any extra spaces
-        self.feedback_column = self._get_param(helper, dbutils, 'FeedbackColumn', feedback_column, required=True)
-        self.schema_folder_name = self._get_param(helper, dbutils, 'SchemaFolderName', schema_folder_name, required=True)
-        
-        # Convert depth level to an integer if provided; otherwise, it can be left as None.
-        depth_level_str = self._get_param(helper, dbutils, 'DepthLevel', depth_level)
+        self.helper = helper
+        self.dbutils = dbutils
+
+        # Fetch core parameters, using either widget values or defaults
+        self.source_environment = self._get_param('SourceStorageAccount', source_environment, required=True)
+        self.destination_environment = self._get_param('DestinationStorageAccount', destination_environment, required=True)
+        self.source_container = self._get_param('SourceContainer', source_container, required=True)
+        self.source_datasetidentifier = self._get_param('SourceDatasetidentifier', source_datasetidentifier, required=True)
+        self.source_filename = self._get_param('SourceFileName', source_filename)
+        self.key_columns = self._get_param('KeyColumns', key_columns, required=True).replace(' ', '')
+        self.feedback_column = self._get_param('FeedbackColumn', feedback_column, required=True)
+        self.schema_folder_name = self._get_param('SchemaFolderName', schema_folder_name, required=True)
+
+        # Convert depth level to an integer if provided, otherwise leave as None
+        depth_level_str = self._get_param('DepthLevel', depth_level)
         self.depth_level = int(depth_level_str) if depth_level_str else None
 
-        # Derived parameters are constructed from the fetched parameters
+        # Derived paths based on provided/fetched parameters
         self.source_schema_filename = f"{self.source_datasetidentifier}_schema"
         self.source_folder_path = f"{self.source_container}/{self.source_datasetidentifier}"
         self.source_schema_folder_path = f"{self.source_container}/{self.schema_folder_name}/{self.source_datasetidentifier}"
 
-    def _get_param(self, helper, dbutils, param_name: str, default_value=None, required: bool = False):
+    def _get_param(self, param_name: str, default_value=None, required: bool = False):
         """
-        Helper function to fetch parameters with optional default values and error handling.
-        
-        If the parameter is not found and is required, an error is raised.
-        Otherwise, it returns the parameter value or a provided default.
+        Fetches a parameter value, either from ADF or defaults.
 
         Args:
-            helper: Helper object used for logging and parameter fetching.
-            dbutils: Databricks utility object to interact with DBFS, widgets, secrets, etc.
             param_name (str): The name of the parameter to fetch.
-            default_value: The default value to use if the parameter is not found.
-            required (bool): Whether the parameter is required. Defaults to False.
+            default_value: The default value if the parameter is not found.
+            required (bool): If True, raises an exception if the parameter is missing.
 
         Returns:
             The parameter value or the default value.
         """
-        value = helper.get_adf_parameter(dbutils, param_name)
+        value = self.helper.get_adf_parameter(self.dbutils, param_name)
         if not value and required:
             raise ValueError(f"Required parameter '{param_name}' is missing.")
         return value or default_value
 
     def print_params(self):
-        """
-        Print all configuration parameters for easy debugging and verification.
-        """
-        helper.write_message("\nConfiguration Parameters:")
-        helper.write_message("-" * 30)
+        """Logger alle konfigurationsparametre undtagen helper og dbutils."""
+        excluded_params = {"helper", "dbutils"}  # Parametre der ikke skal printes
+        self.helper.write_message("\nConfiguration Parameters:")
+        self.helper.write_message("-" * 30)
         for param, value in vars(self).items():
-            helper.write_message(f"{param}: {value}")
-        helper.write_message("-" * 30)
+            if param not in excluded_params:
+                self.helper.write_message(f"{param}: {value}")
+        self.helper.write_message("-" * 30)
 
-def initialize_config(dbutils, helper, source_environment, destination_environment, source_container, source_datasetidentifier, 
-                      source_filename='*', key_columns='', feedback_column='', schema_folder_name='schemachecks', depth_level=None):
+    def unpack(self, namespace: dict):
+        """Unpacks all configuration attributes into the provided namespace (e.g., globals())."""
+        namespace.update(vars(self))
+
+def get_dbutils():
     """
-    Function to initialize the Config class with input parameters and return the config object.
-    
-    Parameters:
-    - dbutils, helper: Required to fetch the parameters.
-    - source_environment, destination_environment, source_container, source_datasetidentifier: Core settings.
-    - source_filename, key_columns, feedback_column, schema_folder_name: Optional settings with default values.
-    - depth_level: Can be left as None if not provided, defaults will be handled in the class.
+    Retrieve the dbutils object from the global scope.
+    This function works in Databricks notebooks where dbutils is available by default.
+    """
+    try:
+        return globals()['dbutils']
+    except KeyError:
+        raise RuntimeError("dbutils is not available in the current environment.")
+
+def initialize_config(depth_level=None):
+    """
+    Initializes the Config class and returns the config object.
+
+    This function fetches parameters dynamically and handles default values.
+
+    Args:
+        depth_level (int, optional): The depth level for processing JSON structures.
 
     Returns:
         Config: An instance of the Config class with all parameters set.
     """
+    dbutils = get_dbutils()
+
+    # Fetch parameters dynamically using helper functions
     return Config(
         dbutils=dbutils,
         helper=helper,
-        source_environment=source_environment,
-        destination_environment=destination_environment,
-        source_container=source_container,
-        source_datasetidentifier=source_datasetidentifier,
-        source_filename=source_filename,
-        key_columns=key_columns,
-        feedback_column=feedback_column,
-        schema_folder_name=schema_folder_name,
+        source_environment=helper.get_adf_parameter(dbutils, 'SourceStorageAccount'),
+        destination_environment=helper.get_adf_parameter(dbutils, 'DestinationStorageAccount'),
+        source_container=helper.get_adf_parameter(dbutils, 'SourceContainer'),
+        source_datasetidentifier=helper.get_adf_parameter(dbutils, 'SourceDatasetidentifier'),
         depth_level=depth_level
     )
