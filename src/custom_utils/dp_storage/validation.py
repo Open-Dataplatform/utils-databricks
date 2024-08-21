@@ -1,6 +1,7 @@
 from pyspark.sql.utils import AnalysisException
 from custom_utils.dp_storage.config import Config
 
+
 class PathValidator:
     def __init__(self, config: Config):
         """
@@ -30,7 +31,9 @@ class PathValidator:
             # Verify source folder and files
             data_file_path = self._verify_source_folder(mount_point)
 
-            self.helper.write_message("All paths and files verified successfully. Proceeding with notebook execution.")
+            self.helper.write_message(
+                "All paths and files verified successfully. Proceeding with notebook execution."
+            )
             return schema_file_path, data_file_path, file_type
 
         except Exception as e:
@@ -45,11 +48,19 @@ class PathValidator:
         Returns:
             str: The mount point path.
         """
-        target_mount = [m.mountPoint for m in self.dbutils.fs.mounts() if self.config.source_environment in m.source]
+        target_mount = [
+            m.mountPoint
+            for m in self.dbutils.fs.mounts()
+            if self.config.source_environment in m.source
+        ]
 
         if not target_mount:
-            self.helper.write_message(f"No mount point found for environment: {self.config.source_environment}")
-            raise Exception(f"No mount point found for environment: {self.config.source_environment}")
+            self.helper.write_message(
+                f"No mount point found for environment: {self.config.source_environment}"
+            )
+            raise Exception(
+                f"No mount point found for environment: {self.config.source_environment}"
+            )
 
         return target_mount[0]
 
@@ -69,10 +80,7 @@ class PathValidator:
         try:
             schema_files = self.dbutils.fs.ls(schema_directory_path)
             expected_schema_filename = f"{self.config.source_datasetidentifier}_schema"
-            schema_format_mapping = {
-                ".json": "json",
-                ".xsd": "xml"
-            }
+            schema_format_mapping = {".json": "json", ".xsd": "xml"}
 
             found_schema_file = None
             file_type = None
@@ -85,10 +93,14 @@ class PathValidator:
                         break
 
             if not found_schema_file:
-                self.helper.write_message(f"Expected schema file not found in {schema_directory_path}.")
+                self.helper.write_message(
+                    f"Expected schema file not found in {schema_directory_path}."
+                )
                 available_files = [file.name for file in schema_files]
                 self.helper.write_message(f"Available files: {available_files}")
-                raise Exception(f"Expected schema file '{expected_schema_filename}.json' or '{expected_schema_filename}.xsd' not found in {schema_directory_path}.")
+                raise Exception(
+                    f"Expected schema file '{expected_schema_filename}.json' or '{expected_schema_filename}.xsd' not found in {schema_directory_path}."
+                )
 
             schema_file_path = f"/dbfs{schema_directory_path}/{found_schema_file}"
             return schema_file_path, file_type
@@ -115,17 +127,27 @@ class PathValidator:
             number_of_files = len(source_files)
 
             self.helper.write_message(f"Expected minimum files: 1")
-            self.helper.write_message(f"Actual number of files found: {number_of_files}")
+            self.helper.write_message(
+                f"Actual number of files found: {number_of_files}"
+            )
 
             if self.config.source_filename == "*":
                 return f"{source_directory_path}/*"
 
-            matched_files = [file for file in source_files if self.config.source_filename in file.name]
+            matched_files = [
+                file
+                for file in source_files
+                if self.config.source_filename in file.name
+            ]
             if not matched_files:
                 available_files = [file.name for file in source_files]
-                self.helper.write_message(f"No files matching '{self.config.source_filename}' found in {source_directory_path}.")
+                self.helper.write_message(
+                    f"No files matching '{self.config.source_filename}' found in {source_directory_path}."
+                )
                 self.helper.write_message(f"Available files: {available_files}")
-                raise Exception(f"No files matching '{self.config.source_filename}' found in {source_directory_path}.")
+                raise Exception(
+                    f"No files matching '{self.config.source_filename}' found in {source_directory_path}."
+                )
 
             return f"{source_directory_path}/{matched_files[0].name}"
 

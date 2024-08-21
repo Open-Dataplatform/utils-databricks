@@ -3,6 +3,7 @@ from pyspark.sql.types import ArrayType, StructType, StringType
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame
 
+
 def _get_array_and_struct_columns(df):
     """Return list with columns (names and types) of either ArrayType or StructType"""
     complex_columns = []
@@ -13,13 +14,14 @@ def _get_array_and_struct_columns(df):
 
     return complex_columns
 
-def _get_expanded_columns_with_aliases(df, column_name, layer_separator='_'):
+
+def _get_expanded_columns_with_aliases(df, column_name, layer_separator="_"):
     """Return list of nested columns (pyspark.sql.column.Column) in a column struct. To be used in df.select().
 
     layer_separator is used as the separator in the new column name between the column and nested column names.
     """
     expanded_columns = []
-    for nested_column in df.select(f'`{column_name}`.*').columns:
+    for nested_column in df.select(f"`{column_name}`.*").columns:
         expanded_column = f"`{column_name}`.`{nested_column}`"
         expanded_column_alias = f"{column_name}{layer_separator}{nested_column}"
 
@@ -27,18 +29,23 @@ def _get_expanded_columns_with_aliases(df, column_name, layer_separator='_'):
 
     return expanded_columns
 
+
 def flatten_array_column(df, column_name):
     """Return dataframe with flattened array column."""
     df = df.withColumn(column_name, F.explode_outer(F.col(column_name)))
     return df
 
-def flatten_struct_column(df, column_name, layer_separator='_'):
+
+def flatten_struct_column(df, column_name, layer_separator="_"):
     """Return dataframe with flattened struct column."""
-    expanded_columns = _get_expanded_columns_with_aliases(df, column_name, layer_separator)
+    expanded_columns = _get_expanded_columns_with_aliases(
+        df, column_name, layer_separator
+    )
     df = df.select("*", *expanded_columns).drop(column_name)
     return df
 
-def flatten(df, layer_separator='_'):
+
+def flatten(df, layer_separator="_"):
     """Return dataframe with flattened arrays and structs.
 
     Written with inspiration from https://www.youtube.com/watch?v=jD8JIw1FVVg.
@@ -58,91 +65,162 @@ def flatten(df, layer_separator='_'):
 
     return df
 
-def flatten_df(df: DataFrame, depth_level=None, current_level=0, max_depth=1, type_mapping: dict = None) -> DataFrame:
+
+def flatten_df(
+    df: DataFrame,
+    depth_level=None,
+    current_level=0,
+    max_depth=1,
+    type_mapping: dict = None,
+) -> DataFrame:
     """
-    Flattens complex fields in a DataFrame up to a specified depth level, applying type mapping,
+    Flattens complex fields in a DataFrame up to a specified depth level, applies type mapping,
     and renames columns by replacing '__' and '.' with '_'.
-    
+
     Args:
-        df (DataFrame): A PySpark DataFrame.
-        depth_level (int or None): The maximum depth level to flatten. If None, max_depth is used.
-        current_level (int): The current depth level (used internally).
+        df (DataFrame): A PySpark DataFrame containing nested structures.
+        depth_level (int, optional): The maximum depth level to flatten. If None, max_depth is used.
+        current_level (int): The current depth level (used internally during recursion).
         max_depth (int): The maximum depth calculated from the schema.
-        type_mapping (dict, optional): A dictionary mapping original types to desired Spark SQL types. Defaults to None.
-    
+        type_mapping (dict, optional): A dictionary mapping original types to desired Spark SQL types.
+
     Returns:
         DataFrame: A flattened DataFrame with custom types applied and column names adjusted.
     """
-    if depth_level is None or depth_level == '':
-        depth_level = max_depth
+    # Determine the depth level to flatten to
+    depth_level = max_depth if depth_level is None or depth_level == "" else depth_level
 
+    # Exit early if the current level has reached or exceeded the depth level
     if current_level >= depth_level:
         return df
 
-    if type_mapping is not None:
-        df = df.select([F.col(c).cast(type_mapping.get(df.schema[c].dataType.simpleString(), df.schema[c].dataType)) for c in df.columns])
+    # Apply custom type mappings if provided
+    if type_mapping:
+        df = df.select(
+            [
+                F.col(c).cast(
+                    type_mapping.get(
+                        df.schema[c].dataType.simpleString(), df.schema[c].dataType
+                    )
+                )
+                for c in df.columns
+            ]
+        )
 
-    complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
+    # Identify columns with complex data types (arrays and structs)
+    complex_fields = {
+        field.name: field.dataType
+        for field in df.schema.fields
+        if isinstance(field.dataType, (ArrayType, StructType))
+    }
 
-    while complex_fields:
+    # Flatten each complex field based on its data type
+    while complex_fields and current_level < depth_level:
         for col_name, data_type in complex_fields.items():
             if current_level + 1 == depth_level:
+                # Convert nested structures to JSON strings if at the final depth level
                 df = df.withColumn(col_name, F.to_json(F.col(col_name)))
             else:
+                # Handle arrays and structs differently
                 if isinstance(data_type, ArrayType):
                     df = df.withColumn(col_name, F.explode_outer(F.col(col_name)))
                 if isinstance(data_type, StructType):
-                    expanded = [F.col(f"{col_name}.{k}").alias(f"{col_name}_{k}") for k in data_type.fieldNames()]
-                    df = df.select("*", *expanded).drop(col_name)
+                    expanded_columns = [
+                        F.col(f"{col_name}.{k}").alias(f"{col_name}_{k}")
+                        for k in data_type.fieldNames()
+                    ]
+                    df = df.select("*", *expanded_columns).drop(col_name)
 
-        complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
+        # Re-evaluate complex fields after flattening
+        complex_fields = {
+            field.name: field.dataType
+            for field in df.schema.fields
+            if isinstance(field.dataType, (ArrayType, StructType))
+        }
         current_level += 1
 
+    # After flattening, convert any remaining complex fields to strings if the depth is reached
     if current_level >= depth_level:
-        df = df.select([F.col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else F.col(c) for c in df.columns])
+        df = df.select(
+            [
+                F.col(c).cast(StringType())
+                if isinstance(df.schema[c].dataType, (ArrayType, StructType))
+                else F.col(c)
+                for c in df.columns
+            ]
+        )
 
     # Rename columns by replacing '__' and '.' with '_'
-    df = rename_columns(df, replacements={'__': '_'})
-    df = rename_columns(df, replacements={'.': '_'})
+    df = rename_columns(df, replacements={"__": "_", ".": "_"})
 
     return df
 
-def _string_replace(s: str, replacements: dict):
-    """Return string with multiple replacements."""
+
+def _string_replace(s: str, replacements: dict) -> str:
+    """
+    Helper function to perform multiple string replacements.
+
+    Args:
+        s (str): The input string to be modified.
+        replacements (dict): Dictionary of replacements where the key is the substring to replace and the value is the replacement.
+
+    Returns:
+        str: The modified string with all replacements applied.
+    """
     for string_before, string_after in replacements.items():
         s = s.replace(string_before, string_after)
 
     return s
 
-def rename_columns(df, replacements={'.': '_'}):
-    """Return dataframe with columns renamed according to replacement dict."""
+
+def rename_columns(df: DataFrame, replacements: dict) -> DataFrame:
+    """
+    Renames DataFrame columns based on a dictionary of replacement rules.
+
+    Args:
+        df (DataFrame): The DataFrame whose columns need renaming.
+        replacements (dict): A dictionary with keys as substrings to be replaced and values as their replacements.
+
+    Returns:
+        DataFrame: The DataFrame with renamed columns.
+    """
     for column_name in df.columns:
-        df = df.withColumnRenamed(column_name, _string_replace(column_name, replacements))
+        df = df.withColumnRenamed(
+            column_name, _string_replace(column_name, replacements)
+        )
     return df
 
-def rename_and_cast_columns(df, column_mapping=None, cast_type_mapping=None):
+
+def rename_and_cast_columns(
+    df: DataFrame, column_mapping: dict = None, cast_type_mapping: dict = None
+) -> DataFrame:
     """
-    Rename columns and optionally cast them to a different type.
-    
+    Renames specified columns and optionally casts them to a different data type.
+
     Args:
         df (DataFrame): The DataFrame whose columns need to be renamed and cast.
-        column_mapping (dict, optional): Specific column names to be renamed. 
-                                         Example: {"Timestamp": "EventTimestamp"}
-        cast_type_mapping (dict, optional): Dictionary to cast columns to specific data types. 
-                                             Example: {"EventTimestamp": "timestamp"}
-    
+        column_mapping (dict, optional): Dictionary specifying columns to rename.
+                                         Example: {"Timestamp": "EventTimestamp"}.
+        cast_type_mapping (dict, optional): Dictionary specifying columns to cast to specific data types.
+                                             Example: {"EventTimestamp": "timestamp"}.
+
     Returns:
-        DataFrame: DataFrame with renamed and possibly casted columns.
+        DataFrame: A DataFrame with renamed and potentially casted columns.
     """
+    # Rename columns based on the provided mapping
     if column_mapping:
         for old_name, new_name in column_mapping.items():
             if old_name in df.columns:
                 df = df.withColumnRenamed(old_name, new_name)
+
+    # Cast columns based on the provided type mapping
     if cast_type_mapping:
         for col_name, new_type in cast_type_mapping.items():
             if col_name in df.columns:
                 df = df.withColumn(col_name, F.col(col_name).cast(new_type))
+
     return df
+
 
 def add_columns_that_are_not_in_df(df, column_names: List[str]):
     """Add columns in column_names that are not already in dataframe.
@@ -154,7 +232,9 @@ def add_columns_that_are_not_in_df(df, column_names: List[str]):
         if column_name not in df.columns:
             df = df.withColumn(column_name, F.lit(None))
             print(f'Column "{column_name}" was added.')
+
     return df
+
 
 def read_json_from_binary(spark, schema, data_file_path):
     """
@@ -169,26 +249,44 @@ def read_json_from_binary(spark, schema, data_file_path):
     Returns:
         DataFrame: The DataFrame parsed from the JSON content, with `input_file_name` as the first column.
     """
-    # Load all files as binary
-    binary_df = spark.read.format("binaryFile").load(data_file_path)
+    try:
+        # Load all files as binary and extract relevant columns
+        binary_df = spark.read.format("binaryFile").load(data_file_path)
 
-    # Extract the file path and content, and add an ID column
-    df_with_filename = binary_df.withColumn("json_string", F.col("content").cast("string")) \
-                                .withColumn("input_file_name", F.col("path")) \
-                                .withColumn("id", F.monotonically_increasing_id())
+        # Add necessary columns including JSON content as string, input file path, and a unique ID
+        df_with_filename = (
+            binary_df.withColumn("json_string", F.col("content").cast("string"))
+            .withColumn("input_file_name", F.col("path"))
+            .withColumn("id", F.monotonically_increasing_id())
+        )
 
-    # Parse JSON content using the schema
-    df_parsed = spark.read.schema(schema).json(df_with_filename.select("json_string").rdd.map(lambda row: row.json_string)) \
-                          .withColumn("id", F.monotonically_increasing_id())
+        # Parse the JSON content using the provided schema
+        df_parsed = (
+            spark.read.schema(schema)
+            .json(
+                df_with_filename.select("json_string").rdd.map(
+                    lambda row: row.json_string
+                )
+            )
+            .withColumn("id", F.monotonically_increasing_id())
+        )
 
-    # Join the parsed DataFrame with the original DataFrame on the id column
-    df_final_with_filename = df_parsed.join(df_with_filename, on="id", how="inner")
+        # Join the parsed DataFrame with the original binary DataFrame on the unique ID
+        df_final_with_filename = df_parsed.join(df_with_filename, on="id", how="inner")
 
-    # Drop unnecessary columns including `json_string`, `content`, `path`, `modificationTime`, `length`, and `id`
-    df_final_with_filename = df_final_with_filename.drop("json_string", "content", "path", "modificationTime", "length", "id")
+        # Drop unnecessary columns after join
+        df_final_with_filename = df_final_with_filename.drop(
+            "json_string", "content", "path", "modificationTime", "length", "id"
+        )
 
-    # Reorder the columns to have `input_file_name` as the first column
-    columns = ["input_file_name"] + [col for col in df_final_with_filename.columns if col != "input_file_name"]
-    df_final_with_filename = df_final_with_filename.select(columns)
+        # Reorder columns to have `input_file_name` as the first column
+        columns = ["input_file_name"] + [
+            col for col in df_final_with_filename.columns if col != "input_file_name"
+        ]
+        df_final_with_filename = df_final_with_filename.select(columns)
 
-    return df_final_with_filename
+        return df_final_with_filename
+
+    except Exception as e:
+        # Handle and log any errors during processing
+        raise RuntimeError(f"Error processing binary JSON files: {str(e)}")
