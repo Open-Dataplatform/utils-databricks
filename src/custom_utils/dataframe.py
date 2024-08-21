@@ -311,13 +311,13 @@ def process_and_flatten_json(config, schema_file_path, data_file_path, helper=No
     schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
 
     # Read and parse the JSON data with binary fallback
-    df = dataframe.read_json_from_binary(spark, schema, data_file_path)
+    df = read_json_from_binary(spark, schema, data_file_path)
 
     # Determine the maximum depth of the JSON schema
     max_depth = reader.get_json_depth(schema_json, helper=helper, depth_level=depth_level)
 
     # Flatten the DataFrame based on the depth level
-    df_flattened = dataframe.flatten_df(df, depth_level=depth_level, max_depth=max_depth, type_mapping=type_mapping)
+    df_flattened = flatten_df(df, depth_level=depth_level, max_depth=max_depth, type_mapping=type_mapping)
 
     # Drop the "input_file_name" column from the DataFrame
     df = df.drop("input_file_name")
@@ -325,7 +325,7 @@ def process_and_flatten_json(config, schema_file_path, data_file_path, helper=No
     # Rename "Timestamp" to "EventTimestamp" and cast it to timestamp for accurate datetime operations,
     # avoiding SQL conflicts with the reserved keyword "Timestamp".
     if "Timestamp" in df_flattened.columns:
-        df_flattened = dataframe.rename_and_cast_columns(
+        df_flattened = rename_and_cast_columns(
             df_flattened,
             column_mapping={"Timestamp": "EventTimestamp"},
             cast_type_mapping={"EventTimestamp": "timestamp"},
