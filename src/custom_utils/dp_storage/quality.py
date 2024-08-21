@@ -58,14 +58,14 @@ def check_for_duplicates(query: str, spark, helper=None) -> None:
             helper.write_message(f"Error executing duplicate check query: {e}")
         raise
 
-def perform_quality_check(spark, key_columns, source_datasetidentifier, helper=None) -> None:
+def perform_quality_check(spark, key_columns, view_name, helper=None) -> None:
     """
     Performs the quality check for duplicates in the new data.
 
     Args:
         spark (SparkSession): The active Spark session.
         key_columns (str): A comma-separated string of key columns.
-        source_datasetidentifier (str): The name of the temporary view containing the data.
+        view_name (str): The name of the temporary view containing the data.
         helper (optional): A logging helper object.
     """
     if not key_columns:
@@ -75,7 +75,7 @@ def perform_quality_check(spark, key_columns, source_datasetidentifier, helper=N
     key_columns_list = get_key_columns_list(key_columns)
 
     # Build the SQL query for duplicate checking
-    query = build_duplicate_check_query(source_datasetidentifier, key_columns_list)
+    query = build_duplicate_check_query(view_name, key_columns_list)
 
     # Execute the query and handle the results
     check_for_duplicates(query, spark, helper)
