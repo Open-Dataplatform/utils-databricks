@@ -342,30 +342,32 @@ def process_and_flatten_json(config, schema_file_path, data_file_path, helper=No
     return df, df_flattened, columns_of_interest, view_name
 
 def create_temp_view_with_most_recent_records(
-    view_name: str,  # Explicitly pass the view name
+    view_name: str,
+    key_columns: str,  # Explicitly pass key_columns as a comma-separated string
     order_by_columns: list = ["input_file_name DESC"],  # Default order by input_file_name in descending order
     helper=None  # Optional helper for logging
 ) -> None:
     """
     Creates a temporary view with the most recent version of records based on key columns and ordering logic.
 
-    The function retrieves all configuration settings from global variables, making it easier to call without needing
-    to pass redundant parameters.
+    The function retrieves configuration settings from the parameters passed in, making it easier to call without needing
+    to rely on global variables.
 
     Args:
         view_name (str): The name of the temporary view containing the data.
+        key_columns (str): A comma-separated string of key columns.
         order_by_columns (list, optional): List of column names used in the ORDER BY clause.
                                            Defaults to ["t.input_file_name DESC"].
         helper (optional): A logging helper object for writing messages. Defaults to None.
 
     Raises:
-        ValueError: If there is an issue with the key_columns variable.
+        ValueError: If key_columns is empty or there is an issue with it.
         Exception: If there is an error executing the SQL query.
     """
     try:
-        # Check if key columns are defined globally
+        # Ensure key columns are provided
         if not key_columns:
-            raise ValueError("ERROR: No KeyColumns defined!")
+            raise ValueError("ERROR: No KeyColumns provided!")
 
         # Create a list of key columns and trim any extra whitespace
         key_columns_list = [col.strip() for col in key_columns.split(',')]
