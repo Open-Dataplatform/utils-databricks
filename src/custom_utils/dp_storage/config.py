@@ -1,35 +1,18 @@
 from custom_utils import helper
+import os
 
 class Config:
-    def __init__(self, dbutils, helper, source_environment=None, destination_environment=None, source_container=None, source_datasetidentifier=None, 
+    def __init__(self, dbutils=None, helper=None, source_environment=None, destination_environment=None, source_container=None, source_datasetidentifier=None, 
                  source_filename='*', key_columns='', feedback_column='', schema_folder_name='schemachecks', depth_level=None):
         """
         Initializes and fetches configuration parameters.
 
         This class retrieves parameters either from Databricks widgets or uses default values, and handles any missing required parameters.
-
-        Args:
-            dbutils: Databricks utility object to interact with DBFS, widgets, secrets, etc.
-            helper: Helper object used for logging and parameter fetching.
-            source_environment (str): The source storage account/environment.
-            destination_environment (str): The destination storage account/environment.
-            source_container (str): The container where source files are stored.
-            source_datasetidentifier (str): The dataset identifier (usually a folder or dataset name).
-            source_filename (str, optional): The pattern or name of the source files. Defaults to '*'.
-            key_columns (str, optional): Comma-separated key columns used for identifying records. Defaults to ''.
-            feedback_column (str, optional): The column used for feedback or timestamp tracking. Defaults to ''.
-            schema_folder_name (str, optional): The folder where schema files are stored. Defaults to 'schemachecks'.
-            depth_level (int, optional): The depth level for processing JSON structures. Defaults to None.
-
-        Derived Attributes:
-            source_schema_filename (str): The name of the schema file based on the dataset identifier.
-            source_folder_path (str): The full path to the source files based on the container and dataset identifier.
-            source_schema_folder_path (str): The full path to the schema files.
         """
         self.helper = helper
         self.dbutils = dbutils
 
-        # Fetch core parameters, using either widget values or defaults
+        # Fetch core parameters using either widget values or defaults
         self.source_environment = self._get_param('SourceStorageAccount', source_environment, required=True)
         self.destination_environment = self._get_param('DestinationStorageAccount', destination_environment, required=True)
         self.source_container = self._get_param('SourceContainer', source_container, required=True)
@@ -50,7 +33,7 @@ class Config:
 
     def _get_param(self, param_name: str, default_value=None, required: bool = False):
         """
-        Fetches a parameter value, either from ADF or defaults.
+        Fetches a parameter value, either from ADF (Azure Data Factory) or defaults.
 
         Args:
             param_name (str): The name of the parameter to fetch.
@@ -60,14 +43,19 @@ class Config:
         Returns:
             The parameter value or the default value.
         """
-        value = self.helper.get_adf_parameter(self.dbutils, param_name)
+        if self.dbutils:
+            value = self.helper.get_adf_parameter(self.dbutils, param_name)
+        else:
+            # Fallback: Fetch from environment variables or use provided default
+            value = os.getenv(param_name.upper(), default_value)
+        
         if not value and required:
             raise ValueError(f"Required parameter '{param_name}' is missing.")
         return value or default_value
 
     def print_params(self):
-        """Logger alle konfigurationsparametre undtagen helper og dbutils."""
-        excluded_params = {"helper", "dbutils"}  # Parametre der ikke skal printes
+        """Log all configuration parameters except helper and dbutils."""
+        excluded_params = {"helper", "dbutils"}  # Parameters to exclude from printing
         self.helper.write_message("\nConfiguration Parameters:")
         self.helper.write_message("-" * 30)
         for param, value in vars(self).items():
@@ -85,9 +73,9 @@ def get_dbutils():
     This function works in Databricks notebooks where dbutils is available by default.
     """
     try:
-        return globals()['dbutils']
+        return globals().get('dbutils', None)
     except KeyError:
-        raise RuntimeError("dbutils is not available in the current environment.")
+        return None  # Safely return None if dbutils is not available
 
 def initialize_config(depth_level=None):
     """
@@ -103,13 +91,13 @@ def initialize_config(depth_level=None):
     """
     dbutils = get_dbutils()
 
-    # Fetch parameters dynamically using helper functions
+    # Initialize Config with fallback to environment variables if dbutils is not available
     return Config(
         dbutils=dbutils,
         helper=helper,
-        source_environment=helper.get_adf_parameter(dbutils, 'SourceStorageAccount'),
-        destination_environment=helper.get_adf_parameter(dbutils, 'DestinationStorageAccount'),
-        source_container=helper.get_adf_parameter(dbutils, 'SourceContainer'),
-        source_datasetidentifier=helper.get_adf_parameter(dbutils, 'SourceDatasetidentifier'),
+        source_environment=helper.get_adf_parameter(dbutils, 'SourceStorageAccount') if dbutils else os.getenv('SOURCESTORAGEACCOUNT'),
+        destination_environment=helper.get_adf_parameter(dbutils, 'DestinationStorageAccount') if dbutils else os.getenv('DESTINATIONSTORAGEACCOUNT'),
+        source_container=helper.get_adf_parameter(dbutils, 'SourceContainer') if dbutils else os.getenv('SOURCECONTAINER'),
+        source_datasetidentifier=helper.get_adf_parameter(dbutils, 'SourceDatasetidentifier') if dbutils else os.getenv('SOURCEDATASETIDENTIFIER'),
         depth_level=depth_level
     )
