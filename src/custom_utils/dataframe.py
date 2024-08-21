@@ -1,7 +1,7 @@
 from typing import List
 from pyspark.sql.types import ArrayType, StructType, StringType
 import pyspark.sql.functions as F
-from pyspark.sql import DataFrame
+from pyspark.sql import SparkSession, DataFrame
 from custom_utils.dp_storage import reader, writer
 
 
