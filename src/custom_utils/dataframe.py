@@ -344,20 +344,19 @@ def process_and_flatten_json(config, schema_file_path, data_file_path, helper=No
 def create_temp_view_with_most_recent_records(
     view_name: str,
     key_columns: str,  # Explicitly pass key_columns as a comma-separated string
+    columns_of_interest: str,  # Explicitly pass columns_of_interest as a comma-separated string
     order_by_columns: list = ["input_file_name DESC"],  # Default order by input_file_name in descending order
     helper=None  # Optional helper for logging
 ) -> None:
     """
     Creates a temporary view with the most recent version of records based on key columns and ordering logic.
 
-    The function retrieves configuration settings from the parameters passed in, making it easier to call without needing
-    to rely on global variables.
-
     Args:
         view_name (str): The name of the temporary view containing the data.
         key_columns (str): A comma-separated string of key columns.
+        columns_of_interest (str): A comma-separated string of columns to be included in the final view.
         order_by_columns (list, optional): List of column names used in the ORDER BY clause.
-                                           Defaults to ["t.input_file_name DESC"].
+                                           Defaults to ["input_file_name DESC"].
         helper (optional): A logging helper object for writing messages. Defaults to None.
 
     Raises:
@@ -372,13 +371,10 @@ def create_temp_view_with_most_recent_records(
         # Create a list of key columns and trim any extra whitespace
         key_columns_list = [col.strip() for col in key_columns.split(',')]
 
-        # Dynamically determine the columns of interest from global variables
-        columns_of_interest_str = columns_of_interest
-
         # Construct the SQL query to create the temporary view
         new_data_sql = f"""
         CREATE OR REPLACE TEMPORARY VIEW temp_{view_name} AS
-        SELECT {columns_of_interest_str}
+        SELECT {columns_of_interest}
         FROM (
             SELECT t.*, 
                    row_number() OVER (PARTITION BY {', '.join(key_columns_list)} 
