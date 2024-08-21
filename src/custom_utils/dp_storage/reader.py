@@ -67,27 +67,24 @@ def verify_source_path_and_source_config(
     assert identifier_from_trigger == config_for_triggered_dataset["dataset"]
 
 
-def get_json_depth(
-    json_schema, current_depth=0, definitions=None, helper=None, depth_level=None
-) -> int:
+def get_json_depth(json_schema, current_depth=0, definitions=None, helper=None, depth_level=None) -> int:
     """
     Recursively determines the maximum depth of a JSON schema, including handling references and mixed structures.
 
     Args:
         json_schema (dict): A JSON schema represented as a dictionary.
         current_depth (int): The current depth level (used internally).
-        definitions (dict, optional): Definitions from the JSON schema to resolve $ref references. Defaults to an empty dictionary if None.
+        definitions (dict, optional): Definitions from the JSON schema to resolve $ref references. Defaults to None.
         helper (object, optional): Helper object used for logging. If provided, logs the maximum depth.
         depth_level (int, optional): The specified flattening depth level for comparison in the log message.
 
     Returns:
         int: The maximum depth level of the JSON schema.
     """
-
     def calculate_depth(schema, current_depth, definitions):
         # Handle $ref references
-        if isinstance(schema, dict) and "$ref" in schema:
-            ref_key = schema["$ref"].split("/")[-1]
+        if isinstance(schema, dict) and '$ref' in schema:
+            ref_key = schema['$ref'].split('/')[-1]
             ref_schema = definitions.get(ref_key, {})
             if ref_schema:
                 return calculate_depth(ref_schema, current_depth, definitions)
@@ -99,37 +96,32 @@ def get_json_depth(
 
         if isinstance(schema, dict):
             # Handle properties (objects)
-            if "properties" in schema:
+            if 'properties' in schema:
                 properties_depth = max(
                     calculate_depth(v, current_depth + 1, definitions)
-                    for v in schema["properties"].values()
+                    for v in schema['properties'].values()
                 )
                 max_depth = max(max_depth, properties_depth)
 
             # Handle items (arrays)
-            if "items" in schema:
+            if 'items' in schema:
                 # Only increase depth if items contain nested structures
-                if isinstance(schema["items"], dict):
-                    items_depth = calculate_depth(
-                        schema["items"], current_depth + 1, definitions
-                    )
+                if isinstance(schema['items'], dict):
+                    items_depth = calculate_depth(schema['items'], current_depth + 1, definitions)
                     max_depth = max(max_depth, items_depth)
 
         if isinstance(schema, list):
             # Handle cases where items is a list of objects
             list_depths = [
-                calculate_depth(item, current_depth + 1, definitions) for item in schema
+                calculate_depth(item, current_depth + 1, definitions)
+                for item in schema
             ]
             max_depth = max(max_depth, *list_depths)
 
         return max_depth
 
-    # Ensure definitions is an empty dictionary if not provided
-    if definitions is None:
-        definitions = {}
-
-    # Calculate the maximum depth using the recursive helper function
-    max_depth = calculate_depth(json_schema, current_depth, definitions)
+    # Calculate the depth
+    max_depth = calculate_depth(json_schema, current_depth, definitions or json_schema.get('definitions', {}))
 
     # Log the depth once if the helper is provided
     if helper:
