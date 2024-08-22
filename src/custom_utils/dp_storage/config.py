@@ -140,7 +140,7 @@ def initialize_config(dbutils=None, helper=None, depth_level=None):
         depth_level=depth_level,
     )
 
-def setup_pipeline(dbutils, helper):
+def initialize_notebook(dbutils, helper):
     """
     Initializes the configuration, unpacks parameters into the global scope,
     and sets up the Spark session.

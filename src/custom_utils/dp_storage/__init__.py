@@ -2,8 +2,8 @@
 
 from .reader import *
 from .writer import *
-from .config import Config, initialize_config, setup_pipeline  # Import Config, initialize_config, and setup_pipeline
+from .config import Config, initialize_config, initialize_notebook  # Import Config, initialize_config, and initialize_notebook
 
 # Automatically call the setup function when this module is imported
 if "dbutils" in globals() and "helper" in globals():
-    spark, config = setup_pipeline(dbutils, helper)
+    spark, config = initialize_notebook(dbutils, helper)
