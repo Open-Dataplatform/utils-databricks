@@ -1,4 +1,5 @@
 import os
+from pyspark.sql import SparkSession
 
 class Config:
     def __init__(
@@ -138,3 +139,26 @@ def initialize_config(dbutils=None, helper=None, depth_level=None):
         ),
         depth_level=depth_level,
     )
+
+def setup_pipeline(dbutils, helper):
+    """
+    Initializes the configuration, unpacks parameters into the global scope,
+    and sets up the Spark session.
+
+    Args:
+        dbutils: The Databricks dbutils object, used for widgets and configurations.
+        helper: The helper object for logging and parameter management.
+    """
+    # Initialize configuration and helper objects
+    config = initialize_config(dbutils=dbutils, helper=helper)
+    
+    # Unpack the config parameters into the global namespace
+    config.unpack(globals())
+
+    # Initialize the Spark session
+    spark = SparkSession.builder.appName(f"Data Processing Pipeline: {config.source_datasetidentifier}").getOrCreate()
+
+    # Print configuration for debugging and verification
+    config.print_params()
+
+    return spark, config
