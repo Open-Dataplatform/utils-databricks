@@ -162,7 +162,3 @@ def setup_pipeline(dbutils, helper):
     config.print_params()
 
     return spark, config
-
-# Automatically initiate setup_pipeline
-if "dbutils" in globals() and "helper" in globals():
-    spark, config = setup_pipeline(dbutils, helper)
