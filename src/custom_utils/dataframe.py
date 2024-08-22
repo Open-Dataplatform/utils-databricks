@@ -293,7 +293,7 @@ def read_json_from_binary(spark, schema, data_file_path):
         raise RuntimeError(f"Error processing binary JSON files: {str(e)}")
 
 
-def process_and_flatten_json(config, schema_file_path, data_file_path, helper=None, depth_level=None, type_mapping=None) -> tuple:
+def process_and_flatten_json(spark, config, schema_file_path, data_file_path, helper=None, depth_level=None, type_mapping=None) -> tuple:
     """
     Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
     """
