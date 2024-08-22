@@ -316,15 +316,8 @@ def process_and_flatten_json(spark, config, schema_file_path, data_file_path, he
     # Flatten the DataFrame based on the depth level
     df_flattened = flatten_df(df, depth_level=depth_level, max_depth=max_depth, type_mapping=type_mapping)
 
-    # Drop the "input_file_name" column from the DataFrame
+    # Drop the "input_file_name" column from the original DataFrame
     df = df.drop("input_file_name")
-
-    # Extract columns of interest and optionally log the output
-    columns_of_interest = reader.get_columns_of_interest(df_flattened, helper=helper)
-
-    # Create temporary view with the flattened DataFrame
-    view_name = config.source_datasetidentifier
-    df_flattened.createOrReplaceTempView(view_name)
 
     # Return both the schema DataFrame and the flattened DataFrame
     return df, df_flattened, columns_of_interest, view_name
