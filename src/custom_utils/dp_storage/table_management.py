@@ -71,7 +71,7 @@ def create_table_if_not_exists(spark, database_name, table_name, destination_pat
     LOCATION 'dbfs:{destination_path}/'
     """
     if helper:
-        helper.write_message(f"Executing SQL query to create table: {create_tbl_sql.strip()}")
+        helper.write_message(f"Executing SQL query to create table: {create_tbl_sql)}")
 
     try:
         spark.sql(create_tbl_sql)
