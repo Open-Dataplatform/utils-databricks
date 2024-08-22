@@ -322,15 +322,6 @@ def process_and_flatten_json(config, schema_file_path, data_file_path, helper=No
     # Drop the "input_file_name" column from the DataFrame
     df = df.drop("input_file_name")
 
-    # Rename "Timestamp" to "EventTimestamp" and cast it to timestamp for accurate datetime operations,
-    # avoiding SQL conflicts with the reserved keyword "Timestamp".
-    if "Timestamp" in df_flattened.columns:
-        df_flattened = rename_and_cast_columns(
-            df_flattened,
-            column_mapping={"Timestamp": "EventTimestamp"},
-            cast_type_mapping={"EventTimestamp": "timestamp"},
-        )
-
     # Extract columns of interest and optionally log the output
     columns_of_interest = reader.get_columns_of_interest(df_flattened, helper=helper)
 
