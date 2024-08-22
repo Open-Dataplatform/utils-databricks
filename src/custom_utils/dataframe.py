@@ -320,7 +320,7 @@ def process_and_flatten_json(spark, config, schema_file_path, data_file_path, he
     df = df.drop("input_file_name")
 
     # Return both the schema DataFrame and the flattened DataFrame
-    return df, df_flattened, columns_of_interest, view_name
+    return df, df_flattened
 
 def create_temp_view_with_most_recent_records(
     spark,  # Pass the Spark session as the first parameter
