@@ -90,6 +90,9 @@ def generate_feedback_timestamps(spark, view_name, feedback_column, dbutils=None
     # Generate the feedback SQL query
     feedback_sql = construct_feedback_sql(view_name, feedback_column, helper)
 
+    if helper:
+        helper.write_message(f"The constructed SQL query to fetch the minimum and maximum feedback timestamps: {feedback_sql}")
+
     # Execute the feedback SQL query
     df_min_max = execute_feedback_sql(spark, feedback_sql, helper)
 
