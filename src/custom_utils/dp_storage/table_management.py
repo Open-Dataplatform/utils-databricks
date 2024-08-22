@@ -74,9 +74,7 @@ def create_table_if_not_exists(spark, database_name, table_name, destination_pat
 
     # Always print the SQL query regardless of whether the table already exists
     if helper:
-        helper.write_message(f"Executing SQL query (for logging): {create_tbl_sql.strip()}")
-    else:
-        print(f"Executing SQL query (for logging): {create_tbl_sql.strip()}")
+        helper.write_message(f"Executing SQL query: {create_tbl_sql.strip()}")
 
     # Only execute the SQL and print a success message if the table does not exist
     if not table_exists:
