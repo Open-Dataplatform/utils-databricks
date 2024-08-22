@@ -304,9 +304,6 @@ def process_and_flatten_json(config, schema_file_path, data_file_path, helper=No
     if type_mapping is None:
         type_mapping = reader.get_type_mapping()
 
-    # Initialize Spark session
-    spark = SparkSession.builder.appName(f"Flatten DataFrame: {config.source_datasetidentifier}").getOrCreate()
-
     # Convert the JSON schema to PySpark StructType and retrieve the original JSON schema
     schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
 
