@@ -32,7 +32,7 @@ def check_if_table_exists(spark, database_name, table_name, helper=None):
         spark (SparkSession): The active Spark session.
         database_name (str): The name of the database.
         table_name (str): The name of the table.
-        helper (optional): An optional logging helper object for writing messages.
+        helper (optional): A logging helper object for writing messages.
 
     Returns:
         bool: True if the table exists, False otherwise.
@@ -54,7 +54,7 @@ def check_if_table_exists(spark, database_name, table_name, helper=None):
     
     return table_exists
 
-def create_table_if_not_exists(spark, database_name, table_name, destination_path, helper=None):
+def create_table_if_not_exists(spark, database_name, table_name, destination_path, table_exists, helper=None):
     """
     Creates a Databricks Delta table at the specified path if it does not already exist.
 
@@ -63,6 +63,7 @@ def create_table_if_not_exists(spark, database_name, table_name, destination_pat
         database_name (str): The name of the database.
         table_name (str): The name of the table.
         destination_path (str): The path where the table data will be stored.
+        table_exists (bool): Boolean flag indicating if the table already exists.
         helper (optional): A logging helper object for writing messages.
     """
     create_tbl_sql = f"""
@@ -70,17 +71,23 @@ def create_table_if_not_exists(spark, database_name, table_name, destination_pat
     USING DELTA
     LOCATION 'dbfs:{destination_path}/'
     """
-    if helper:
-        helper.write_message(f"Executing SQL query to create table: {create_tbl_sql}")
 
-    try:
-        spark.sql(create_tbl_sql)
-        if helper:
-            helper.write_message(f"Table {database_name}.{table_name} created successfully.")
-    except Exception as e:
-        if helper:
-            helper.write_message(f"Error creating table {database_name}.{table_name}: {str(e)}")
-        raise
+    # Always print the SQL query regardless of whether the table already exists
+    if helper:
+        helper.write_message(f"Executing SQL query (for logging): {create_tbl_sql.strip()}")
+    else:
+        print(f"Executing SQL query (for logging): {create_tbl_sql.strip()}")
+
+    # Only execute the SQL and print a success message if the table does not exist
+    if not table_exists:
+        try:
+            spark.sql(create_tbl_sql)
+            if helper:
+                helper.write_message(f"Table {database_name}.{table_name} created successfully.")
+        except Exception as e:
+            if helper:
+                helper.write_message(f"Error creating table {database_name}.{table_name}: {str(e)}")
+            raise
 
 def manage_table_creation(spark, destination_environment, source_datasetidentifier, helper=None):
     """
@@ -99,5 +106,4 @@ def manage_table_creation(spark, destination_environment, source_datasetidentifi
     table_exists = check_if_table_exists(spark, database_name, table_name, helper)
 
     # Create the table if it does not exist
-    if not table_exists:
-        create_table_if_not_exists(spark, database_name, table_name, destination_path, helper)
+    create_table_if_not_exists(spark, database_name, table_name, destination_path, table_exists, helper)
