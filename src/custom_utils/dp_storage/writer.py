@@ -2,7 +2,13 @@
 
 import json
 from pyspark.sql.types import (
-    StructType, StringType, IntegerType, ArrayType, StructField, BooleanType, DoubleType
+    StructType,
+    StringType,
+    IntegerType,
+    ArrayType,
+    StructField,
+    BooleanType,
+    DoubleType,
 )
 from typing import Tuple
 from .connector import get_mount_point_name
@@ -27,7 +33,7 @@ def get_destination_path_extended(storage_account: str, datasetidentifier: str) 
         str: The destination path.
     """
     mount_point = get_mount_point_name(storage_account)
-    destination_path = f'{mount_point}/{datasetidentifier}'
+    destination_path = f"{mount_point}/{datasetidentifier}"
 
     return destination_path
 
@@ -37,14 +43,16 @@ def get_databricks_table_info(destination_config: dict) -> Tuple[str, str]:
 
     data_config = list(destination_config.values())[0]
     mount_point = get_mount_point_name(data_config["account"])
-    
-    database_name = mount_point.split('/')[-1]
-    table_name = data_config['dataset']
-    
+
+    database_name = mount_point.split("/")[-1]
+    table_name = data_config["dataset"]
+
     return database_name, table_name
 
 
-def get_databricks_table_info_extended(storage_account: str, datasetidentifier: str) -> Tuple[str, str]:
+def get_databricks_table_info_extended(
+    storage_account: str, datasetidentifier: str
+) -> Tuple[str, str]:
     """Constructs database and table names to be used in Databricks.
 
     Args:
@@ -55,10 +63,10 @@ def get_databricks_table_info_extended(storage_account: str, datasetidentifier: 
         Tuple[str, str]: The database name and table name.
     """
     mount_point = get_mount_point_name(storage_account)
-    
-    database_name = mount_point.split('/')[-1]
+
+    database_name = mount_point.split("/")[-1]
     table_name = datasetidentifier
-    
+
     return database_name, table_name
 
 
@@ -71,35 +79,47 @@ def json_schema_to_spark_struct(schema_file_path, definitions=None):
         definitions (dict, optional): The schema definitions. Defaults to None.
 
     Returns:
-        tuple: A tuple containing the original JSON schema and the corresponding PySpark StructType.
+        tuple: A tuple containing the original JSON schema as a dictionary and the corresponding PySpark StructType.
     """
-    # Read and parse the schema JSON file
-    with open(schema_file_path, 'r') as f:
-        json_schema = json.load(f)
-    
+    try:
+        # Read and parse the schema JSON file
+        with open(schema_file_path, "r") as f:
+            json_schema = json.load(f)
+    except Exception as e:
+        raise ValueError(
+            f"Failed to load or parse schema file '{schema_file_path}': {e}"
+        )
+
+    # Initialize definitions if not provided
     if definitions is None:
-        definitions = json_schema.get('definitions', {})
+        definitions = json_schema.get("definitions", {})
 
     def resolve_ref(ref):
-        ref_path = ref.split('/')[-1]
+        """Resolve a JSON schema $ref to its definition."""
+        ref_path = ref.split("/")[-1]
         return definitions.get(ref_path, {})
 
     def parse_type(field_props):
+        """Recursively parse the JSON schema properties and map them to PySpark data types."""
         if isinstance(field_props, list):
-            valid_types = [parse_type(fp) for fp in field_props if fp.get('type') != 'null']
+            # Handle lists of possible types, ignoring 'null' if present
+            valid_types = [
+                parse_type(fp) for fp in field_props if fp.get("type") != "null"
+            ]
             return valid_types[0] if valid_types else StringType()
-        
-        if '$ref' in field_props:
-            field_props = resolve_ref(field_props['$ref'])
 
-        json_type = field_props.get('type')
+        # Resolve references if present
+        if "$ref" in field_props:
+            field_props = resolve_ref(field_props["$ref"])
+
+        # Determine the JSON type and map it to a corresponding PySpark type
+        json_type = field_props.get("type")
         if isinstance(json_type, list):
-            json_type = [t for t in json_type if t != 'null']
-            json_type = json_type[0] if json_type else None
+            # Handle lists of types (e.g., ["null", "string"])
+            json_type = next((t for t in json_type if t != "null"), None)
 
-        if json_type is None:
-            return StringType()
-        elif json_type == "string":
+        # Map JSON types to PySpark types
+        if json_type == "string":
             return StringType()
         elif json_type == "integer":
             return IntegerType()
@@ -108,42 +128,53 @@ def json_schema_to_spark_struct(schema_file_path, definitions=None):
         elif json_type == "number":
             return DoubleType()
         elif json_type == "array":
-            items = field_props['items']
-            if isinstance(items, list):
-                valid_items = [item for item in items if item.get('type') != 'null']
-                return ArrayType(parse_type(valid_items[0]) if valid_items else StringType())
-            else:
-                return ArrayType(parse_type(items))
+            items = field_props.get("items")
+            return ArrayType(parse_type(items) if items else StringType())
         elif json_type == "object":
-            return StructType([StructField(k, parse_type(v), True) for k, v in field_props.get('properties', {}).items()])
+            properties = field_props.get("properties", {})
+            return StructType(
+                [StructField(k, parse_type(v), True) for k, v in properties.items()]
+            )
         else:
+            # Default to StringType for unsupported or missing types
             return StringType()
 
     def parse_properties(properties):
-        fields = [StructField(field_name, parse_type(field_props), True) for field_name, field_props in properties.items()]
-        return StructType(fields)
+        """Parse the top-level properties in the JSON schema."""
+        return StructType(
+            [
+                StructField(name, parse_type(props), True)
+                for name, props in properties.items()
+            ]
+        )
 
-    # Return both the JSON schema dictionary and the StructType
-    return json_schema, parse_properties(json_schema.get('properties', {}))
+    # Return both the original JSON schema as a dictionary and the parsed PySpark StructType
+    return json_schema, parse_properties(json_schema.get("properties", {}))
 
 
 def apply_type_mapping(schema: StructType, type_mapping: dict) -> StructType:
     """
     Applies a custom type mapping to a given StructType schema.
-    
+
     Args:
         schema (StructType): The original schema to map.
         type_mapping (dict): A dictionary mapping original types to desired Spark SQL types.
-    
+
     Returns:
         StructType: A new StructType with the custom types applied.
     """
+
     def map_field(field):
         field_type = field.dataType
         if isinstance(field_type, StructType):
             mapped_type = apply_type_mapping(field_type, type_mapping)
         elif isinstance(field_type, ArrayType):
-            mapped_type = ArrayType(type_mapping.get(field_type.elementType.simpleString(), field_type.elementType), field_type.containsNull)
+            mapped_type = ArrayType(
+                type_mapping.get(
+                    field_type.elementType.simpleString(), field_type.elementType
+                ),
+                field_type.containsNull,
+            )
         else:
             mapped_type = type_mapping.get(field_type.simpleString(), field_type)
         return StructField(field.name, mapped_type, field.nullable)
