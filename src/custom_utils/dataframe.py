@@ -4,7 +4,6 @@ import pyspark.sql.functions as F
 from pyspark.sql import SparkSession, DataFrame
 from custom_utils.dp_storage import reader, writer
 
-
 def _get_array_and_struct_columns(df):
     """Return list with columns (names and types) of either ArrayType or StructType"""
     complex_columns = []
@@ -14,7 +13,6 @@ def _get_array_and_struct_columns(df):
             complex_columns.append((field.name, data_type))
 
     return complex_columns
-
 
 def _get_expanded_columns_with_aliases(df, column_name, layer_separator="_"):
     """Return list of nested columns (pyspark.sql.column.Column) in a column struct. To be used in df.select().
@@ -157,6 +155,96 @@ def flatten_df(
     return df
 
 
+def flatten_df(
+    df: DataFrame,
+    depth_level=None,
+    current_level=0,
+    max_depth=1,
+    type_mapping: dict = None,
+) -> DataFrame:
+    """
+    Flattens complex fields in a DataFrame up to a specified depth level, applies type mapping,
+    and renames columns by replacing '__' and '.' with '_'.
+
+    Args:
+        df (DataFrame): A PySpark DataFrame containing nested structures.
+        depth_level (int, optional): The maximum depth level to flatten. If None, max_depth is used.
+        current_level (int): The current depth level (used internally during recursion).
+        max_depth (int): The maximum depth calculated from the schema.
+        type_mapping (dict, optional): A dictionary mapping original types to desired Spark SQL types.
+
+    Returns:
+        DataFrame: A flattened DataFrame with custom types applied and column names adjusted.
+    """
+    # Determine the depth level to flatten to
+    depth_level = max_depth if depth_level is None or depth_level == "" else depth_level
+
+    # Exit early if the current level has reached or exceeded the depth level
+    if current_level >= depth_level:
+        return df
+
+    # Apply custom type mappings if provided
+    if type_mapping:
+        df = df.select(
+            [
+                F.col(c).cast(
+                    type_mapping.get(
+                        df.schema[c].dataType.simpleString(), df.schema[c].dataType
+                    )
+                )
+                for c in df.columns
+            ]
+        )
+
+    # Identify columns with complex data types (arrays and structs)
+    complex_fields = {
+        field.name: field.dataType
+        for field in df.schema.fields
+        if isinstance(field.dataType, (ArrayType, StructType))
+    }
+
+    # Flatten each complex field based on its data type
+    while complex_fields and current_level < depth_level:
+        for col_name, data_type in complex_fields.items():
+            if current_level + 1 == depth_level:
+                # Convert nested structures to JSON strings if at the final depth level
+                df = df.withColumn(col_name, F.to_json(F.col(col_name)))
+            else:
+                # Handle arrays and structs differently
+                if isinstance(data_type, ArrayType):
+                    df = df.withColumn(col_name, F.explode_outer(F.col(col_name)))
+                if isinstance(data_type, StructType):
+                    expanded_columns = [
+                        F.col(f"{col_name}.{k}").alias(f"{col_name}_{k}")
+                        for k in data_type.fieldNames()
+                    ]
+                    df = df.select("*", *expanded_columns).drop(col_name)
+
+        # Re-evaluate complex fields after flattening
+        complex_fields = {
+            field.name: field.dataType
+            for field in df.schema.fields
+            if isinstance(field.dataType, (ArrayType, StructType))
+        }
+        current_level += 1
+
+    # After flattening, convert any remaining complex fields to strings if the depth is reached
+    if current_level >= depth_level:
+        df = df.select(
+            [
+                F.col(c).cast(StringType())
+                if isinstance(df.schema[c].dataType, (ArrayType, StructType))
+                else F.col(c)
+                for c in df.columns
+            ]
+        )
+
+    # Rename columns by replacing '__' and '.' with '_'
+    df = rename_columns(df, replacements={"__": "_", ".": "_"})
+
+    return df
+
+
 def _string_replace(s: str, replacements: dict) -> str:
     """
     Helper function to perform multiple string replacements.
@@ -189,6 +277,38 @@ def rename_columns(df: DataFrame, replacements: dict) -> DataFrame:
         df = df.withColumnRenamed(
             column_name, _string_replace(column_name, replacements)
         )
+    
+    return df
+
+
+def rename_and_cast_columns(
+    df: DataFrame, column_mapping: dict = None, cast_type_mapping: dict = None
+) -> DataFrame:
+    """
+    Renames specified columns and optionally casts them to a different data type.
+
+    Args:
+        df (DataFrame): The DataFrame whose columns need to be renamed and cast.
+        column_mapping (dict, optional): Dictionary specifying columns to rename.
+                                         Example: {"Timestamp": "EventTimestamp"}.
+        cast_type_mapping (dict, optional): Dictionary specifying columns to cast to specific data types.
+                                             Example: {"EventTimestamp": "timestamp"}.
+
+    Returns:
+        DataFrame: A DataFrame with renamed and potentially casted columns.
+    """
+    # Rename columns based on the provided mapping
+    if column_mapping:
+        for old_name, new_name in column_mapping.items():
+            if old_name in df.columns:
+                df = df.withColumnRenamed(old_name, new_name)
+
+    # Cast columns based on the provided type mapping
+    if cast_type_mapping:
+        for col_name, new_type in cast_type_mapping.items():
+            if col_name in df.columns:
+                df = df.withColumn(col_name, F.col(col_name).cast(new_type))
+
     return df
 
 
@@ -329,22 +449,21 @@ def create_temp_view_with_most_recent_records(
     columns_of_interest: str,  # Explicitly pass columns_of_interest as a comma-separated string
     order_by_columns: list = ["input_file_name DESC"],  # Default order by input_file_name in descending order
     helper=None  # Optional helper for logging
-) -> None:
+) -> str:
     """
     Creates a temporary view with the most recent version of records based on key columns and ordering logic.
 
     Args:
         spark (SparkSession): The active Spark session.
-        view_name (str): The name of the temporary view containing the data.
+        view_name (str): The name of the original view containing the data.
         key_columns (str): A comma-separated string of key columns.
         columns_of_interest (str): A comma-separated string of columns to be included in the final view.
         order_by_columns (list, optional): List of column names used in the ORDER BY clause.
                                            Defaults to ["input_file_name DESC"].
         helper (optional): A logging helper object for writing messages. Defaults to None.
 
-    Raises:
-        ValueError: If key_columns is empty or there is an issue with it.
-        Exception: If there is an error executing the SQL query.
+    Returns:
+        str: The name of the temporary view created (e.g., "temp_<view_name>").
     """
     try:
         # Ensure key columns are provided
@@ -355,8 +474,9 @@ def create_temp_view_with_most_recent_records(
         key_columns_list = [col.strip() for col in key_columns.split(',')]
 
         # Construct the SQL query to create the temporary view
+        temp_view_name = f"temp_{view_name}"
         new_data_sql = f"""
-        CREATE OR REPLACE TEMPORARY VIEW temp_{view_name} AS
+        CREATE OR REPLACE TEMPORARY VIEW {temp_view_name} AS
         SELECT {columns_of_interest}
         FROM (
             SELECT t.*, 
@@ -374,10 +494,10 @@ def create_temp_view_with_most_recent_records(
         # Execute the SQL query to create the temporary view
         spark.sql(new_data_sql)
         if helper:
-            helper.write_message(f"Temporary view temp_{view_name} created successfully.")
+            helper.write_message(f"Temporary view {temp_view_name} created successfully.")
 
-        # Optionally: Display the DataFrame to verify the result (useful in Databricks or Jupyter)
-        # display(spark.sql(f"SELECT * FROM temp_{view_name}"))
+        # Return the name of the temporary view
+        return temp_view_name
 
     except ValueError as ve:
         if helper:
@@ -386,5 +506,5 @@ def create_temp_view_with_most_recent_records(
 
     except Exception as e:
         if helper:
-            helper.write_message(f"Error creating temporary view temp_{view_name}: {e}")
+            helper.write_message(f"Error creating temporary view {temp_view_name}: {e}")
         raise
