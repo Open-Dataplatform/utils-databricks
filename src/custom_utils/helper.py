@@ -27,3 +27,22 @@ def get_adf_parameter(dbutils, param_name, default_value=""):
     except Exception as e:
         write_message(f"Could not get parameter {param_name}: {e}")
         return default_value
+
+def get_key_columns_list(key_columns: str) -> list:
+    """
+    Retrieves the list of key columns from the provided key_columns string.
+
+    Args:
+        key_columns (str): A comma-separated string of key columns.
+
+    Returns:
+        list: A list of key columns.
+
+    Raises:
+        ValueError: If key_columns is empty or not provided.
+    """
+    if not key_columns:
+        raise ValueError("ERROR: No KeyColumns defined!")
+
+    # Convert key_columns to a list and strip any extra spaces
+    return [col.strip() for col in key_columns.split(',')]
