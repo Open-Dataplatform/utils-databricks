@@ -38,11 +38,13 @@ def validate_and_prepare_destination(dbutils, destination_path, temp_view_name, 
     """
     path_existed = True
     try:
+        # Check if the destination path exists
         try:
             dbutils.fs.ls(destination_path)
             if helper:
                 helper.write_message(f"Path already exists: {destination_path}")
         except Exception as e:
+            # Handle case where the path does not exist
             if "java.io.FileNotFoundException" in str(e):
                 path_existed = False
                 if helper:
@@ -106,6 +108,7 @@ def check_if_table_exists(spark, database_name, table_name, helper=None):
     """
     table_exists = False
     try:
+        # Attempt to describe the table to check its existence
         spark.sql(f"DESCRIBE TABLE {database_name}.{table_name}")
         table_exists = True
     except Exception as e:
@@ -113,10 +116,10 @@ def check_if_table_exists(spark, database_name, table_name, helper=None):
             if helper:
                 helper.write_message(f"Table {database_name}.{table_name} does not exist. It will be created.")
         else:
+            # Log and continue without crashing
             if helper:
                 helper.write_message(f"Error checking table existence: {str(e)}")
-            raise
-    
+            # Avoid raising the exception to prevent notebook termination
     return table_exists
 
 def create_table_if_not_exists(spark, database_name, table_name, destination_path, temp_view_name, helper=None):
