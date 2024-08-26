@@ -394,22 +394,21 @@ def create_temp_view_with_most_recent_records(
     columns_of_interest: str,  # Explicitly pass columns_of_interest as a comma-separated string
     order_by_columns: list = ["input_file_name DESC"],  # Default order by input_file_name in descending order
     helper=None  # Optional helper for logging
-) -> None:
+) -> str:
     """
     Creates a temporary view with the most recent version of records based on key columns and ordering logic.
 
     Args:
         spark (SparkSession): The active Spark session.
-        view_name (str): The name of the temporary view containing the data.
+        view_name (str): The name of the original view containing the data.
         key_columns (str): A comma-separated string of key columns.
         columns_of_interest (str): A comma-separated string of columns to be included in the final view.
         order_by_columns (list, optional): List of column names used in the ORDER BY clause.
                                            Defaults to ["input_file_name DESC"].
         helper (optional): A logging helper object for writing messages. Defaults to None.
 
-    Raises:
-        ValueError: If key_columns is empty or there is an issue with it.
-        Exception: If there is an error executing the SQL query.
+    Returns:
+        str: The name of the temporary view created (e.g., "temp_<view_name>").
     """
     try:
         # Ensure key columns are provided
@@ -420,8 +419,9 @@ def create_temp_view_with_most_recent_records(
         key_columns_list = [col.strip() for col in key_columns.split(',')]
 
         # Construct the SQL query to create the temporary view
+        temp_view_name = f"temp_{view_name}"
         new_data_sql = f"""
-        CREATE OR REPLACE TEMPORARY VIEW temp_{view_name} AS
+        CREATE OR REPLACE TEMPORARY VIEW {temp_view_name} AS
         SELECT {columns_of_interest}
         FROM (
             SELECT t.*, 
@@ -439,10 +439,10 @@ def create_temp_view_with_most_recent_records(
         # Execute the SQL query to create the temporary view
         spark.sql(new_data_sql)
         if helper:
-            helper.write_message(f"Temporary view temp_{view_name} created successfully.")
+            helper.write_message(f"Temporary view {temp_view_name} created successfully.")
 
-        # Optionally: Display the DataFrame to verify the result (useful in Databricks or Jupyter)
-        # display(spark.sql(f"SELECT * FROM temp_{view_name}"))
+        # Return the name of the temporary view
+        return temp_view_name
 
     except ValueError as ve:
         if helper:
@@ -451,5 +451,5 @@ def create_temp_view_with_most_recent_records(
 
     except Exception as e:
         if helper:
-            helper.write_message(f"Error creating temporary view temp_{view_name}: {e}")
+            helper.write_message(f"Error creating temporary view {temp_view_name}: {e}")
         raise

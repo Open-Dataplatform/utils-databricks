@@ -13,6 +13,7 @@ def get_merge_destination_details(spark, destination_environment, source_dataset
     Returns:
         tuple: A tuple containing the destination path, database name, and table name.
     """
+    # Fetch the destination path and table information based on the environment and dataset identifier
     destination_path = writer.get_destination_path_extended(destination_environment, source_datasetidentifier)
     database_name, table_name = writer.get_databricks_table_info_extended(destination_environment, source_datasetidentifier)
     
@@ -31,12 +32,13 @@ def get_pre_merge_version(spark, database_name, table_name, helper=None):
         spark (SparkSession): The active Spark session.
         database_name (str): The name of the database.
         table_name (str): The name of the table.
-        helper (optional): An optional logging helper object for writing messages.
+        helper (optional): A logging helper object for writing messages.
 
     Returns:
         int: The pre-merge version number of the Delta table.
     """
     try:
+        # Query the version history of the Delta table to get the latest version before the merge
         pre_merge_version = spark.sql(f"DESCRIBE HISTORY {database_name}.{table_name} LIMIT 1").select("version").collect()[0][0]
         return pre_merge_version
     except Exception as e:
@@ -58,8 +60,10 @@ def generate_merge_sql(view_name, database_name, table_name, key_columns, helper
     Returns:
         str: The constructed SQL query for the MERGE operation.
     """
+    # Construct the match condition based on the provided key columns
     match_sql = ' AND '.join([f"s.{col.strip()} = t.{col.strip()}" for col in key_columns.split(',')])
 
+    # Construct the MERGE SQL statement
     merge_sql = f"""
     MERGE INTO {database_name}.{table_name} AS t
     USING {view_name} AS s
@@ -71,7 +75,7 @@ def generate_merge_sql(view_name, database_name, table_name, key_columns, helper
     """
 
     if helper:
-        helper.write_message(f"Executing SQL query: {merge_sql}")
+        helper.write_message(f"Executing SQL query:\n{'-' * 30}\n{merge_sql.strip()}\n{'-' * 30}")
     
     return merge_sql
 
@@ -91,6 +95,7 @@ def execute_merge_and_get_post_version(spark, database_name, table_name, merge_s
         int: The post-merge version number of the Delta table.
     """
     try:
+        # Execute the MERGE operation using the constructed SQL
         spark.sql(merge_sql)
         if helper:
             helper.write_message("Data merged successfully.")
@@ -99,7 +104,7 @@ def execute_merge_and_get_post_version(spark, database_name, table_name, merge_s
             helper.write_message(f"Error during data merge: {e}")
         raise
 
-    # Calculate the post-merge version
+    # Calculate and return the new version after the merge
     try:
         post_merge_version = pre_merge_version + 1
         return post_merge_version
@@ -118,8 +123,9 @@ def display_newly_merged_data(spark, database_name, table_name, pre_merge_versio
         table_name (str): The name of the target table.
         pre_merge_version (int): The version of the table before the merge.
         post_merge_version (int): The version of the table after the merge.
-        helper (optional): An optional logging helper object for writing messages.
+        helper (optional): A logging helper object for writing messages.
     """
+    # Construct the query to fetch newly merged data by comparing pre and post versions
     merged_data_sql = f"""
     SELECT * FROM {database_name}.{table_name} VERSION AS OF {post_merge_version}
     EXCEPT
@@ -127,17 +133,17 @@ def display_newly_merged_data(spark, database_name, table_name, pre_merge_versio
     """
 
     if helper:
-        helper.write_message(f"Displaying newly merged data with query: {merged_data_sql}")
+        helper.write_message(f"Displaying newly merged data with query:\n{'-' * 30}\n{merged_data_sql.strip()}\n{'-' * 30}")
 
     try:
         merged_data_df = spark.sql(merged_data_sql)
         
-        # Check if the result has any rows
+        # Display the results if there are any rows returned
         if merged_data_df.count() == 0:
             if helper:
                 helper.write_message("Query returned no results.")
         else:
-            display(merged_data_df.limit(10))  # Limit the output to 10 rows for clarity
+            display(merged_data_df.limit(100))  # Limit the output to 100 rows for clarity
     except Exception as e:
         if helper:
             helper.write_message(f"Error displaying merged data: {e}")
@@ -155,17 +161,17 @@ def manage_data_merge(spark, destination_environment, source_datasetidentifier, 
         key_columns (str): A comma-separated string of key columns.
         helper (optional): A logging helper object for writing messages.
     """
-    # Get destination details
+    # Get the destination details including path, database, and table names
     destination_path, database_name, table_name = get_merge_destination_details(spark, destination_environment, source_datasetidentifier, helper)
 
-    # Get the pre-merge version
+    # Retrieve the current version of the Delta table before the merge
     pre_merge_version = get_pre_merge_version(spark, database_name, table_name, helper)
 
-    # Generate the SQL for the merge
+    # Generate the SQL for the MERGE operation
     merge_sql = generate_merge_sql(view_name, database_name, table_name, key_columns, helper)
 
-    # Execute the merge and get the post-merge version
+    # Execute the merge and get the new version after the merge
     post_merge_version = execute_merge_and_get_post_version(spark, database_name, table_name, merge_sql, pre_merge_version, helper)
 
-    # Display the newly merged data
+    # Display the newly merged data for review
     display_newly_merged_data(spark, database_name, table_name, pre_merge_version, post_merge_version, helper)
