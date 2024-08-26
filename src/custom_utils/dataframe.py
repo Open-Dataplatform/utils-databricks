@@ -409,10 +409,6 @@ def create_temp_view_with_most_recent_records(
 
     Returns:
         str: The name of the temporary view created (e.g., "temp_<view_name>").
-
-    Raises:
-        ValueError: If key_columns is empty or there is an issue with it.
-        Exception: If there is an error executing the SQL query.
     """
     try:
         # Ensure key columns are provided
