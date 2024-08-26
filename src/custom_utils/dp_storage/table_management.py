@@ -21,15 +21,20 @@ def get_destination_details(spark, destination_environment, source_datasetidenti
     
     return destination_path, database_name, table_name
 
-def validate_and_prepare_destination(destination_path, temp_view_name, helper=None):
+def validate_and_prepare_destination(dbutils, destination_path, temp_view_name, spark, helper=None):
     """
     Validates that the destination path exists and creates it if it does not exist. 
     If the path does not exist, it recreates the Delta Parquet files from scratch.
 
     Args:
+        dbutils: The dbutils object to use for file system operations.
         destination_path (str): The path to validate or create.
         temp_view_name (str): The name of the temporary view containing the columns.
+        spark (SparkSession): The active Spark session.
         helper (optional): A logging helper object for writing messages.
+
+    Returns:
+        bool: True if the path existed before validation, False otherwise.
     """
     path_existed = True
     try:
@@ -55,6 +60,8 @@ def validate_and_prepare_destination(destination_path, temp_view_name, helper=No
         if helper:
             helper.write_message(f"Error checking or creating path: {str(e)}")
         raise
+
+    return path_existed
 
 def recreate_delta_parquet(spark, destination_path, temp_view_name, helper=None):
     """
@@ -138,6 +145,7 @@ USING DELTA
 LOCATION 'dbfs:{destination_path}/'
 """
 
+        # Print the SQL query regardless of whether the table exists
         if helper:
             helper.write_message(f"SQL Query to Create the Table:\n{'-' * 30}\n{create_table_sql.strip()}\n{'-' * 30}")
 
@@ -166,12 +174,13 @@ LOCATION 'dbfs:{destination_path}/'
             helper.write_message(f"Error during table creation: {str(e)}")
         raise
 
-def manage_table_creation(spark, destination_environment, source_datasetidentifier, temp_view_name, helper=None):
+def manage_table_creation(spark, dbutils, destination_environment, source_datasetidentifier, temp_view_name, helper=None):
     """
     Orchestrates the process of managing table creation in Databricks based on the dataset and environment.
 
     Args:
         spark (SparkSession): The active Spark session.
+        dbutils: The dbutils object for file system operations.
         destination_environment (str): The destination environment.
         source_datasetidentifier (str): The dataset identifier (usually a folder or dataset name).
         temp_view_name (str): The name of the temporary view containing the columns.
@@ -181,7 +190,7 @@ def manage_table_creation(spark, destination_environment, source_datasetidentifi
     destination_path, database_name, table_name = get_destination_details(spark, destination_environment, source_datasetidentifier, helper)
 
     # Validate and prepare the destination path (this handles path recreation if needed)
-    validate_and_prepare_destination(destination_path, temp_view_name, helper)
+    path_existed = validate_and_prepare_destination(dbutils, destination_path, temp_view_name, spark, helper)
 
-    # Create the table if it does not exist and write data
+    # Even if the path already exists, ensure the table is validated
     create_table_if_not_exists(spark, database_name, table_name, destination_path, temp_view_name, helper)
