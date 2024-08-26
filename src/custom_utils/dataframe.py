@@ -28,10 +28,12 @@ def _get_expanded_columns_with_aliases(df, column_name, layer_separator="_"):
 
     return expanded_columns
 
+
 def flatten_array_column(df, column_name):
     """Return dataframe with flattened array column."""
     df = df.withColumn(column_name, F.explode_outer(F.col(column_name)))
     return df
+
 
 def flatten_struct_column(df, column_name, layer_separator="_"):
     """Return dataframe with flattened struct column."""
@@ -62,54 +64,96 @@ def flatten(df, layer_separator="_"):
 
     return df
 
-def flatten_df(df: DataFrame, depth_level=None, current_level=0, max_depth=1, type_mapping: dict = None) -> DataFrame:
+
+def flatten_df(
+    df: DataFrame,
+    depth_level=None,
+    current_level=0,
+    max_depth=1,
+    type_mapping: dict = None,
+) -> DataFrame:
     """
-    Flattens complex fields in a DataFrame up to a specified depth level, applying type mapping,
+    Flattens complex fields in a DataFrame up to a specified depth level, applies type mapping,
     and renames columns by replacing '__' and '.' with '_'.
-    
+
     Args:
-        df (DataFrame): A PySpark DataFrame.
-        depth_level (int or None): The maximum depth level to flatten. If None, max_depth is used.
-        current_level (int): The current depth level (used internally).
+        df (DataFrame): A PySpark DataFrame containing nested structures.
+        depth_level (int, optional): The maximum depth level to flatten. If None, max_depth is used.
+        current_level (int): The current depth level (used internally during recursion).
         max_depth (int): The maximum depth calculated from the schema.
-        type_mapping (dict, optional): A dictionary mapping original types to desired Spark SQL types. Defaults to None.
-    
+        type_mapping (dict, optional): A dictionary mapping original types to desired Spark SQL types.
+
     Returns:
         DataFrame: A flattened DataFrame with custom types applied and column names adjusted.
     """
-    if depth_level is None or depth_level == '':
-        depth_level = max_depth
+    # Determine the depth level to flatten to
+    depth_level = max_depth if depth_level is None or depth_level == "" else depth_level
 
+    # Exit early if the current level has reached or exceeded the depth level
     if current_level >= depth_level:
         return df
 
-    if type_mapping is not None:
-        df = df.select([F.col(c).cast(type_mapping.get(df.schema[c].dataType.simpleString(), df.schema[c].dataType)) for c in df.columns])
+    # Apply custom type mappings if provided
+    if type_mapping:
+        df = df.select(
+            [
+                F.col(c).cast(
+                    type_mapping.get(
+                        df.schema[c].dataType.simpleString(), df.schema[c].dataType
+                    )
+                )
+                for c in df.columns
+            ]
+        )
 
-    complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
+    # Identify columns with complex data types (arrays and structs)
+    complex_fields = {
+        field.name: field.dataType
+        for field in df.schema.fields
+        if isinstance(field.dataType, (ArrayType, StructType))
+    }
 
-    while complex_fields:
+    # Flatten each complex field based on its data type
+    while complex_fields and current_level < depth_level:
         for col_name, data_type in complex_fields.items():
             if current_level + 1 == depth_level:
+                # Convert nested structures to JSON strings if at the final depth level
                 df = df.withColumn(col_name, F.to_json(F.col(col_name)))
             else:
+                # Handle arrays and structs differently
                 if isinstance(data_type, ArrayType):
                     df = df.withColumn(col_name, F.explode_outer(F.col(col_name)))
                 if isinstance(data_type, StructType):
-                    expanded = [F.col(f"{col_name}.{k}").alias(f"{col_name}_{k}") for k in data_type.fieldNames()]
-                    df = df.select("*", *expanded).drop(col_name)
+                    expanded_columns = [
+                        F.col(f"{col_name}.{k}").alias(f"{col_name}_{k}")
+                        for k in data_type.fieldNames()
+                    ]
+                    df = df.select("*", *expanded_columns).drop(col_name)
 
-        complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
+        # Re-evaluate complex fields after flattening
+        complex_fields = {
+            field.name: field.dataType
+            for field in df.schema.fields
+            if isinstance(field.dataType, (ArrayType, StructType))
+        }
         current_level += 1
 
+    # After flattening, convert any remaining complex fields to strings if the depth is reached
     if current_level >= depth_level:
-        df = df.select([F.col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else F.col(c) for c in df.columns])
+        df = df.select(
+            [
+                F.col(c).cast(StringType())
+                if isinstance(df.schema[c].dataType, (ArrayType, StructType))
+                else F.col(c)
+                for c in df.columns
+            ]
+        )
 
     # Rename columns by replacing '__' and '.' with '_'
-    df = rename_columns(df, replacements={'__': '_'})
-    df = rename_columns(df, replacements={'.': '_'})
+    df = rename_columns(df, replacements={"__": "_", ".": "_"})
 
     return df
+
 
 def flatten_df(
     df: DataFrame,
@@ -217,6 +261,7 @@ def _string_replace(s: str, replacements: dict) -> str:
 
     return s
 
+
 def rename_columns(df: DataFrame, replacements: dict) -> DataFrame:
     """
     Renames DataFrame columns based on a dictionary of replacement rules.
@@ -232,6 +277,7 @@ def rename_columns(df: DataFrame, replacements: dict) -> DataFrame:
         df = df.withColumnRenamed(
             column_name, _string_replace(column_name, replacements)
         )
+    
     return df
 
 
@@ -265,29 +311,37 @@ def rename_and_cast_columns(
 
     return df
 
-def rename_and_cast_columns(df, column_mapping=None, cast_type_mapping=None):
+
+def rename_and_cast_columns(
+    df: DataFrame, column_mapping: dict = None, cast_type_mapping: dict = None
+) -> DataFrame:
     """
-    Rename columns and optionally cast them to a different type.
-    
+    Renames specified columns and optionally casts them to a different data type.
+
     Args:
         df (DataFrame): The DataFrame whose columns need to be renamed and cast.
-        column_mapping (dict, optional): Specific column names to be renamed. 
-                                         Example: {"Timestamp": "EventTimestamp"}
-        cast_type_mapping (dict, optional): Dictionary to cast columns to specific data types. 
-                                             Example: {"EventTimestamp": "timestamp"}
-    
+        column_mapping (dict, optional): Dictionary specifying columns to rename.
+                                         Example: {"Timestamp": "EventTimestamp"}.
+        cast_type_mapping (dict, optional): Dictionary specifying columns to cast to specific data types.
+                                             Example: {"EventTimestamp": "timestamp"}.
+
     Returns:
-        DataFrame: DataFrame with renamed and possibly casted columns.
+        DataFrame: A DataFrame with renamed and potentially casted columns.
     """
+    # Rename columns based on the provided mapping
     if column_mapping:
         for old_name, new_name in column_mapping.items():
             if old_name in df.columns:
                 df = df.withColumnRenamed(old_name, new_name)
+
+    # Cast columns based on the provided type mapping
     if cast_type_mapping:
         for col_name, new_type in cast_type_mapping.items():
             if col_name in df.columns:
                 df = df.withColumn(col_name, F.col(col_name).cast(new_type))
+
     return df
+
 
 def add_columns_that_are_not_in_df(df, column_names: List[str]):
     """Add columns in column_names that are not already in dataframe.
@@ -301,6 +355,7 @@ def add_columns_that_are_not_in_df(df, column_names: List[str]):
             print(f'Column "{column_name}" was added.')
 
     return df
+
 
 def read_json_from_binary(spark, schema, data_file_path):
     """
