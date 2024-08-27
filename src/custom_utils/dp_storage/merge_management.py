@@ -143,6 +143,7 @@ def display_newly_merged_data(spark, database_name, table_name, pre_merge_versio
             if helper:
                 helper.write_message("Query returned no results.")
         else:
+            helper.write_message(f"Displaying up to 100 rows of the newly merged data:")
             display(merged_data_df.limit(100))  # Limit the output to 100 rows for clarity
     except Exception as e:
         if helper:
