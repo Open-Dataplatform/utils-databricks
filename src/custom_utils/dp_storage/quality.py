@@ -17,7 +17,7 @@ def build_duplicate_check_query(view_name: str, key_columns_list: list) -> str:
 
     query = f"""
     SELECT 
-        'ERROR: duplicates in new data for {key_columns_str}' AS error_message, 
+        raise_error('ERROR: duplicates in new data for {key_columns_str}') AS error_message, 
         COUNT(*) AS duplicate_count, 
         {', '.join(['input_file_name'] + key_columns_list)}
     FROM {view_name}
