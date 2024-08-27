@@ -4,6 +4,7 @@ def get_merge_destination_details(spark, destination_environment, source_dataset
     """
     Retrieves the destination path, database name, and table name for merging data.
     """
+    # Fetch the destination path and table information based on the environment and dataset identifier
     destination_path = writer.get_destination_path_extended(destination_environment, source_datasetidentifier)
     database_name, table_name = writer.get_databricks_table_info_extended(destination_environment, source_datasetidentifier)
     
