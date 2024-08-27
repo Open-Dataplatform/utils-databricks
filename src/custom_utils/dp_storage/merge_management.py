@@ -7,6 +7,7 @@ def get_merge_destination_details(spark, destination_environment, source_dataset
     destination_path = writer.get_destination_path_extended(destination_environment, source_datasetidentifier)
     database_name, table_name = writer.get_databricks_table_info_extended(destination_environment, source_datasetidentifier)
     
+    # Log the destination details if helper is provided
     if helper:
         helper.write_message(f"Destination path: {destination_path}")
         helper.write_message(f"Database name: {database_name}")
@@ -19,7 +20,9 @@ def get_pre_merge_version(spark, database_name, table_name, helper=None):
     Retrieves the current version of the Delta table before the merge.
     """
     try:
-        pre_merge_version = spark.sql(f"DESCRIBE HISTORY {database_name}.{table_name} LIMIT 1").select("version").collect()[0][0]
+        # Fetch the latest version of the Delta table from history
+        pre_merge_version = spark.sql(f"DESCRIBE HISTORY {database_name}.{table_name} LIMIT 1") \
+                                .select("version").collect()[0][0]
         return pre_merge_version
     except Exception as e:
         if helper:
@@ -30,8 +33,10 @@ def generate_merge_sql(temp_view_name, database_name, table_name, key_columns, h
     """
     Constructs the SQL query for the MERGE operation.
     """
+    # Construct the match condition for the MERGE operation based on key columns
     match_sql = ' AND '.join([f"s.{col.strip()} = t.{col.strip()}" for col in key_columns.split(',')])
 
+    # Build the MERGE SQL query
     merge_sql = f"""
     MERGE INTO {database_name}.{table_name} AS t
     USING {temp_view_name} AS s
@@ -42,6 +47,7 @@ def generate_merge_sql(temp_view_name, database_name, table_name, key_columns, h
       INSERT *
     """
 
+    # Log the SQL query for the MERGE operation
     if helper:
         helper.write_message(f"Executing SQL query:\n{'-' * 30}\n{merge_sql.strip()}\n{'-' * 30}")
     
@@ -58,43 +64,50 @@ def find_duplicate_keys_in_source(spark, temp_view_name, key_column, helper=None
     HAVING COUNT(*) > 1
     """
 
-    if helper:
-        helper.write_message(f"Executing query to find duplicate keys:\n{'-' * 30}\n{duplicate_keys_query.strip()}\n{'-' * 30}")
-
+    # Execute the duplicate check query
     duplicates_df = spark.sql(duplicate_keys_query)
-    return duplicates_df
 
-def display_problematic_rows(spark, temp_view_name, key_column, duplicates_df, helper=None):
-    """
-    Displays the rows from the source data that have duplicate keys.
-    """
     if duplicates_df.count() == 0:
         if helper:
             helper.write_message("No duplicates found in the source data.")
-        return
+    else:
+        # Log and display the duplicate query only if duplicates are found
+        if helper:
+            helper.write_message(f"Executing query to find duplicate keys:\n{'-' * 30}\n{duplicate_keys_query.strip()}\n{'-' * 30}")
+    
+    return duplicates_df
 
-    # Collect the problematic keys
-    duplicate_keys = [row[key_column] for row in duplicates_df.collect()]
-
-    # Query the source data to display the problematic rows
-    problematic_rows_query = f"""
-    SELECT *
-    FROM {temp_view_name}
-    WHERE {key_column} IN ({','.join([f"'{key}'" for key in duplicate_keys])})
+def display_problematic_rows_and_raise_error(spark, temp_view_name, key_column, duplicates_df, helper=None):
     """
+    Displays the rows from the source data that have duplicate keys and raises an error if duplicates are found.
+    """
+    if duplicates_df.count() > 0:
+        # Collect the problematic key values
+        duplicate_keys = [row[key_column] for row in duplicates_df.collect()]
 
-    if helper:
-        helper.write_message(f"Displaying rows with duplicate keys:\n{'-' * 30}\n{problematic_rows_query.strip()}\n{'-' * 30}")
+        # Query to fetch the problematic rows based on duplicate keys
+        problematic_rows_query = f"""
+        SELECT *
+        FROM {temp_view_name}
+        WHERE {key_column} IN ({','.join([f"'{key}'" for key in duplicate_keys])})
+        """
 
-    problematic_rows_df = spark.sql(problematic_rows_query)
-    display(problematic_rows_df.limit(100))  # Display the first 100 rows for clarity
+        if helper:
+            helper.write_message(f"Displaying rows with duplicate keys:\n{'-' * 30}\n{problematic_rows_query.strip()}\n{'-' * 30}")
+
+        # Display the problematic rows (limited to 100 for readability)
+        problematic_rows_df = spark.sql(problematic_rows_query)
+        display(problematic_rows_df.limit(100))
+
+        # Raise an error to stop the process if duplicates are found
+        raise ValueError("Duplicate keys found in the source data. Merge operation aborted.")
 
 def execute_merge_and_get_post_version(spark, database_name, table_name, merge_sql, pre_merge_version, helper=None):
     """
     Executes the MERGE operation and calculates the post-merge version.
     """
     try:
-        # Execute the MERGE operation using the constructed SQL
+        # Execute the MERGE SQL operation
         spark.sql(merge_sql)
         if helper:
             helper.write_message("Data merged successfully.")
@@ -103,7 +116,7 @@ def execute_merge_and_get_post_version(spark, database_name, table_name, merge_s
             helper.write_message(f"Error during data merge: {e}")
         raise
 
-    # Calculate and return the new version after the merge
+    # Calculate the new version after the merge
     try:
         post_merge_version = pre_merge_version + 1
         return post_merge_version
@@ -116,6 +129,7 @@ def display_newly_merged_data(spark, database_name, table_name, pre_merge_versio
     """
     Displays the data that was newly merged by querying the differences between versions.
     """
+    # Query to identify newly merged data by comparing versions
     merged_data_sql = f"""
     SELECT * FROM {database_name}.{table_name} VERSION AS OF {post_merge_version}
     EXCEPT
@@ -128,6 +142,7 @@ def display_newly_merged_data(spark, database_name, table_name, pre_merge_versio
     try:
         merged_data_df = spark.sql(merged_data_sql)
         
+        # Display the results if there are any newly merged rows
         if merged_data_df.count() == 0:
             if helper:
                 helper.write_message("Query returned no results.")
@@ -148,13 +163,7 @@ def manage_data_merge(spark, destination_environment, source_datasetidentifier, 
 
     # Check for duplicate keys before performing the merge
     duplicates_df = find_duplicate_keys_in_source(spark, temp_view_name, key_columns, helper)
-    display_problematic_rows(spark, temp_view_name, key_columns, duplicates_df, helper)
-
-    if duplicates_df.count() > 0:
-        # If duplicates are found, skip the merge process to avoid errors
-        if helper:
-            helper.write_message("Merge operation skipped due to duplicate key conflicts.")
-        return
+    display_problematic_rows_and_raise_error(spark, temp_view_name, key_columns, duplicates_df, helper)
 
     # Retrieve the current version of the Delta table before the merge
     pre_merge_version = get_pre_merge_version(spark, database_name, table_name, helper)
