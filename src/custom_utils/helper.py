@@ -1,10 +1,11 @@
+
 """Helper common functions"""
 
 from custom_utils import adf
 
-def write_message(message):
-    """Log or print a message."""
-    print(message)
+def write_message(message, level="info"):
+    """Log or print a message with an optional log level."""
+    print(f"[{level.upper()}] {message}")
 
 def exit_notebook(message):
     """Exit the notebook with a message."""
@@ -25,7 +26,7 @@ def get_adf_parameter(dbutils, param_name, default_value=""):
     try:
         return adf.get_parameter(dbutils, param_name)
     except Exception as e:
-        write_message(f"Could not get parameter {param_name}: {e}")
+        write_message(f"Could not get parameter {param_name}: {e}", level="warning")
         return default_value
 
 def get_key_columns_list(key_columns: str) -> list:
