@@ -1,4 +1,5 @@
 import os
+import datetime
 from pyspark.sql import SparkSession
 
 class Config:
@@ -17,6 +18,7 @@ class Config:
         feedback_column (str, optional): Column to store feedback during data validation.
         schema_folder_name (str, optional): Name of the folder that stores schema files.
         depth_level (int, optional): The depth level for processing hierarchical structures.
+        debug (bool, optional): Whether to print info messages. Default is False.
     """
     
     def __init__(
@@ -32,9 +34,11 @@ class Config:
         feedback_column="",
         schema_folder_name="schemachecks",
         depth_level=None,
+        debug=False  # Optional debug flag (default is False)
     ):
         self.helper = helper
         self.dbutils = dbutils
+        self.debug = debug
 
         # Core parameters fetched from widgets, environment variables, or default values
         self.source_environment = self._get_param("SourceStorageAccount", source_environment, required=True)
@@ -54,16 +58,39 @@ class Config:
         self.source_schema_filename = f"{self.source_datasetidentifier}_schema"
         self.source_folder_path = f"{self.source_container}/{self.source_datasetidentifier}"
         self.source_schema_folder_path = f"{self.source_container}/{self.schema_folder_name}/{self.source_datasetidentifier}"
+        
+        # Generate full file paths
+        self.full_source_file_path = self.generate_source_file_path()
+        self.full_schema_file_path = self.generate_schema_file_path()
 
-    def _log_message(self, message, level="info"):
+    def generate_source_file_path(self):
+        """Generate full path for source files."""
+        return f"/mnt/{self.source_environment}/{self.source_folder_path}/{self.source_filename}"
+
+    def generate_schema_file_path(self):
+        """Generate full path for schema files."""
+        return f"/mnt/{self.source_environment}/{self.source_schema_folder_path}/{self.source_schema_filename}.json"
+
+    def _log_message(self, message, level="info", single_info_prefix=False):
         """
         Logs a message using the helper, or falls back to print if helper is not available.
-        
+        If single_info_prefix is True, it prints '[INFO]' only once before the log block.
+
         Args:
             message (str): The message to log or print.
             level (str): The log level (e.g., info, warning, error). Defaults to "info".
+            single_info_prefix (bool): Whether to print `[INFO]` prefix just once.
         """
-        if self.helper:
+        # If level is 'info' and debug is False, skip the message
+        if level == "info" and not self.debug:
+            return
+
+        # Only add the "[INFO]" once if single_info_prefix is enabled
+        if single_info_prefix and level == "info":
+            print("[INFO]")
+            print(message)
+        elif self.helper:
+            # Log message with the helper if available
             self.helper.write_message(message, level)
         else:
             print(f"[{level.upper()}] {message}")
@@ -71,43 +98,49 @@ class Config:
     def _get_param(self, param_name: str, default_value=None, required: bool = False):
         """
         Fetches a parameter value from Databricks widgets, environment variables, or default values.
-
-        Args:
-            param_name (str): The name of the parameter to fetch.
-            default_value: The default value to return if no value is found.
-            required (bool): Whether this parameter is required (raises an error if not found).
-
-        Returns:
-            The value of the parameter, or raises an error if required and not found.
         """
         value = None
-        
-        # Attempt to fetch from widgets if dbutils is available
         if self.dbutils:
             try:
                 value = self.dbutils.widgets.get(param_name)
             except Exception as e:
                 self._log_message(f"Could not retrieve widget '{param_name}': {str(e)}", level="warning")
 
-        # Fallback to environment variables if the widget value is not found
         if not value:
             value = os.getenv(param_name.upper(), default_value)
 
-        # Raise an error if the value is required and still not found
         if not value and required:
             raise ValueError(f"Required parameter '{param_name}' is missing.")
 
         return value
 
     def print_params(self):
-        """Logs all configuration parameters except for sensitive ones like dbutils and helper."""
+        """Logs all configuration parameters in a structured format."""
         excluded_params = {"helper", "dbutils"}
-        self._log_message("\nConfiguration Parameters:", level="info")
-        self._log_message("-" * 30, level="info")
-        for param, value in vars(self).items():
-            if param not in excluded_params:
-                self._log_message(f"{param}: {value}", level="info")
-        self._log_message("-" * 30, level="info")
+        
+        # Print the header info once
+        self._log_message("\n=== Configuration Parameters ===", level="info", single_info_prefix=True)
+        print("------------------------------")  # Manually print the separator for clean output
+
+        # Log each parameter without `[INFO]` prefix for cleaner output
+        params = [
+            f"Source Environment: {self.source_environment}",
+            f"Destination Environment: {self.destination_environment}",
+            f"Source Container: {self.source_container}",
+            f"Source Dataset Identifier: {self.source_datasetidentifier}",
+            f"Source Filename: {self.source_filename}",
+            f"Key Columns: {self.key_columns}",
+            f"Feedback Column: {self.feedback_column}",
+            f"Schema Folder Name: {self.schema_folder_name}",
+            f"Depth Level: {self.depth_level}",
+            f"Full Source File Path: {self.full_source_file_path}",
+            f"Full Schema File Path: {self.full_schema_file_path}",
+        ]
+        for param in params:
+            print(param)  # Avoid [INFO] prefixes here for a cleaner format
+
+        # Closing info line
+        print("------------------------------")
 
     def unpack(self, namespace: dict):
         """
@@ -118,16 +151,8 @@ class Config:
         """
         namespace.update(vars(self))
 
-def get_dbutils():
-    """
-    Retrieve the dbutils object from the global scope, as it is usually available in Databricks notebooks.
 
-    Returns:
-        dbutils object if found, else None.
-    """
-    return globals().get("dbutils", None)
-
-def initialize_config(dbutils=None, helper=None, depth_level=None):
+def initialize_config(dbutils=None, helper=None, depth_level=None, debug=False):
     """
     Initializes the Config class and returns the config object.
 
@@ -135,12 +160,13 @@ def initialize_config(dbutils=None, helper=None, depth_level=None):
         dbutils (optional): The Databricks dbutils object, if available.
         helper (optional): The helper object used for logging and parameter fetching.
         depth_level (int, optional): The depth level for processing JSON structures.
+        debug (bool, optional): Whether to print info messages. Default is False.
 
     Returns:
         Config: An instance of the Config class with all parameters set.
     """
     if dbutils is None:
-        dbutils = get_dbutils()
+        dbutils = globals().get("dbutils", None)
 
     # Initialize Config with fallback to environment variables if dbutils is not available
     return Config(
@@ -150,23 +176,30 @@ def initialize_config(dbutils=None, helper=None, depth_level=None):
         destination_environment=helper.get_adf_parameter(dbutils, "DestinationStorageAccount"),
         source_container=helper.get_adf_parameter(dbutils, "SourceContainer"),
         source_datasetidentifier=helper.get_adf_parameter(dbutils, "SourceDatasetidentifier"),
+        source_filename=helper.get_adf_parameter(dbutils, "SourceFileName"),
+        key_columns=helper.get_adf_parameter(dbutils, "KeyColumns"),
+        feedback_column=helper.get_adf_parameter(dbutils, "FeedbackColumn"),
+        schema_folder_name=helper.get_adf_parameter(dbutils, "SchemaFolderName"),
         depth_level=depth_level,
+        debug=debug  # Pass the debug flag
     )
 
-def initialize_notebook(dbutils, helper):
+
+def initialize_notebook(dbutils, helper, debug=False):
     """
     Initializes the notebook, including configuration and Spark session setup.
 
     Args:
         dbutils: The Databricks dbutils object, used for widgets and configurations.
         helper: The helper object for logging and parameter management.
+        debug (bool, optional): Whether to print info messages. Default is False.
 
     Returns:
         spark (SparkSession): The Spark session for processing.
         config (Config): The configuration object initialized with all parameters.
     """
     # Initialize configuration object
-    config = initialize_config(dbutils=dbutils, helper=helper)
+    config = initialize_config(dbutils=dbutils, helper=helper, debug=debug)
 
     # Unpack the configuration into the global namespace for easy access
     config.unpack(globals())
@@ -175,6 +208,7 @@ def initialize_notebook(dbutils, helper):
     spark = SparkSession.builder.appName(f"Data Processing Pipeline: {config.source_datasetidentifier}").getOrCreate()
 
     # Print configuration for debugging and verification
-    config.print_params()
+    if debug:
+        config.print_params()
 
     return spark, config
