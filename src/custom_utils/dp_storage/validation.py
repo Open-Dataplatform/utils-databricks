@@ -1,5 +1,5 @@
 from pyspark.sql.utils import AnalysisException
-from custom_utils.dp_storage.config import Config
+from custom_utils.config.config import Config
 
 
 class PathValidator:

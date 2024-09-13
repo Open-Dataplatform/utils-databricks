@@ -57,20 +57,28 @@ class Config:
 
         # Construct paths based on provided parameters
         self.source_schema_filename = f"{self.source_datasetidentifier}_schema"
-        self.source_folder_path = f"{self.source_container}/{self.source_datasetidentifier}"
-        self.source_schema_folder_path = f"{self.source_container}/{self.schema_folder_name}/{self.source_datasetidentifier}"
-        
+        self.full_source_folder_path = self.generate_source_path()
+        self.full_source_schema_folder_path = self.generate_schema_path()
+
         # Generate full file paths
         self.full_source_file_path = self.generate_source_file_path()
         self.full_schema_file_path = self.generate_schema_file_path()
 
+    def generate_source_path(self):
+        """Generate folder path for source files."""
+        return f"/mnt/{self.source_environment}/{self.source_container}/{self.source_datasetidentifier}"
+    
     def generate_source_file_path(self):
-        """Generate full path for source files."""
-        return f"/mnt/{self.source_environment}/{self.source_folder_path}/{self.source_filename}"
+        """Generate full file path for source files."""
+        return f"{self.full_source_folder_path}/{self.source_filename}"
 
+    def generate_schema_path(self):
+        """Generate folder path for schema files."""
+        return f"/mnt/{self.source_environment}/{self.source_container}/{self.schema_folder_name}/{self.source_datasetidentifier}"
+    
     def generate_schema_file_path(self):
         """Generate full path for schema files."""
-        return f"/mnt/{self.source_environment}/{self.source_schema_folder_path}/{self.source_schema_filename}.json"
+        return f"{self.full_source_schema_folder_path}/{self.source_schema_filename}.json"
 
     def _log_message(self, message, level="info", single_info_prefix=False):
         """
@@ -151,12 +159,13 @@ class Config:
             f"Source Container: {self.source_container}",
             f"Source Dataset Identifier: {self.source_datasetidentifier}",
             f"Source Filename: {self.source_filename}",
+            f"Source Schema Filename: {self.source_schema_filename}",  # Added source schema filename
             f"Key Columns: {self.key_columns}",
             f"Feedback Column: {self.feedback_column}",
             f"Schema Folder Name: {self.schema_folder_name}",
             f"Depth Level: {self.depth_level}",
-            f"Full Source File Path: {self.full_source_file_path}",
-            f"Full Schema File Path: {self.full_schema_file_path}",
+            f"Source Folder Path: {self.full_source_folder_path}",
+            f"Source Schema Folder Path: {self.full_source_schema_folder_path}",
         ]
         for param in params:
             print(param)  # Avoid [INFO] prefixes here for a cleaner format
