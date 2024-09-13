@@ -2,6 +2,7 @@ import os
 import datetime
 from pyspark.sql import SparkSession
 
+
 class Config:
     """
     Configuration class to handle environment parameters, paths, and settings for data processing.
@@ -85,7 +86,6 @@ class Config:
         if level == "info" and not self.debug:
             return
 
-        # Only add the "[INFO]" once if single_info_prefix is enabled
         if single_info_prefix and level == "info":
             print("[INFO]")
             print(message)
@@ -98,21 +98,43 @@ class Config:
     def _get_param(self, param_name: str, default_value=None, required: bool = False):
         """
         Fetches a parameter value from Databricks widgets, environment variables, or default values.
+        Raises an error if the parameter is required but missing.
+
+        Args:
+            param_name (str): The name of the parameter.
+            default_value: The default value if the parameter is not found.
+            required (bool): Whether this parameter is mandatory.
+
+        Returns:
+            str: The parameter value.
+
+        Raises:
+            ValueError: If a required parameter is missing.
         """
         value = None
-        if self.dbutils:
-            try:
+        try:
+            if self.dbutils:
                 value = self.dbutils.widgets.get(param_name)
-            except Exception as e:
-                self._log_message(f"Could not retrieve widget '{param_name}': {str(e)}", level="warning")
+        except Exception as e:
+            self._log_message(f"Could not retrieve widget '{param_name}': {str(e)}", level="warning")
 
         if not value:
             value = os.getenv(param_name.upper(), default_value)
 
         if not value and required:
-            raise ValueError(f"Required parameter '{param_name}' is missing.")
+            error_message = f"Required parameter '{param_name}' is missing."
+            self._log_message(error_message, level="error")
+            self._exit_notebook(error_message)
+            raise ValueError(error_message)
 
         return value
+
+    def _exit_notebook(self, message):
+        """Exit the notebook with an error message."""
+        if self.dbutils:
+            self.dbutils.notebook.exit(f"[ERROR] {message}")
+        else:
+            raise SystemExit(f"[ERROR] {message}")
 
     def print_params(self):
         """Logs all configuration parameters in a structured format."""
@@ -198,17 +220,25 @@ def initialize_notebook(dbutils, helper, debug=False):
         spark (SparkSession): The Spark session for processing.
         config (Config): The configuration object initialized with all parameters.
     """
-    # Initialize configuration object
-    config = initialize_config(dbutils=dbutils, helper=helper, debug=debug)
+    try:
+        # Initialize configuration object
+        config = initialize_config(dbutils=dbutils, helper=helper, debug=debug)
 
-    # Unpack the configuration into the global namespace for easy access
-    config.unpack(globals())
+        # Unpack the configuration into the global namespace for easy access
+        config.unpack(globals())
 
-    # Initialize the Spark session with a custom name
-    spark = SparkSession.builder.appName(f"Data Processing Pipeline: {config.source_datasetidentifier}").getOrCreate()
+        # Initialize the Spark session with a custom name
+        spark = SparkSession.builder.appName(f"Data Processing Pipeline: {config.source_datasetidentifier}").getOrCreate()
 
-    # Print configuration for debugging and verification
-    if debug:
-        config.print_params()
+        # Print configuration for debugging and verification
+        if debug:
+            config.print_params()
 
-    return spark, config
+        return spark, config
+    except Exception as e:
+        error_message = f"Failed to initialize notebook: {str(e)}"
+        helper.write_message(error_message, level="error")
+        if dbutils:
+            dbutils.notebook.exit(f"[ERROR] {error_message}")
+        else:
+            raise SystemExit(f"[ERROR] {error_message}")
