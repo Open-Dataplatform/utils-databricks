@@ -159,10 +159,8 @@ class Config:
             f"Source Container: {self.source_container}",
             f"Source Dataset Identifier: {self.source_datasetidentifier}",
             f"Source Filename: {self.source_filename}",
-            f"Source Schema Filename: {self.source_schema_filename}",  # Added source schema filename
             f"Key Columns: {self.key_columns}",
             f"Feedback Column: {self.feedback_column}",
-            f"Schema Folder Name: {self.schema_folder_name}",
             f"Depth Level: {self.depth_level}",
             f"Source Folder Path: {self.full_source_folder_path}",
             f"Source Schema Folder Path: {self.full_source_schema_folder_path}",
