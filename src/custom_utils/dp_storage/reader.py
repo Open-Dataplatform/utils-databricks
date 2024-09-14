@@ -67,7 +67,7 @@ def verify_source_path_and_source_config(
     assert identifier_from_trigger == config_for_triggered_dataset["dataset"]
 
 
-def get_json_depth(json_schema, current_depth=0, definitions=None, helper=None, depth_level=None) -> int:
+def get_json_depth(json_schema, current_depth=0, definitions=None, logger=None, depth_level=None) -> int:
     """
     Recursively determines the maximum depth of a JSON schema, including handling references and mixed structures.
 
@@ -75,7 +75,7 @@ def get_json_depth(json_schema, current_depth=0, definitions=None, helper=None, 
         json_schema (dict): A JSON schema represented as a dictionary.
         current_depth (int): The current depth level (used internally).
         definitions (dict, optional): Definitions from the JSON schema to resolve $ref references. Defaults to None.
-        helper (object, optional): Helper object used for logging. If provided, logs the maximum depth.
+        logger (Logger, optional): Logger object used for logging. If provided, logs the maximum depth.
         depth_level (int, optional): The specified flattening depth level for comparison in the log message.
 
     Returns:
@@ -123,9 +123,9 @@ def get_json_depth(json_schema, current_depth=0, definitions=None, helper=None, 
     # Calculate the depth
     max_depth = calculate_depth(json_schema, current_depth, definitions or json_schema.get('definitions', {}))
 
-    # Log the depth once if the helper is provided
-    if helper:
-        helper.write_message(f"Maximum depth level of the JSON schema: {max_depth}; Flattened depth level of the JSON file: {depth_level}")
+    # Log the depth using the logger, if provided
+    if logger:
+        logger.log_message(f"Maximum depth level of the JSON schema: {max_depth}; Flattened depth level of the JSON file: {depth_level}")
 
     return max_depth
 
