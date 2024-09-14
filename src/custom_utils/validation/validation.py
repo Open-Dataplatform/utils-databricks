@@ -109,7 +109,6 @@ class PathValidator:
             found_schema_file = None
             file_type = None
 
-            # Identify the schema file
             for file in schema_files:
                 for ext, ftype in schema_format_mapping.items():
                     if file.name == f"{expected_schema_filename}{ext}":
@@ -125,12 +124,12 @@ class PathValidator:
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
-            # Construct the full schema file path and ensure it has the '/dbfs/' prefix
+            # Construct the schema file path with the '/dbfs/' prefix
             schema_file_path = os.path.join("/dbfs", schema_directory_path, found_schema_file)
             schema_file_name = found_schema_file
 
-            # Return the full schema file path with '/dbfs/' prefix
-            return schema_directory_path, schema_file_path, schema_file_name, file_type
+            # Return the paths
+            return schema_file_path, schema_directory_path, schema_file_name, file_type
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
