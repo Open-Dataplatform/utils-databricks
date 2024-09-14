@@ -16,16 +16,16 @@ class PathValidator:
         """
         self.config = config
         self.dbutils = config.dbutils
-        self.file_handler = FileHandler(config)
         self.logger = config.logger  # Use logger from the config
+        self.file_handler = FileHandler(config)
 
     def verify_paths_and_files(self):
         """
         Verify that the schema folder, schema file, and source folder exist and contain the expected files.
-        Returns the schema file path, wildcard file path, matched files, and file type.
+        Returns the schema file path, source file paths, matched files, and file type.
 
         Returns:
-            tuple: Schema file path, wildcard file path, matched files, and file type.
+            tuple: Full schema file path, list of full source file paths, matched files, and file type.
 
         Raises:
             Exception: If validation fails.
@@ -38,10 +38,10 @@ class PathValidator:
             schema_directory_path, schema_file_path, schema_file_name, file_type = self._verify_schema_folder(mount_point)
 
             # Verify source folder and files
-            wildcard_path, matched_files = self._verify_source_folder(mount_point)
+            source_directory_path, source_file_paths, matched_files = self._verify_source_folder(mount_point)
 
             # Log path validation results
-            self.logger.log_path_validation(schema_directory_path, wildcard_path, len(matched_files))
+            self.logger.log_path_validation(schema_directory_path, source_directory_path, len(matched_files))
 
             # Log file validation results
             self.logger.log_file_validation(schema_file_name, matched_files, file_type, self.config.source_filename)
@@ -50,13 +50,14 @@ class PathValidator:
             self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.",
                                     level="info", single_info_prefix=True)
 
-            # Return schema path, wildcard path, matched files, and file type
-            return schema_file_path, wildcard_path, matched_files, file_type
+            # Return schema file path, list of full source file paths, matched files, and file type
+            return schema_file_path, source_file_paths, matched_files, file_type
 
-        except Exception as e:
-            error_message = f"Failed to validate paths or files: {str(e)}"
-            self.logger.log_message(error_message, level="error")
-            self.logger.exit_notebook(error_message, self.dbutils)
+    except Exception as e:
+        error_message = f"Failed to validate paths or files: {str(e)}"
+        self.logger.log_message(error_message, level="error")
+        self.logger.exit_notebook(error_message, self.dbutils)
+
 
     def _get_mount_point(self) -> str:
         """
@@ -143,7 +144,7 @@ class PathValidator:
             mount_point (str): The mount point path.
 
         Returns:
-            tuple: The source directory path and a list of full paths to matched files.
+            tuple: The source directory path, a list of full paths to matched files, and a list of filenames.
 
         Raises:
             Exception: If no matching files are found or if an error occurs.
@@ -160,10 +161,11 @@ class PathValidator:
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
-            # Construct full paths for matched files, assuming matched_files are strings (file names)
+            # Construct full paths for matched files
             matched_file_paths = [os.path.join(source_directory_path, file) for file in matched_files]
 
-            return source_directory_path, matched_file_paths
+            # Return the source directory path, full paths, and filenames
+            return source_directory_path, matched_file_paths, matched_files
 
         except AnalysisException as e:
             error_message = f"Failed to access source folder: {str(e)}"
