@@ -33,6 +33,61 @@ def flatten(df, layer_separator="_"):
     
     return df
 
+def read_json_from_binary(spark: SparkSession, schema: StructType, data_file_path: str) -> DataFrame:
+    """
+    Reads files as binary, parses the JSON content, and ensures that the `input_file_name` is correctly
+    associated with each row in the resulting DataFrame.
+
+    Args:
+        spark (SparkSession): The Spark session.
+        schema (StructType): The schema to enforce on the JSON data.
+        data_file_path (str): The path to the data file(s).
+
+    Returns:
+        DataFrame: The DataFrame parsed from the JSON content, with `input_file_name` as the first column.
+    """
+    try:
+        # Load all files as binary and extract relevant columns
+        binary_df = spark.read.format("binaryFile").load(data_file_path)
+
+        # Add necessary columns including JSON content as string, input file path, and a unique ID
+        df_with_filename = (
+            binary_df.withColumn("json_string", F.col("content").cast("string"))
+            .withColumn("input_file_name", F.col("path"))
+            .withColumn("id", F.monotonically_increasing_id())
+        )
+
+        # Parse the JSON content using the provided schema
+        df_parsed = (
+            spark.read.schema(schema)
+            .json(
+                df_with_filename.select("json_string").rdd.map(
+                    lambda row: row.json_string
+                )
+            )
+            .withColumn("id", F.monotonically_increasing_id())
+        )
+
+        # Join the parsed DataFrame with the original binary DataFrame on the unique ID
+        df_final_with_filename = df_parsed.join(df_with_filename, on="id", how="inner")
+
+        # Drop unnecessary columns after join
+        df_final_with_filename = df_final_with_filename.drop(
+            "json_string", "content", "path", "modificationTime", "length", "id"
+        )
+
+        # Reorder columns to have `input_file_name` as the first column
+        columns = ["input_file_name"] + [
+            col for col in df_final_with_filename.columns if col != "input_file_name"
+        ]
+        df_final_with_filename = df_final_with_filename.select(columns)
+
+        return df_final_with_filename
+
+    except Exception as e:
+        # Handle and log any errors during processing
+        raise RuntimeError(f"Error processing binary JSON files: {str(e)}")
+
 def process_and_flatten_json(spark, config, schema_file_path, data_file_path, helper=None, depth_level=None, type_mapping=None) -> tuple:
     """
     Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
