@@ -1,6 +1,6 @@
 import os
 from pyspark.sql import SparkSession
-from custom_utils.logging.logger import log_message
+from custom_utils.logging.logger import log_message, Logger
 from custom_utils.helper import exit_notebook, get_param_value
 from custom_utils.path_utils import generate_source_path, generate_source_file_path, generate_schema_path, generate_schema_file_path
 
@@ -111,10 +111,13 @@ def initialize_notebook(dbutils, helper, debug=False):
 
         spark = SparkSession.builder.appName(f"Data Processing Pipeline: {config.source_datasetidentifier}").getOrCreate()
 
+        # Initialize the Logger
+        logger = Logger()
+
         if debug:
             config.print_params()
 
-        return spark, config
+        return spark, config, logger
     except Exception as e:
         error_message = f"Failed to initialize notebook: {str(e)}"
         log_message(error_message, level="error", debug=debug)
