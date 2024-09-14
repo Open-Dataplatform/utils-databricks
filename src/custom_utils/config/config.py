@@ -88,7 +88,7 @@ class Config:
         namespace.update(vars(self))
 
 
-def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
+def initialize_config(dbutils=dbutils, logger=None, depth_level=None, debug=False):
     """
     Initializes the Config class and returns the config object.
     """
@@ -112,11 +112,15 @@ def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
     )
 
 
-def initialize_notebook(dbutils=dbutils, logger=None, debug=False):
+def initialize_notebook(dbutils=None, logger=None, debug=False):
     """
     Initializes the notebook, including configuration and Spark session setup.
     """
     try:
+        # If dbutils is not provided, attempt to get it from globals
+        if dbutils is None:
+            dbutils = globals().get('dbutils', None)
+
         # Initialize logger if not provided
         logger = logger or Logger(debug=debug)
 
