@@ -88,15 +88,11 @@ class Config:
         namespace.update(vars(self))
 
 
-def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
+def initialize_config(logger=None, depth_level=None, debug=False):
     """
     Initializes the Config class and returns the config object.
     """
-    if dbutils is None:
-        dbutils = globals().get("dbutils", None)
-
     return Config(
-        dbutils=dbutils,
         logger=logger,
         source_environment=get_adf_parameter(dbutils, "SourceStorageAccount"),
         destination_environment=get_adf_parameter(dbutils, "DestinationStorageAccount"),
@@ -107,24 +103,20 @@ def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
         feedback_column=get_adf_parameter(dbutils, "FeedbackColumn"),
         schema_folder_name=get_adf_parameter(dbutils, "SchemaFolderName"),
         depth_level=depth_level,
-        debug=debug
+        debug=debug,
     )
 
 
-def initialize_notebook(dbutils=None, logger=None, debug=False):
+def initialize_notebook(logger=None, debug=False):
     """
     Initializes the notebook, including configuration and Spark session setup.
     """
     try:
-        # If dbutils is not provided, attempt to get it from globals
-        if dbutils is None:
-            dbutils = globals().get('dbutils', None)
-
         # Initialize logger if not provided
         logger = logger or Logger(debug=debug)
 
         # Initialize configuration object
-        config = initialize_config(dbutils=dbutils, logger=logger, debug=debug)
+        config = initialize_config(logger=logger, debug=debug)
         config.unpack(globals())
 
         # Initialize the Spark session
