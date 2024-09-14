@@ -88,12 +88,11 @@ class Config:
         namespace.update(vars(self))
 
 
-def initialize_config(dbutils=dbutils, logger=None, depth_level=None, debug=False):
+def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
     """
     Initializes the Config class and returns the config object.
     """
     if dbutils is None:
-        # Attempt to get dbutils from the global scope if not explicitly provided
         dbutils = globals().get("dbutils", None)
 
     return Config(
