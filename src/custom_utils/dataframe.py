@@ -209,20 +209,17 @@ def read_json_from_binary(spark: SparkSession, schema: StructType, data_file_pat
         logger.log_message(f"Error processing binary JSON files: {e}", level="error")
         logger.exit_notebook(f"Error processing binary JSON files: {e}")
 
-def process_and_flatten_json(
-    spark,
-    config,
-    schema_file_path,
-    data_file_path,
-    logger=None,
-    debug=False
-) -> tuple:
+    # Assuming `config` is a globally available object
+    def process_and_flatten_json(
+        schema_file_path,
+        data_file_path,
+        logger=None,
+        debug=False
+    ) -> tuple:
     """
     Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
-    
+
     Args:
-        spark (SparkSession): The active Spark session.
-        config (Config): Configuration object containing various parameters.
         schema_file_path (str): Path to the JSON schema file.
         data_file_path (str): Path to the data file(s).
         logger (Logger, optional): Logger object for logging. Defaults to None.
@@ -232,9 +229,15 @@ def process_and_flatten_json(
         tuple: Original DataFrame and the flattened DataFrame.
     """
     try:
+        # Get the active Spark session
+        spark = SparkSession.builder.getOrCreate()
+
+        # Access the global `config` object
+        global config
+
         # Reading schema and parsing JSON to Spark StructType
         schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
-        
+
         if logger:
             logger.log_message(f"Schema file path: {schema_file_path}", level="info")
             logger.log_message(f"Data file path: {data_file_path}", level="info")
@@ -245,11 +248,11 @@ def process_and_flatten_json(
 
         # Read the JSON data with binary fallback
         df = read_json_from_binary(spark, schema, data_file_path)
-        
+
         if logger and debug:
             # Log the initial DataFrame schema and row count
             logger.log_message("Initial DataFrame schema:", level="info")
-            df.printSchema()  # This will print the schema in a structured format
+            df.printSchema()
             initial_row_count = df.count()
             logger.log_message(f"Initial DataFrame row count: {initial_row_count}", level="info")
 
