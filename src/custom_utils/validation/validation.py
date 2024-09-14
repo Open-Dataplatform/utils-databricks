@@ -46,7 +46,7 @@ class PathValidator:
             self.logger.log_file_validation(matched_files, file_type, self.config.source_filename)
 
             # Log success message
-            self.logger.log("All paths and files verified successfully. Proceeding with notebook execution.", 
+            self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.", 
                             level="info", single_info_prefix=True)
 
             return schema_file_path, source_directory_path, file_type
