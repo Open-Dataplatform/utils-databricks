@@ -88,11 +88,15 @@ class Config:
         namespace.update(vars(self))
 
 
-def initialize_config(logger=None, depth_level=None, debug=False):
+def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
     """
     Initializes the Config class and returns the config object.
     """
+    if dbutils is None:
+        dbutils = globals().get("dbutils", None)  # Attempt to get dbutils from globals if not provided
+
     return Config(
+        dbutils=dbutils,
         logger=logger,
         source_environment=get_adf_parameter(dbutils, "SourceStorageAccount"),
         destination_environment=get_adf_parameter(dbutils, "DestinationStorageAccount"),
@@ -103,7 +107,7 @@ def initialize_config(logger=None, depth_level=None, debug=False):
         feedback_column=get_adf_parameter(dbutils, "FeedbackColumn"),
         schema_folder_name=get_adf_parameter(dbutils, "SchemaFolderName"),
         depth_level=depth_level,
-        debug=debug,
+        debug=debug
     )
 
 
@@ -115,8 +119,11 @@ def initialize_notebook(logger=None, debug=False):
         # Initialize logger if not provided
         logger = logger or Logger(debug=debug)
 
+        # Initialize dbutils if not in the function's parameters
+        dbutils = globals().get("dbutils", None)
+        
         # Initialize configuration object
-        config = initialize_config(logger=logger, debug=debug)
+        config = initialize_config(dbutils=dbutils, logger=logger, debug=debug)
         config.unpack(globals())
 
         # Initialize the Spark session
