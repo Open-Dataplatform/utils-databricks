@@ -117,8 +117,8 @@ class PathValidator:
             if not found_schema_file:
                 available_files = [file.name for file in schema_files]
                 error_message = (f"Expected schema file '{expected_schema_filename}.json' or "
-                                f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
-                                f"Available files: {available_files}")
+                                 f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
+                                 f"Available files: {available_files}")
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
