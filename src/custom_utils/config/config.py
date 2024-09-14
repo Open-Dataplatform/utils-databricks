@@ -112,7 +112,7 @@ def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
     )
 
 
-def initialize_notebook(dbutils=None, logger=None, debug=False):
+def initialize_notebook(dbutils=dbutils, logger=None, debug=False):
     """
     Initializes the notebook, including configuration and Spark session setup.
     """

@@ -1,9 +1,9 @@
-# File: path_validator.py
+# File: custom_utils/validation/validation.py
 
 from pyspark.sql.utils import AnalysisException
 from custom_utils.config.config import Config
 from custom_utils.file_handler.file_handler import FileHandler
-from custom_utils.logging.logger import Logger  # Import the Logger
+from custom_utils.logging.logger import Logger
 
 class PathValidator:
     def __init__(self, config: Config):
@@ -16,7 +16,7 @@ class PathValidator:
         self.config = config
         self.dbutils = config.dbutils
         self.file_handler = FileHandler(config)
-        self.logger = Logger(debug=config.debug)  # Initialize the Logger with debug flag
+        self.logger = config.logger  # Use logger from the config
 
     def verify_paths_and_files(self):
         """
@@ -39,24 +39,33 @@ class PathValidator:
             # Verify source folder and files
             source_directory_path, matched_files = self._verify_source_folder(mount_point)
 
-            # Log path validation results using the Logger
+            # Log path validation results
             self.logger.log_path_validation(schema_file_path, source_directory_path, len(matched_files))
 
-            # Log file validation results using the Logger
+            # Log file validation results
             self.logger.log_file_validation(matched_files, file_type, self.config.source_filename)
 
             # Log success message
             self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.", 
-                            level="info", single_info_prefix=True)
+                                    level="info", single_info_prefix=True)
 
             return schema_file_path, source_directory_path, file_type
 
         except Exception as e:
             error_message = f"Failed to validate paths or files: {str(e)}"
-            self.logger.log(error_message, level="error")
+            self.logger.log_message(error_message, level="error")
             self.logger.exit_notebook(error_message, self.dbutils)
 
-    def _get_mount_point(self):
+    def _get_mount_point(self) -> str:
+        """
+        Retrieve the mount point for the specified source environment.
+
+        Returns:
+            str: The mount point path.
+
+        Raises:
+            Exception: If the mount point is not found or if an error occurs.
+        """
         try:
             target_mount = [
                 m.mountPoint
@@ -65,16 +74,28 @@ class PathValidator:
             ]
             if not target_mount:
                 error_message = f"No mount point found for environment: {self.config.source_environment}"
-                self.logger.log(error_message, level="error")
+                self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
             return target_mount[0]
         except Exception as e:
             error_message = f"Error while retrieving mount points: {str(e)}"
-            self.logger.log(error_message, level="error")
+            self.logger.log_message(error_message, level="error")
             self.logger.exit_notebook(error_message, self.dbutils)
 
-    def _verify_schema_folder(self, mount_point: str):
+    def _verify_schema_folder(self, mount_point: str) -> tuple:
+        """
+        Verify the schema folder and the expected schema file.
+
+        Args:
+            mount_point (str): The mount point path.
+
+        Returns:
+            tuple: The schema file path and file type (e.g., 'json').
+
+        Raises:
+            Exception: If the schema file is not found or if an error occurs.
+        """
         schema_directory_path = f"{mount_point}/{self.config.schema_folder_name}/{self.config.source_datasetidentifier}"
 
         try:
@@ -95,9 +116,9 @@ class PathValidator:
             if not found_schema_file:
                 available_files = [file.name for file in schema_files]
                 error_message = (f"Expected schema file '{expected_schema_filename}.json' or "
-                                 f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}.")
-                self.logger.log(error_message, level="error")
-                self.logger.log(f"Available files: {available_files}", level="error")
+                                 f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
+                                 f"Available files: {available_files}")
+                self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
             schema_file_path = f"{schema_directory_path}/{found_schema_file}"
@@ -105,10 +126,22 @@ class PathValidator:
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
-            self.logger.log(error_message, level="error")
+            self.logger.log_message(error_message, level="error")
             raise Exception(error_message)
 
-    def _verify_source_folder(self, mount_point: str):
+    def _verify_source_folder(self, mount_point: str) -> tuple:
+        """
+        Verify the source folder and the expected files.
+
+        Args:
+            mount_point (str): The mount point path.
+
+        Returns:
+            tuple: The source directory path and a list of matched files.
+
+        Raises:
+            Exception: If no matching files are found or if an error occurs.
+        """
         source_directory_path = f"{mount_point}/{self.config.source_datasetidentifier}"
 
         try:
@@ -117,14 +150,13 @@ class PathValidator:
 
             if not matched_files:
                 available_files = [file.name for file in source_files]
-                error_message = f"No files matching '{self.config.source_filename}' found in {source_directory_path}."
-                self.logger.log(error_message, level="error")
-                self.logger.log(f"Available files: {available_files}", level="error")
+                error_message = f"No files matching '{self.config.source_filename}' found in {source_directory_path}. Available files: {available_files}"
+                self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
             return source_directory_path, matched_files
 
         except AnalysisException as e:
             error_message = f"Failed to access source folder: {str(e)}"
-            self.logger.log(error_message, level="error")
+            self.logger.log_message(error_message, level="error")
             raise Exception(error_message)
