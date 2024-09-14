@@ -49,6 +49,7 @@ class Logger:
             source_directory_path (str): The path to the source directory.
             number_of_files (int): The number of files found in the source directory.
         """
+        schema_file_path = schema_file_path.lstrip("/dbfs/")
         content_lines = [
             f"Schema directory path: {schema_file_path}",
             f"Source directory path: {source_directory_path}",
@@ -57,7 +58,7 @@ class Logger:
         ]
         self.log_block("Path Validation Results", content_lines)
 
-    def log_file_validation(self, matched_files, file_type, source_filename):
+    def log_file_validation(self, schema_file_path, matched_files, file_type, source_filename):
         """
         Log the results of the file validation.
 
@@ -69,6 +70,7 @@ class Logger:
         num_files = len(matched_files)
         files_to_display = matched_files[:10] if num_files > 10 else matched_files
         content_lines = [
+            f"Schema directory file path: {schema_file_path}",
             f"File Type: {file_type}",
             f"Number of files found: {num_files} {'(showing top 10)' if num_files > 10 else ''}",
             f"Files found matching the pattern '{source_filename}':"
