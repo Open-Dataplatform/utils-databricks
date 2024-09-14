@@ -1,7 +1,7 @@
 import os
 from pyspark.sql import SparkSession
 from custom_utils.logging.logger import log_message, Logger
-from custom_utils.helper import exit_notebook, get_param_value
+from custom_utils.helper import exit_notebook, get_param_value, get_adf_parameter
 from custom_utils.path_utils import generate_source_path, generate_source_file_path, generate_schema_path, generate_schema_file_path
 
 class Config:
@@ -12,7 +12,6 @@ class Config:
     def __init__(
         self,
         dbutils=None,
-        helper=None,
         source_environment=None,
         destination_environment=None,
         source_container=None,
@@ -24,7 +23,6 @@ class Config:
         depth_level=None,
         debug=False
     ):
-        self.helper = helper
         self.dbutils = dbutils
         self.debug = debug
 
@@ -78,7 +76,7 @@ class Config:
         namespace.update(vars(self))
 
 
-def initialize_config(dbutils=None, helper=None, depth_level=None, debug=False):
+def initialize_config(dbutils=None, depth_level=None, debug=False):
     """
     Initializes the Config class and returns the config object.
     """
@@ -87,26 +85,25 @@ def initialize_config(dbutils=None, helper=None, depth_level=None, debug=False):
 
     return Config(
         dbutils=dbutils,
-        helper=helper,
-        source_environment=helper.get_adf_parameter(dbutils, "SourceStorageAccount"),
-        destination_environment=helper.get_adf_parameter(dbutils, "DestinationStorageAccount"),
-        source_container=helper.get_adf_parameter(dbutils, "SourceContainer"),
-        source_datasetidentifier=helper.get_adf_parameter(dbutils, "SourceDatasetidentifier"),
-        source_filename=helper.get_adf_parameter(dbutils, "SourceFileName"),
-        key_columns=helper.get_adf_parameter(dbutils, "KeyColumns"),
-        feedback_column=helper.get_adf_parameter(dbutils, "FeedbackColumn"),
-        schema_folder_name=helper.get_adf_parameter(dbutils, "SchemaFolderName"),
+        source_environment=get_adf_parameter(dbutils, "SourceStorageAccount"),
+        destination_environment=get_adf_parameter(dbutils, "DestinationStorageAccount"),
+        source_container=get_adf_parameter(dbutils, "SourceContainer"),
+        source_datasetidentifier=get_adf_parameter(dbutils, "SourceDatasetidentifier"),
+        source_filename=get_adf_parameter(dbutils, "SourceFileName"),
+        key_columns=get_adf_parameter(dbutils, "KeyColumns"),
+        feedback_column=get_adf_parameter(dbutils, "FeedbackColumn"),
+        schema_folder_name=get_adf_parameter(dbutils, "SchemaFolderName"),
         depth_level=depth_level,
         debug=debug
     )
 
 
-def initialize_notebook(dbutils, helper, debug=False):
+def initialize_notebook(dbutils, debug=False):
     """
     Initializes the notebook, including configuration and Spark session setup.
     """
     try:
-        config = initialize_config(dbutils=dbutils, helper=helper, debug=debug)
+        config = initialize_config(dbutils=dbutils, debug=debug)
         config.unpack(globals())
 
         spark = SparkSession.builder.appName(f"Data Processing Pipeline: {config.source_datasetidentifier}").getOrCreate()
