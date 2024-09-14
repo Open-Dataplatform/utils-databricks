@@ -6,32 +6,23 @@ from custom_utils.config.config import Config
 class FileHandler:
     def __init__(self, config: Config):
         """
-        Initialize the FileHandler with the provided configuration.
-        
+        Initialize the FileHandler with the given configuration.
+
         Args:
-            config (Config): Configuration object containing ADF details, paths, and authentication strategy.
+            config (Config): An instance of the Config class.
         """
         self.config = config
-        self.error_log_path = config.full_schema_file_path
-        self.output_file_path = config.full_source_file_path
 
-    def update_source_filename(self, source_filename):
+    def filter_files(self, files):
         """
-        Update the source filename in the configuration.
-        
-        Args:
-            source_filename (str): The new source file name or pattern.
-        """
-        self.config.update_source_filename(source_filename)
+        Filter files based on the source filename pattern.
 
-    def log_errors(self, error_log):
-        """
-        Log any errors that occurred during the process to a file.
-        
         Args:
-            error_log (dict): A dictionary containing the errors to be logged.
+            files (list): List of files to filter.
+
+        Returns:
+            list: List of filenames that match the source filename pattern.
         """
-        if error_log:
-            with open(self.error_log_path, "a") as log_file:
-                json.dump(error_log, log_file, indent=4)
-            print(f"Errors logged to {self.error_log_path}")
+        if self.config.source_filename == "*":
+            return [file.name for file in files]
+        return [file.name for file in files if fnmatch.fnmatch(file.name, self.config.source_filename)]
