@@ -22,11 +22,23 @@ class Logger:
         if level == "info" and not self.debug:
             return
 
-        if single_info_prefix and level == "info":
-            print("[INFO]")
-            print(message)
-        else:
-            print(f"[{level.upper()}] {message}")
+        prefix = f"[{level.upper()}] " if not (single_info_prefix and level == "info") else ""
+        print(f"{prefix}{message}")
+
+    def log_block(self, header, content_lines, level="info"):
+        """
+        Utility method to log blocks of messages with a header and separators.
+
+        Args:
+            header (str): Header of the block.
+            content_lines (list): List of lines to include in the block.
+            level (str): Log level for the block.
+        """
+        self.log_message(f"\n=== {header} ===", level=level, single_info_prefix=True)
+        print("------------------------------")
+        for line in content_lines:
+            self.log_message(line, level=level)
+        print("------------------------------")
 
     def log_path_validation(self, schema_file_path, source_directory_path, number_of_files):
         """
@@ -37,13 +49,13 @@ class Logger:
             source_directory_path (str): The path to the source directory.
             number_of_files (int): The number of files found in the source directory.
         """
-        self.log_message("\n=== Path Validation Results ===", level="info", single_info_prefix=True)
-        print("------------------------------")
-        print(f"Schema directory path: {schema_file_path}")
-        print(f"Source directory path: {source_directory_path}")
-        print(f"Expected minimum files: 1")
-        print(f"Actual number of files found: {number_of_files}")
-        print("------------------------------")
+        content_lines = [
+            f"Schema directory path: {schema_file_path}",
+            f"Source directory path: {source_directory_path}",
+            "Expected minimum files: 1",
+            f"Actual number of files found: {number_of_files}"
+        ]
+        self.log_block("Path Validation Results", content_lines)
 
     def log_file_validation(self, matched_files, file_type, source_filename):
         """
@@ -54,26 +66,24 @@ class Logger:
             file_type (str): The type of the schema file (e.g., 'json' or 'xml').
             source_filename (str): The filename pattern used for matching.
         """
-        self.log_message("\n=== File Validation Results ===", level="info", single_info_prefix=True)
-        print("------------------------------")
-        print(f"File Type: {file_type}")
-        
         num_files = len(matched_files)
-        
-        # Show the total number of files found, with a note if displaying only the top 10
-        if num_files > 10:
-            print(f"Number of files found: {num_files} (showing top 10)")
-            files_to_display = matched_files[:10]
-        else:
-            print(f"Number of files found: {num_files}")
-            files_to_display = matched_files
+        files_to_display = matched_files[:10] if num_files > 10 else matched_files
+        content_lines = [
+            f"File Type: {file_type}",
+            f"Number of files found: {num_files} {'(showing top 10)' if num_files > 10 else ''}",
+            f"Files found matching the pattern '{source_filename}':"
+        ] + [f"- {file}" for file in files_to_display]
 
-        # Always print the list of matching files, regardless of the source_filename pattern
-        print(f"Files found matching the pattern '{source_filename}':")
-        for file in files_to_display:
-            print(f"- {file}")
-        
-        print("------------------------------")
+        self.log_block("File Validation Results", content_lines)
+
+    def log_error(self, message):
+        """
+        Log an error message.
+
+        Args:
+            message (str): The error message to log.
+        """
+        self.log_message(message, level="error")
 
     def exit_notebook(self, message, dbutils=None):
         """
@@ -83,17 +93,8 @@ class Logger:
             message (str): The error message to display.
             dbutils (object, optional): Databricks dbutils object for notebook exit.
         """
+        self.log_error(message)
         if dbutils:
             dbutils.notebook.exit(f"[ERROR] {message}")
         else:
             raise SystemExit(f"[ERROR] {message}")
-
-def log_message(message, level="info", single_info_prefix=False, debug=False):
-    if level == "info" and not debug:
-        return
-
-    if single_info_prefix and level == "info":
-        print("[INFO]")
-        print(message)
-    else:
-        print(f"[{level.upper()}] {message}")

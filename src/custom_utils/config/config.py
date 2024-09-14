@@ -1,3 +1,5 @@
+# File: custom_utils/config/config.py
+
 import os
 from pyspark.sql import SparkSession
 from custom_utils.logging.logger import Logger
@@ -109,14 +111,11 @@ def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
     )
 
 
-def initialize_notebook(dbutils, debug=False):
+def initialize_notebook(dbutils, logger=logger, debug=False):
     """
     Initializes the notebook, including configuration and Spark session setup.
     """
     try:
-        # Initialize the Logger
-        logger = Logger(debug=debug)
-
         # Initialize configuration object
         config = initialize_config(dbutils=dbutils, logger=logger, debug=debug)
         config.unpack(globals())
