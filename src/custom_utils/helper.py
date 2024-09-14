@@ -2,7 +2,7 @@
 
 import os
 from custom_utils import adf
-from custom_utils.logging import logger
+from custom_utils.logging.logger import Logger  # Import Logger
 
 # Initialize the Logger
 logger = Logger()

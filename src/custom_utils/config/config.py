@@ -1,6 +1,6 @@
 import os
 from pyspark.sql import SparkSession
-from custom_utils.logging import logger
+from custom_utils.logging.logger import log_message
 from custom_utils.helper import exit_notebook, get_param_value
 from custom_utils.path_utils import generate_source_path, generate_source_file_path, generate_schema_path, generate_schema_file_path
 
