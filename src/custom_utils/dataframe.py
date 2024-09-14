@@ -209,76 +209,76 @@ def read_json_from_binary(spark: SparkSession, schema: StructType, data_file_pat
         logger.log_message(f"Error processing binary JSON files: {e}", level="error")
         logger.exit_notebook(f"Error processing binary JSON files: {e}")
 
-    # Assuming `config` is a globally available object
-    def process_and_flatten_json(
-        schema_file_path,
-        data_file_path,
-        logger=None,
-        debug=False
-    ) -> tuple:
-        """
-        Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
+# Assuming `config` is a globally available object
+def process_and_flatten_json(
+    schema_file_path,
+    data_file_path,
+    logger=None,
+    debug=False
+) -> tuple:
+    """
+    Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
 
-        Args:
-            schema_file_path (str): Path to the JSON schema file.
-            data_file_path (str): Path to the data file(s).
-            logger (Logger, optional): Logger object for logging. Defaults to None.
-            debug (bool, optional): If True, enables debug logging. Defaults to False.
+    Args:
+        schema_file_path (str): Path to the JSON schema file.
+        data_file_path (str): Path to the data file(s).
+        logger (Logger, optional): Logger object for logging. Defaults to None.
+        debug (bool, optional): If True, enables debug logging. Defaults to False.
 
-        Returns:
-            tuple: Original DataFrame and the flattened DataFrame.
-        """
-        try:
-            # Get the active Spark session
-            spark = SparkSession.builder.getOrCreate()
+    Returns:
+        tuple: Original DataFrame and the flattened DataFrame.
+    """
+    try:
+        # Get the active Spark session
+        spark = SparkSession.builder.getOrCreate()
 
-            # Access the global `config` object
-            global config
+        # Access the global `config` object
+        global config
 
-            # Reading schema and parsing JSON to Spark StructType
-            schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
+        # Reading schema and parsing JSON to Spark StructType
+        schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
 
-            if logger:
-                logger.log_message(f"Schema file path: {schema_file_path}", level="info")
-                logger.log_message(f"Data file path: {data_file_path}", level="info")
+        if logger:
+            logger.log_message(f"Schema file path: {schema_file_path}", level="info")
+            logger.log_message(f"Data file path: {data_file_path}", level="info")
 
-                if debug:
-                    # Pretty print the schema JSON
-                    logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
+            if debug:
+                # Pretty print the schema JSON
+                logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
 
-            # Read the JSON data with binary fallback
-            df = read_json_from_binary(spark, schema, data_file_path)
+        # Read the JSON data with binary fallback
+        df = read_json_from_binary(spark, schema, data_file_path)
 
-            if logger and debug:
-                # Log the initial DataFrame schema and row count
-                logger.log_message("Initial DataFrame schema:", level="info")
-                df.printSchema()
-                initial_row_count = df.count()
-                logger.log_message(f"Initial DataFrame row count: {initial_row_count}", level="info")
+        if logger and debug:
+            # Log the initial DataFrame schema and row count
+            logger.log_message("Initial DataFrame schema:", level="info")
+            df.printSchema()
+            initial_row_count = df.count()
+            logger.log_message(f"Initial DataFrame row count: {initial_row_count}", level="info")
 
-            # Get the depth level and flatten the DataFrame
-            max_depth = reader.get_json_depth(schema_json, logger=logger, depth_level=config.depth_level)
-            df_flattened = flatten_df(df, depth_level=config.depth_level, max_depth=max_depth, type_mapping=reader.get_type_mapping())
+        # Get the depth level and flatten the DataFrame
+        max_depth = reader.get_json_depth(schema_json, logger=logger, depth_level=config.depth_level)
+        df_flattened = flatten_df(df, depth_level=config.depth_level, max_depth=max_depth, type_mapping=reader.get_type_mapping())
 
-            if logger and debug:
-                # Log the flattened DataFrame schema and row count
-                logger.log_message("Flattened DataFrame schema:", level="info")
-                df_flattened.printSchema()
-                flattened_row_count = df_flattened.count()
-                logger.log_message(f"Flattened DataFrame row count: {flattened_row_count}", level="info")
+        if logger and debug:
+            # Log the flattened DataFrame schema and row count
+            logger.log_message("Flattened DataFrame schema:", level="info")
+            df_flattened.printSchema()
+            flattened_row_count = df_flattened.count()
+            logger.log_message(f"Flattened DataFrame row count: {flattened_row_count}", level="info")
 
-            # Drop the "input_file_name" column from the original DataFrame
-            df = df.drop("input_file_name")
+        # Drop the "input_file_name" column from the original DataFrame
+        df = df.drop("input_file_name")
 
-            if logger:
-                logger.log_message("Completed JSON processing and flattening.", level="info")
+        if logger:
+            logger.log_message("Completed JSON processing and flattening.", level="info")
 
-            return df, df_flattened
+        return df, df_flattened
 
-        except Exception as e:
-            if logger:
-                logger.log_message(f"Error during processing and flattening: {str(e)}", level="error")
-            raise
+    except Exception as e:
+        if logger:
+            logger.log_message(f"Error during processing and flattening: {str(e)}", level="error")
+        raise
 
 def create_temp_view_with_most_recent_records(
     spark,
