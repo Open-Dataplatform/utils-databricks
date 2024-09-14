@@ -87,3 +87,13 @@ class Logger:
             dbutils.notebook.exit(f"[ERROR] {message}")
         else:
             raise SystemExit(f"[ERROR] {message}")
+
+def log_message(message, level="info", single_info_prefix=False, debug=False):
+    if level == "info" and not debug:
+        return
+
+    if single_info_prefix and level == "info":
+        print("[INFO]")
+        print(message)
+    else:
+        print(f"[{level.upper()}] {message}")
