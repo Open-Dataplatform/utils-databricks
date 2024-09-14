@@ -10,7 +10,7 @@ class Logger:
         """
         self.debug = debug
 
-    def log(self, message, level="info", single_info_prefix=False):
+    def log_message(self, message, level="info", single_info_prefix=False):
         """
         Log a message.
 
@@ -28,28 +28,6 @@ class Logger:
         else:
             print(f"[{level.upper()}] {message}")
 
-    # custom_utils/logging/logger.py
-    def log_message(message, level="info", single_info_prefix=False, debug=False):
-        """
-        Logs a message to the console or a logging system. Supports various log levels.
-
-        Args:
-            message (str): The message to log.
-            level (str): The log level ('info', 'warning', 'error'). Default is 'info'.
-            single_info_prefix (bool): If True, adds '[INFO]' only once before the log block.
-            debug (bool): If False and the level is 'info', the message will not be logged.
-        """
-        if level == "info" and not debug:
-            return
-
-        # Handle different log levels
-        if single_info_prefix and level == "info":
-            print("[INFO]")
-            print(message)
-        else:
-            print(f"[{level.upper()}] {message}")
-
-
     def log_path_validation(self, schema_file_path, source_directory_path, number_of_files):
         """
         Log the results of the path validation.
@@ -59,7 +37,7 @@ class Logger:
             source_directory_path (str): The path to the source directory.
             number_of_files (int): The number of files found in the source directory.
         """
-        self.log("\n=== Path Validation Results ===", level="info", single_info_prefix=True)
+        self.log_message("\n=== Path Validation Results ===", level="info", single_info_prefix=True)
         print("------------------------------")
         print(f"Schema directory path: {schema_file_path}")
         print(f"Source directory path: {source_directory_path}")
@@ -76,7 +54,7 @@ class Logger:
             file_type (str): The type of the schema file (e.g., 'json' or 'xml').
             source_filename (str): The filename pattern used for matching.
         """
-        self.log("\n=== File Validation Results ===", level="info", single_info_prefix=True)
+        self.log_message("\n=== File Validation Results ===", level="info", single_info_prefix=True)
         print("------------------------------")
         print(f"File Type: {file_type}")
         
