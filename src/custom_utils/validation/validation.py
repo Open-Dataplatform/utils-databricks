@@ -53,11 +53,10 @@ class PathValidator:
             # Return schema file path, list of full source file paths, matched files, and file type
             return schema_file_path, source_file_paths, matched_files, file_type
 
-    except Exception as e:
-        error_message = f"Failed to validate paths or files: {str(e)}"
-        self.logger.log_message(error_message, level="error")
-        self.logger.exit_notebook(error_message, self.dbutils)
-
+        except Exception as e:
+            error_message = f"Failed to validate paths or files: {str(e)}"
+            self.logger.log_message(error_message, level="error")
+            self.logger.exit_notebook(error_message, self.dbutils)
 
     def _get_mount_point(self) -> str:
         """
@@ -81,6 +80,7 @@ class PathValidator:
                 raise Exception(error_message)
 
             return target_mount[0]
+
         except Exception as e:
             error_message = f"Error while retrieving mount points: {str(e)}"
             self.logger.log_message(error_message, level="error")
