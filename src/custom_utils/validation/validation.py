@@ -57,7 +57,6 @@ class PathValidator:
             self.logger.log_message(error_message, level="error")
             self.logger.exit_notebook(error_message, self.dbutils)
 
-
     def _get_mount_point(self) -> str:
         """
         Retrieve the mount point for the specified source environment.
@@ -93,7 +92,7 @@ class PathValidator:
             mount_point (str): The mount point path.
 
         Returns:
-            tuple: The schema file path (with '/dbfs/' prefix) and file type (e.g., 'json').
+            tuple: The schema directory path, full schema file path, schema file name, and file type (e.g., 'json').
 
         Raises:
             Exception: If the schema file is not found or if an error occurs.
@@ -118,8 +117,8 @@ class PathValidator:
             if not found_schema_file:
                 available_files = [file.name for file in schema_files]
                 error_message = (f"Expected schema file '{expected_schema_filename}.json' or "
-                                f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
-                                f"Available files: {available_files}")
+                                 f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
+                                 f"Available files: {available_files}")
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
@@ -127,17 +126,12 @@ class PathValidator:
             schema_file_path = f"/dbfs/{schema_directory_path}/{found_schema_file}"
             schema_file_name = found_schema_file
 
-            # Log the directory path (without filename) separately
-            # self.logger.log_message(f"Schema directory path: {schema_directory_path}", level="info")
-
-            # Return the full schema file path with '/dbfs/' prefix
             return schema_directory_path, schema_file_path, schema_file_name, file_type
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
-            self.logger.log_message(error_message, level="error")
+            # self.logger.log_message(error_message, level="error")
             raise Exception(error_message)
-
 
     def _verify_source_folder(self, mount_point: str) -> tuple:
         """
@@ -161,11 +155,8 @@ class PathValidator:
             if not matched_files:
                 available_files = [file.name for file in source_files]
                 error_message = f"No files matching '{self.config.source_filename}' found in {source_directory_path}. Available files: {available_files}"
-                self.logger.log_message(error_message, level="error")
+                # self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
-
-            # Log the source directory path (without filename pattern)
-            # self.logger.log_message(f"Source directory path: {source_directory_path}", level="info")
 
             return source_directory_path, matched_files
 
@@ -173,4 +164,3 @@ class PathValidator:
             error_message = f"Failed to access source folder: {str(e)}"
             self.logger.log_message(error_message, level="error")
             raise Exception(error_message)
-
