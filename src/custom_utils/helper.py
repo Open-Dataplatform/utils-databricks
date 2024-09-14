@@ -17,6 +17,13 @@ def log_message(message, level="info", single_info_prefix=False, debug=False):
         print(f"[{level.upper()}] {message}")
 
 def exit_notebook(message, dbutils=None):
+    """
+    Exit the notebook with an error message. If `dbutils` is not available, raises a system exit.
+
+    Args:
+        message (str): The error message to display.
+        dbutils: The Databricks dbutils object, used to exit the notebook.
+    """
     if dbutils:
         dbutils.notebook.exit(f"[ERROR] {message}")
     else:
@@ -38,6 +45,19 @@ def get_adf_parameter(dbutils, param_name, default_value=""):
     except Exception as e:
         write_message(f"Could not get parameter {param_name}: {e}", level="warning")
         return default_value
+
+def exit_notebook(message, dbutils=None):
+    """
+    Exit the notebook with an error message. If `dbutils` is not available, raises a system exit.
+
+    Args:
+        message (str): The error message to display.
+        dbutils: The Databricks dbutils object, used to exit the notebook.
+    """
+    if dbutils:
+        dbutils.notebook.exit(f"[ERROR] {message}")
+    else:
+        raise SystemExit(f"[ERROR] {message}")
 
 def get_key_columns_list(key_columns: str) -> list:
     """

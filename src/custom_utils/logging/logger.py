@@ -28,6 +28,28 @@ class Logger:
         else:
             print(f"[{level.upper()}] {message}")
 
+    # custom_utils/logging/logger.py
+    def log_message(message, level="info", single_info_prefix=False, debug=False):
+        """
+        Logs a message to the console or a logging system. Supports various log levels.
+
+        Args:
+            message (str): The message to log.
+            level (str): The log level ('info', 'warning', 'error'). Default is 'info'.
+            single_info_prefix (bool): If True, adds '[INFO]' only once before the log block.
+            debug (bool): If False and the level is 'info', the message will not be logged.
+        """
+        if level == "info" and not debug:
+            return
+
+        # Handle different log levels
+        if single_info_prefix and level == "info":
+            print("[INFO]")
+            print(message)
+        else:
+            print(f"[{level.upper()}] {message}")
+
+
     def log_path_validation(self, schema_file_path, source_directory_path, number_of_files):
         """
         Log the results of the path validation.
