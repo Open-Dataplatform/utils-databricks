@@ -41,7 +41,7 @@ class PathValidator:
             source_directory_path, full_source_file_path, matched_files = self._verify_source_folder(mount_point)
 
             # Log path validation results
-            self.logger.log_path_validation(schema_file_path, full_source_file_path, len(matched_files))
+            self.logger.log_path_validation(schema_directory_path, source_directory_path, len(matched_files))
 
             # Log file validation results
             self.logger.log_file_validation(schema_file_name, matched_files, file_type, self.config.source_filename)
@@ -126,7 +126,6 @@ class PathValidator:
             
             # Construct the schema file path
             schema_file_path = f"/dbfs{os.path.join(schema_directory_path, found_schema_file)}"
-            print(f"Schema file path (after assignment): {schema_file_path}")  # Debugging statement
 
             # Return the paths
             return schema_file_path, schema_directory_path, found_schema_file, file_type
