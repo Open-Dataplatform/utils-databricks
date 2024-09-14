@@ -124,13 +124,13 @@ class PathValidator:
                 raise Exception(error_message)
 
             # Construct schema file path
-            schema_file_path = f"{schema_directory_path}/{found_schema_file}"
+            schema_file_path = f"/dbfs/{schema_directory_path}/{found_schema_file}"
 
             # Log the directory path (without filename) separately
-            self.logger.log_message(f"Schema directory path: {schema_directory_path}", level="info")
+            # self.logger.log_message(f"Schema directory path: {schema_directory_path}", level="info")
 
             # Return the full schema file path with '/dbfs/' prefix
-            return f"/dbfs/{schema_file_path}", file_type
+            return schema_file_path, file_type
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
@@ -164,7 +164,7 @@ class PathValidator:
                 raise Exception(error_message)
 
             # Log the source directory path (without filename pattern)
-            self.logger.log_message(f"Source directory path: {source_directory_path}", level="info")
+            # self.logger.log_message(f"Source directory path: {source_directory_path}", level="info")
 
             return source_directory_path, matched_files
 

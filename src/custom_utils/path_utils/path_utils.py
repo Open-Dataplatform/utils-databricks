@@ -1,4 +1,5 @@
-# custom_utils/path_utils.py
+# File: custom_utils/path_utils/path_utils.py
+
 def generate_source_path(source_environment, source_container, source_datasetidentifier):
     """
     Generate the folder path for source files.
