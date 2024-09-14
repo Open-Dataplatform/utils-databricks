@@ -93,7 +93,7 @@ class PathValidator:
             mount_point (str): The mount point path.
 
         Returns:
-            tuple: The schema file path and file type (e.g., 'json').
+            tuple: The schema file path (with '/dbfs/' prefix) and file type (e.g., 'json').
 
         Raises:
             Exception: If the schema file is not found or if an error occurs.
@@ -118,13 +118,19 @@ class PathValidator:
             if not found_schema_file:
                 available_files = [file.name for file in schema_files]
                 error_message = (f"Expected schema file '{expected_schema_filename}.json' or "
-                                 f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
-                                 f"Available files: {available_files}")
+                                f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
+                                f"Available files: {available_files}")
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
+            # Construct schema file path
             schema_file_path = f"{schema_directory_path}/{found_schema_file}"
-            return schema_file_path, file_type
+            
+            # Log without '/dbfs/' prefix
+            self.logger.log_message(f"Schema directory path: {schema_file_path}", level="info")
+
+            # Return path with '/dbfs/' prefix
+            return f"/dbfs/{schema_file_path}", file_type
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
