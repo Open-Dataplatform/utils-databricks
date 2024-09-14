@@ -10,11 +10,9 @@ from custom_utils.path_utils import (
     generate_schema_path, 
     generate_schema_file_path
 )
+from custom_utils import dbutils  # Import dbutils from the global import in custom_utils/__init__.py
 
 class Config:
-    """
-    Configuration class to handle environment parameters, paths, and settings for data processing.
-    """
     def __init__(
         self,
         dbutils=None,
@@ -30,7 +28,8 @@ class Config:
         depth_level=None,
         debug=False
     ):
-        self.dbutils = dbutils
+        # Attempt to use dbutils from the global import if not explicitly passed
+        self.dbutils = dbutils or globals().get("dbutils", None)
         self.logger = logger or Logger(debug=debug)
         self.debug = debug
 
@@ -82,9 +81,7 @@ class Config:
         print("------------------------------")
 
     def unpack(self, namespace: dict):
-        """
-        Unpacks all configuration attributes into the provided namespace (e.g., globals()).
-        """
+        """Unpacks all configuration attributes into the provided namespace (e.g., globals())."""
         namespace.update(vars(self))
 
 
@@ -92,13 +89,8 @@ def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
     """
     Initializes the Config class and returns the config object.
     """
-    # If dbutils is not provided, try to get it from globals()
-    if dbutils is None:
-        dbutils = globals().get("dbutils", None)
-
-    # Check if dbutils is still None and raise an error if it is required
-    if dbutils is None:
-        raise ValueError("dbutils is not available. Ensure that this code is running in a Databricks environment.")
+    # Attempt to use global dbutils if not provided
+    dbutils = dbutils or globals().get("dbutils", None)
 
     return Config(
         dbutils=dbutils,
@@ -121,11 +113,11 @@ def initialize_notebook(dbutils=None, logger=None, debug=False):
     Initializes the notebook, including configuration and Spark session setup.
     """
     try:
+        # Attempt to use global dbutils if not provided
+        dbutils = dbutils or globals().get("dbutils", None)
+
         # Initialize logger if not provided
         logger = logger or Logger(debug=debug)
-
-        # Attempt to retrieve dbutils from the global environment
-        dbutils = globals().get("dbutils", None)
 
         # Initialize configuration object
         config = initialize_config(dbutils=dbutils, logger=logger, debug=debug)
@@ -141,7 +133,4 @@ def initialize_notebook(dbutils=None, logger=None, debug=False):
     except Exception as e:
         error_message = f"Failed to initialize notebook: {str(e)}"
         logger.log_message(error_message, level="error")
-        if 'dbutils' in globals():
-            logger.exit_notebook(error_message, globals()['dbutils'])
-        else:
-            raise
+        logger.exit_notebook(error_message, dbutils)
