@@ -7,9 +7,11 @@ from pyspark.sql.types import ArrayType, StructType, StringType
 from pyspark.sql import SparkSession, DataFrame
 from custom_utils.dp_storage import reader, writer
 from custom_utils.logging.logger import Logger  # Import the Logger class
+from custom_utils.config.config import Config # Import the Config class
 
 # Create an instance of Logger (can be passed from outside or use default)
 logger = Logger(debug=True)  # Set debug=True or False based on the requirement
+config = Config(debug=True)  # Set debug=True or False based on the requirement
 
 def _get_array_and_struct_columns(df: DataFrame) -> List[tuple]:
     """Return a list with columns (names and types) of either ArrayType or StructType."""
@@ -209,7 +211,6 @@ def read_json_from_binary(spark: SparkSession, schema: StructType, data_file_pat
         logger.log_message(f"Error processing binary JSON files: {e}", level="error")
         logger.exit_notebook(f"Error processing binary JSON files: {e}")
 
-# Assuming `config` is a globally available object
 def process_and_flatten_json(
     schema_file_path,
     data_file_path,
@@ -231,9 +232,6 @@ def process_and_flatten_json(
     try:
         # Get the active Spark session
         spark = SparkSession.builder.getOrCreate()
-
-        # Access the global `config` object
-        global config
 
         # Reading schema and parsing JSON to Spark StructType
         schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
