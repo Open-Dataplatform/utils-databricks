@@ -264,3 +264,21 @@ def create_temp_view_with_most_recent_records(
         if logger:
             logger.log_message(f"Error creating temporary view {temp_view_name}: {e}", level="error")
         raise
+
+def rename_columns(df: DataFrame, replacements: dict) -> DataFrame:
+    """
+    Renames DataFrame columns based on a dictionary of replacement rules.
+
+    Args:
+        df (DataFrame): The DataFrame whose columns need renaming.
+        replacements (dict): A dictionary with keys as substrings to be replaced and values as their replacements.
+
+    Returns:
+        DataFrame: The DataFrame with renamed columns.
+    """
+    for column_name in df.columns:
+        df = df.withColumnRenamed(
+            column_name, _string_replace(column_name, replacements)
+        )
+    
+    return df
