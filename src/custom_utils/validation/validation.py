@@ -123,12 +123,12 @@ class PathValidator:
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
-            # Construct schema file path using os.path.join to avoid double slashes
+            # Construct schema file path with '/dbfs/' prefix
             schema_file_path = os.path.join("/dbfs", schema_directory_path, found_schema_file)
             schema_file_name = found_schema_file
 
             # Return the full schema file path with '/dbfs/' prefix
-            return schema_directory_path, schema_file_path, schema_file_name, file_type
+            return schema_file_path, schema_directory_path, schema_file_name, file_type
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
@@ -143,12 +143,12 @@ class PathValidator:
             mount_point (str): The mount point path.
 
         Returns:
-            tuple: The source directory path and a list of matched files.
+            tuple: The source directory path and a list of full paths to matched files.
 
         Raises:
             Exception: If no matching files are found or if an error occurs.
         """
-        source_directory_path = f"{mount_point}/{self.config.source_datasetidentifier}"
+        source_directory_path = os.path.join(mount_point, self.config.source_datasetidentifier)
 
         try:
             source_files = self.dbutils.fs.ls(source_directory_path)
@@ -157,10 +157,13 @@ class PathValidator:
             if not matched_files:
                 available_files = [file.name for file in source_files]
                 error_message = f"No files matching '{self.config.source_filename}' found in {source_directory_path}. Available files: {available_files}"
-                # self.logger.log_message(error_message, level="error")
+                self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
-            return source_directory_path, matched_files
+            # Construct full paths for matched files
+            matched_file_paths = [os.path.join(source_directory_path, file.name) for file in matched_files]
+
+            return source_directory_path, matched_file_paths
 
         except AnalysisException as e:
             error_message = f"Failed to access source folder: {str(e)}"
