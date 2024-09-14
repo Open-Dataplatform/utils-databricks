@@ -1,4 +1,3 @@
-from .config import Config, initialize_config, initialize_notebook
+# File: custom_utils/config/__init__.py
 
-# Try to get dbutils if available in the global scope
-dbutils = globals().get("dbutils", None)
+from .config import Config, initialize_config, initialize_notebook
