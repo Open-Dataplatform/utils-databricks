@@ -1,20 +1,11 @@
+"""Helper common functions for logging, parameter retrieval, and notebook control."""
 
-"""Helper common functions"""
-
+import os
 from custom_utils import adf
+from custom_utils.logging.logger import Logger  # Import Logger
 
-def write_message(message, level="info"):
-    """Log or print a message with an optional log level."""
-    print(f"[{level.upper()}] {message}")
-
-def log_message(message, level="info", single_info_prefix=False, debug=False):
-    if level == "info" and not debug:
-        return
-    if single_info_prefix and level == "info":
-        print("[INFO]")
-        print(message)
-    else:
-        print(f"[{level.upper()}] {message}")
+# Initialize the Logger
+logger = Logger()
 
 def exit_notebook(message, dbutils=None):
     """
@@ -24,40 +15,60 @@ def exit_notebook(message, dbutils=None):
         message (str): The error message to display.
         dbutils: The Databricks dbutils object, used to exit the notebook.
     """
+    logger.log_message(message, level="error")  # Use logger for error messages
     if dbutils:
         dbutils.notebook.exit(f"[ERROR] {message}")
     else:
         raise SystemExit(f"[ERROR] {message}")
 
 def get_adf_parameter(dbutils, param_name, default_value=""):
-    """Get a parameter from Azure Data Factory (ADF).
-    
+    """
+    Get a parameter from Azure Data Factory (ADF).
+
     Args:
         dbutils: Databricks utilities.
         param_name (str): Name of the parameter.
         default_value (str): Default value if parameter is not found.
-        
+
     Returns:
         str: Parameter value.
     """
     try:
         return adf.get_parameter(dbutils, param_name)
     except Exception as e:
-        write_message(f"Could not get parameter {param_name}: {e}", level="warning")
+        logger.log_message(f"Could not get parameter '{param_name}': {e}", level="warning")  # Use logger for warnings
         return default_value
 
-def exit_notebook(message, dbutils=None):
+def get_param_value(dbutils, param_name, default_value=None, required=False):
     """
-    Exit the notebook with an error message. If `dbutils` is not available, raises a system exit.
+    Fetches a parameter value from Databricks widgets, environment variables, or defaults.
 
     Args:
-        message (str): The error message to display.
-        dbutils: The Databricks dbutils object, used to exit the notebook.
+        dbutils (object): Databricks dbutils for accessing widgets.
+        param_name (str): The name of the parameter.
+        default_value (str): The default value if the parameter is not set.
+        required (bool): If True, raises an exception if the parameter is not found.
+
+    Returns:
+        str: The value of the parameter.
+
+    Raises:
+        ValueError: If the parameter is required and not found.
     """
-    if dbutils:
-        dbutils.notebook.exit(f"[ERROR] {message}")
-    else:
-        raise SystemExit(f"[ERROR] {message}")
+    value = None
+    try:
+        if dbutils:
+            value = dbutils.widgets.get(param_name)
+    except Exception as e:
+        logger.log_message(f"Could not retrieve widget '{param_name}': {e}", level="warning")
+
+    if not value:
+        value = os.getenv(param_name.upper(), default_value)
+
+    if required and not value:
+        exit_notebook(f"Required parameter '{param_name}' is missing.", dbutils)
+
+    return value
 
 def get_key_columns_list(key_columns: str) -> list:
     """
