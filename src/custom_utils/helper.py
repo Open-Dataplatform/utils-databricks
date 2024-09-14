@@ -7,10 +7,20 @@ def write_message(message, level="info"):
     """Log or print a message with an optional log level."""
     print(f"[{level.upper()}] {message}")
 
-def exit_notebook(message):
-    """Exit the notebook with a message."""
-    write_message(message)
-    dbutils.notebook.exit(message)
+def log_message(message, level="info", single_info_prefix=False, debug=False):
+    if level == "info" and not debug:
+        return
+    if single_info_prefix and level == "info":
+        print("[INFO]")
+        print(message)
+    else:
+        print(f"[{level.upper()}] {message}")
+
+def exit_notebook(message, dbutils=None):
+    if dbutils:
+        dbutils.notebook.exit(f"[ERROR] {message}")
+    else:
+        raise SystemExit(f"[ERROR] {message}")
 
 def get_adf_parameter(dbutils, param_name, default_value=""):
     """Get a parameter from Azure Data Factory (ADF).
