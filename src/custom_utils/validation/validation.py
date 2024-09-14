@@ -134,11 +134,6 @@ class PathValidator:
             self.logger.log_message(error_message, level="error")
             raise Exception(error_message)
 
-    except AnalysisException as e:
-        error_message = f"Failed to access schema folder: {str(e)}"
-        # self.logger.log_message(error_message, level="error")
-        raise Exception(error_message)
-
     def _verify_source_folder(self, mount_point: str) -> tuple:
         """
         Verify the source folder and the expected files.
