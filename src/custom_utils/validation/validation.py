@@ -21,10 +21,13 @@ class PathValidator:
     def verify_paths_and_files(self):
         """
         Verify that the schema folder, schema file, and source folder exist and contain the expected files.
-        Returns the schema file path, source directory path, matched files, and file type.
+        Returns the schema file path, wildcard file path, matched files, and file type.
 
         Returns:
-            tuple: Schema file path, source directory path, matched files, and file type.
+            tuple: Schema file path, wildcard file path, matched files, and file type.
+
+        Raises:
+            Exception: If validation fails.
         """
         try:
             # Retrieve the mount point for the source environment
@@ -34,25 +37,26 @@ class PathValidator:
             schema_file_path, file_type = self._verify_schema_folder(mount_point)
 
             # Verify source folder and files
-            source_directory_path, matched_files = self._verify_source_folder(mount_point)
+            wildcard_path, matched_files = self._verify_source_folder(mount_point)
 
             # Log path validation results
-            self.logger.log_path_validation(schema_file_path, source_directory_path, len(matched_files))
+            self.logger.log_path_validation(schema_file_path, wildcard_path, len(matched_files))
 
             # Log file validation results
             self.logger.log_file_validation(matched_files, file_type, self.config.source_filename)
 
             # Log success message
-            self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.", 
+            self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.",
                                     level="info", single_info_prefix=True)
 
-            # Return schema path, source path, matched files, and file type
-            return schema_file_path, source_directory_path, matched_files, file_type
+            # Return schema path, wildcard path, matched files, and file type
+            return schema_file_path, wildcard_path, matched_files, file_type
 
         except Exception as e:
             error_message = f"Failed to validate paths or files: {str(e)}"
             self.logger.log_message(error_message, level="error")
             self.logger.exit_notebook(error_message, self.dbutils)
+
 
     def _get_mount_point(self) -> str:
         """
@@ -152,7 +156,10 @@ class PathValidator:
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
-            return source_directory_path, matched_files
+            # Construct the wildcard path using the source_filename parameter
+            wildcard_path = f"{source_directory_path}/{self.config.source_filename}"
+
+            return wildcard_path, matched_files
 
         except AnalysisException as e:
             error_message = f"Failed to access source folder: {str(e)}"
