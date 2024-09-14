@@ -1,17 +1,22 @@
 import os
 from pyspark.sql import SparkSession
-from custom_utils.logging.logger import log_message, Logger
-from custom_utils.helper import exit_notebook, get_param_value, get_adf_parameter
-from custom_utils.path_utils import generate_source_path, generate_source_file_path, generate_schema_path, generate_schema_file_path
+from custom_utils.logging.logger import Logger
+from custom_utils.helper import get_param_value, get_adf_parameter
+from custom_utils.path_utils import (
+    generate_source_path, 
+    generate_source_file_path, 
+    generate_schema_path, 
+    generate_schema_file_path
+)
 
 class Config:
     """
     Configuration class to handle environment parameters, paths, and settings for data processing.
     """
-
     def __init__(
         self,
         dbutils=None,
+        logger=None,
         source_environment=None,
         destination_environment=None,
         source_container=None,
@@ -24,6 +29,7 @@ class Config:
         debug=False
     ):
         self.dbutils = dbutils
+        self.logger = logger or Logger(debug=debug)
         self.debug = debug
 
         # Core parameters fetched from widgets, environment variables, or default values
@@ -42,14 +48,18 @@ class Config:
 
         # Construct paths using utility functions
         self.source_schema_filename = f"{self.source_datasetidentifier}_schema"
-        self.full_source_folder_path = generate_source_path(self.source_environment, self.source_container, self.source_datasetidentifier)
-        self.full_source_schema_folder_path = generate_schema_path(self.source_environment, self.source_container, self.schema_folder_name, self.source_datasetidentifier)
+        self.full_source_folder_path = generate_source_path(
+            self.source_environment, self.source_container, self.source_datasetidentifier
+        )
+        self.full_source_schema_folder_path = generate_schema_path(
+            self.source_environment, self.source_container, self.schema_folder_name, self.source_datasetidentifier
+        )
         self.full_source_file_path = generate_source_file_path(self.full_source_folder_path, self.source_filename)
         self.full_schema_file_path = generate_schema_file_path(self.full_source_schema_folder_path, self.source_schema_filename)
 
     def print_params(self):
         """Logs all configuration parameters in a structured format."""
-        log_message("\n=== Configuration Parameters ===", level="info", single_info_prefix=True, debug=self.debug)
+        self.logger.log_message("\n=== Configuration Parameters ===", level="info", single_info_prefix=True)
         print("------------------------------")
 
         params = [
@@ -76,7 +86,7 @@ class Config:
         namespace.update(vars(self))
 
 
-def initialize_config(dbutils=None, depth_level=None, debug=False):
+def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
     """
     Initializes the Config class and returns the config object.
     """
@@ -85,6 +95,7 @@ def initialize_config(dbutils=None, depth_level=None, debug=False):
 
     return Config(
         dbutils=dbutils,
+        logger=logger,
         source_environment=get_adf_parameter(dbutils, "SourceStorageAccount"),
         destination_environment=get_adf_parameter(dbutils, "DestinationStorageAccount"),
         source_container=get_adf_parameter(dbutils, "SourceContainer"),
@@ -103,19 +114,21 @@ def initialize_notebook(dbutils, debug=False):
     Initializes the notebook, including configuration and Spark session setup.
     """
     try:
-        config = initialize_config(dbutils=dbutils, debug=debug)
+        # Initialize the Logger
+        logger = Logger(debug=debug)
+
+        # Initialize configuration object
+        config = initialize_config(dbutils=dbutils, logger=logger, debug=debug)
         config.unpack(globals())
 
+        # Initialize the Spark session
         spark = SparkSession.builder.appName(f"Data Processing Pipeline: {config.source_datasetidentifier}").getOrCreate()
-
-        # Initialize the Logger
-        logger = Logger()
 
         if debug:
             config.print_params()
 
-        return spark, config, logger
+        return spark, config
     except Exception as e:
         error_message = f"Failed to initialize notebook: {str(e)}"
-        log_message(error_message, level="error", debug=debug)
-        exit_notebook(error_message, dbutils)
+        logger.log_message(error_message, level="error")
+        logger.exit_notebook(error_message, dbutils)
