@@ -33,6 +33,95 @@ def flatten(df, layer_separator="_"):
     
     return df
 
+def flatten_df(
+    df: DataFrame,
+    depth_level=None,
+    current_level=0,
+    max_depth=1,
+    type_mapping: dict = None,
+) -> DataFrame:
+    """
+    Flattens complex fields in a DataFrame up to a specified depth level, applies type mapping,
+    and renames columns by replacing '__' and '.' with '_'.
+
+    Args:
+        df (DataFrame): A PySpark DataFrame containing nested structures.
+        depth_level (int, optional): The maximum depth level to flatten. If None, max_depth is used.
+        current_level (int): The current depth level (used internally during recursion).
+        max_depth (int): The maximum depth calculated from the schema.
+        type_mapping (dict, optional): A dictionary mapping original types to desired Spark SQL types.
+
+    Returns:
+        DataFrame: A flattened DataFrame with custom types applied and column names adjusted.
+    """
+    # Determine the depth level to flatten to
+    depth_level = max_depth if depth_level is None or depth_level == "" else depth_level
+
+    # Exit early if the current level has reached or exceeded the depth level
+    if current_level >= depth_level:
+        return df
+
+    # Apply custom type mappings if provided
+    if type_mapping:
+        df = df.select(
+            [
+                F.col(c).cast(
+                    type_mapping.get(
+                        df.schema[c].dataType.simpleString(), df.schema[c].dataType
+                    )
+                )
+                for c in df.columns
+            ]
+        )
+
+    # Identify columns with complex data types (arrays and structs)
+    complex_fields = {
+        field.name: field.dataType
+        for field in df.schema.fields
+        if isinstance(field.dataType, (ArrayType, StructType))
+    }
+
+    # Flatten each complex field based on its data type
+    while complex_fields and current_level < depth_level:
+        for col_name, data_type in complex_fields.items():
+            if current_level + 1 == depth_level:
+                # Convert nested structures to JSON strings if at the final depth level
+                df = df.withColumn(col_name, F.to_json(F.col(col_name)))
+            else:
+                # Handle arrays and structs differently
+                if isinstance(data_type, ArrayType):
+                    df = df.withColumn(col_name, F.explode_outer(F.col(col_name)))
+                if isinstance(data_type, StructType):
+                    expanded_columns = [
+                        F.col(f"{col_name}.{k}").alias(f"{col_name}_{k}")
+                        for k in data_type.fieldNames()
+                    ]
+                    df = df.select("*", *expanded_columns).drop(col_name)
+
+        # Re-evaluate complex fields after flattening
+        complex_fields = {
+            field.name: field.dataType
+            for field in df.schema.fields
+            if isinstance(field.dataType, (ArrayType, StructType))
+        }
+        current_level += 1
+
+    # After flattening, convert any remaining complex fields to strings if the depth is reached
+    if current_level >= depth_level:
+        df = df.select(
+            [
+                F.col(c).cast(StringType())
+                if isinstance(df.schema[c].dataType, (ArrayType, StructType))
+                else F.col(c)
+                for c in df.columns
+            ]
+        )
+
+    # Rename columns by replacing '__' and '.' with '_'
+    df = rename_columns(df, replacements={"__": "_", ".": "_"})
+
+    return df
+
 def read_json_from_binary(spark: SparkSession, schema: StructType, data_file_path: str) -> DataFrame:
     """
     Reads files as binary, parses the JSON content, and ensures that the `input_file_name` is correctly
