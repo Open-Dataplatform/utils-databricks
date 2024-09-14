@@ -35,17 +35,17 @@ class Config:
         self.debug = debug
 
         # Core parameters fetched from widgets, environment variables, or default values
-        self.source_environment = get_param_value(dbutils, "SourceStorageAccount", source_environment, required=True)
-        self.destination_environment = get_param_value(dbutils, "DestinationStorageAccount", destination_environment, required=True)
-        self.source_container = get_param_value(dbutils, "SourceContainer", source_container, required=True)
-        self.source_datasetidentifier = get_param_value(dbutils, "SourceDatasetidentifier", source_datasetidentifier, required=True)
-        self.source_filename = get_param_value(dbutils, "SourceFileName", source_filename)
-        self.key_columns = get_param_value(dbutils, "KeyColumns", key_columns, required=True).replace(" ", "")
-        self.feedback_column = get_param_value(dbutils, "FeedbackColumn", feedback_column, required=True)
-        self.schema_folder_name = get_param_value(dbutils, "SchemaFolderName", schema_folder_name)
+        self.source_environment = get_param_value(self.dbutils, "SourceStorageAccount", source_environment, required=True)
+        self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", destination_environment, required=True)
+        self.source_container = get_param_value(self.dbutils, "SourceContainer", source_container, required=True)
+        self.source_datasetidentifier = get_param_value(self.dbutils, "SourceDatasetidentifier", source_datasetidentifier, required=True)
+        self.source_filename = get_param_value(self.dbutils, "SourceFileName", source_filename)
+        self.key_columns = get_param_value(self.dbutils, "KeyColumns", key_columns, required=True).replace(" ", "")
+        self.feedback_column = get_param_value(self.dbutils, "FeedbackColumn", feedback_column, required=True)
+        self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", schema_folder_name)
 
         # Convert depth level to integer if provided
-        depth_level_str = get_param_value(dbutils, "DepthLevel", depth_level)
+        depth_level_str = get_param_value(self.dbutils, "DepthLevel", depth_level)
         self.depth_level = int(depth_level_str) if depth_level_str else None
 
         # Construct paths using utility functions
@@ -93,6 +93,7 @@ def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
     Initializes the Config class and returns the config object.
     """
     if dbutils is None:
+        # Attempt to get dbutils from the global scope if not explicitly provided
         dbutils = globals().get("dbutils", None)
 
     return Config(
