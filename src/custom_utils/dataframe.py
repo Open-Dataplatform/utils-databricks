@@ -33,7 +33,7 @@ def flatten(df, layer_separator="_"):
     
     return df
 
-def process_and_flatten_json(spark, config, schema_file_path, data_file_path, logger=None, depth_level=None, type_mapping=None) -> tuple:
+def process_and_flatten_json(spark, config, schema_file_path, data_file_path, helper=None, depth_level=None, type_mapping=None) -> tuple:
     """
     Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
     """
