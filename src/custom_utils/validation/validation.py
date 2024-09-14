@@ -21,13 +21,10 @@ class PathValidator:
     def verify_paths_and_files(self):
         """
         Verify that the schema folder, schema file, and source folder exist and contain the expected files.
-        Returns the schema file path, source directory path, and file type.
+        Returns the schema file path, source directory path, matched files, and file type.
 
         Returns:
-            tuple: Schema file path, source directory path, and file type.
-
-        Raises:
-            Exception: If validation fails.
+            tuple: Schema file path, source directory path, matched files, and file type.
         """
         try:
             # Retrieve the mount point for the source environment
@@ -49,7 +46,8 @@ class PathValidator:
             self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.", 
                                     level="info", single_info_prefix=True)
 
-            return schema_file_path, source_directory_path, file_type
+            # Return schema path, source path, matched files, and file type
+            return schema_file_path, source_directory_path, matched_files, file_type
 
         except Exception as e:
             error_message = f"Failed to validate paths or files: {str(e)}"
