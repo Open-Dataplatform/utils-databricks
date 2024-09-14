@@ -1,13 +1,14 @@
 # File: custom_utils/dataframe.py
 
+import json
+import pyspark.sql.functions as F
 from typing import List
 from pyspark.sql.types import ArrayType, StructType, StringType
-import pyspark.sql.functions as F
 from pyspark.sql import SparkSession, DataFrame
 from custom_utils.dp_storage import reader, writer
 from custom_utils.logging.logger import Logger  # Import the Logger class
 
-# Create an instance of Logger (this should ideally be passed from outside)
+# Create an instance of Logger (can be passed from outside or use default)
 logger = Logger(debug=True)  # Set debug=True or False based on the requirement
 
 def _get_array_and_struct_columns(df: DataFrame) -> List[tuple]:
@@ -20,7 +21,7 @@ def _get_array_and_struct_columns(df: DataFrame) -> List[tuple]:
     return complex_columns
 
 def _get_expanded_columns_with_aliases(df: DataFrame, column_name: str, layer_separator: str = "_") -> List[F.col]:
-    """Return a list of nested columns (pyspark.sql.column.Column) in a column struct. To be used in df.select()."""
+    """Return a list of nested columns (pyspark.sql.column.Column) in a column struct to be used in df.select()."""
     expanded_columns = []
     for nested_column in df.select(f"`{column_name}`.*").columns:
         expanded_column = f"`{column_name}`.`{nested_column}`"
@@ -30,24 +31,36 @@ def _get_expanded_columns_with_aliases(df: DataFrame, column_name: str, layer_se
 
 def flatten_array_column(df: DataFrame, column_name: str) -> DataFrame:
     """Return dataframe with flattened array column."""
-    return df.withColumn(column_name, F.explode_outer(F.col(column_name)))
+    try:
+        return df.withColumn(column_name, F.explode_outer(F.col(column_name)))
+    except Exception as e:
+        logger.log_message(f"Error flattening array column '{column_name}': {e}", level="error")
+        logger.exit_notebook(f"Error flattening array column '{column_name}'")
 
 def flatten_struct_column(df: DataFrame, column_name: str, layer_separator: str = "_") -> DataFrame:
     """Return dataframe with flattened struct column."""
-    expanded_columns = _get_expanded_columns_with_aliases(df, column_name, layer_separator)
-    return df.select("*", *expanded_columns).drop(column_name)
+    try:
+        expanded_columns = _get_expanded_columns_with_aliases(df, column_name, layer_separator)
+        return df.select("*", *expanded_columns).drop(column_name)
+    except Exception as e:
+        logger.log_message(f"Error flattening struct column '{column_name}': {e}", level="error")
+        logger.exit_notebook(f"Error flattening struct column '{column_name}'")
 
 def flatten(df: DataFrame, layer_separator: str = "_") -> DataFrame:
     """Return dataframe with flattened arrays and structs."""
-    complex_columns = _get_array_and_struct_columns(df)
-    while complex_columns:
-        column_name, data_type = complex_columns[0]
-        if data_type == StructType:
-            df = flatten_struct_column(df, column_name, layer_separator)
-        elif data_type == ArrayType:
-            df = flatten_array_column(df, column_name)
+    try:
         complex_columns = _get_array_and_struct_columns(df)
-    return df
+        while complex_columns:
+            column_name, data_type = complex_columns[0]
+            if data_type == StructType:
+                df = flatten_struct_column(df, column_name, layer_separator)
+            elif data_type == ArrayType:
+                df = flatten_array_column(df, column_name)
+            complex_columns = _get_array_and_struct_columns(df)
+        return df
+    except Exception as e:
+        logger.log_message(f"Error flattening DataFrame: {e}", level="error")
+        logger.exit_notebook(f"Error flattening DataFrame")
 
 def flatten_df(
     df: DataFrame,
@@ -56,58 +69,81 @@ def flatten_df(
     max_depth: int = 1,
     type_mapping: dict = None,
 ) -> DataFrame:
-    """Flattens complex fields in a DataFrame up to a specified depth level."""
-    depth_level = max_depth if depth_level is None or depth_level == "" else depth_level
-    if current_level >= depth_level:
-        return df
+    """
+    Flattens complex fields in a DataFrame up to a specified depth level.
+    
+    Args:
+        df (DataFrame): A PySpark DataFrame containing nested structures.
+        depth_level (int, optional): The maximum depth level to flatten. Uses config if not provided.
+        current_level (int): The current depth level (used internally).
+        max_depth (int): The maximum depth calculated from the schema.
+        type_mapping (dict, optional): A dictionary mapping original types to desired Spark SQL types.
 
-    if type_mapping:
-        df = df.select(
-            [
-                F.col(c).cast(
-                    type_mapping.get(df.schema[c].dataType.simpleString(), df.schema[c].dataType)
-                )
-                for c in df.columns
-            ]
-        )
+    Returns:
+        DataFrame: A flattened DataFrame.
+    """
+    try:
+        # Determine the depth level to flatten to
+        depth_level = max_depth if depth_level is None or depth_level == "" else depth_level
+        if current_level >= depth_level:
+            return df
 
-    complex_fields = {
-        field.name: field.dataType
-        for field in df.schema.fields
-        if isinstance(field.dataType, (ArrayType, StructType))
-    }
+        # Apply custom type mappings if provided
+        if type_mapping:
+            df = df.select(
+                [
+                    F.col(c).cast(
+                        type_mapping.get(df.schema[c].dataType.simpleString(), df.schema[c].dataType)
+                    )
+                    for c in df.columns
+                ]
+            )
 
-    while complex_fields and current_level < depth_level:
-        for col_name, data_type in complex_fields.items():
-            if current_level + 1 == depth_level:
-                df = df.withColumn(col_name, F.to_json(F.col(col_name)))
-            else:
-                if isinstance(data_type, ArrayType):
-                    df = df.withColumn(col_name, F.explode_outer(F.col(col_name)))
-                if isinstance(data_type, StructType):
-                    expanded_columns = [
-                        F.col(f"{col_name}.{k}").alias(f"{col_name}_{k}")
-                        for k in data_type.fieldNames()
-                    ]
-                    df = df.select("*", *expanded_columns).drop(col_name)
-
+        # Identify columns with complex data types
         complex_fields = {
             field.name: field.dataType
             for field in df.schema.fields
             if isinstance(field.dataType, (ArrayType, StructType))
         }
-        current_level += 1
 
-    if current_level >= depth_level:
-        df = df.select(
-            [
-                F.col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else F.col(c)
-                for c in df.columns
-            ]
-        )
+        while complex_fields and current_level < depth_level:
+            for col_name, data_type in complex_fields.items():
+                if current_level + 1 == depth_level:
+                    df = df.withColumn(col_name, F.to_json(F.col(col_name)))
+                else:
+                    if isinstance(data_type, ArrayType):
+                        df = df.withColumn(col_name, F.explode_outer(F.col(col_name)))
+                    if isinstance(data_type, StructType):
+                        expanded_columns = [
+                            F.col(f"{col_name}.{k}").alias(f"{col_name}_{k}")
+                            for k in data_type.fieldNames()
+                        ]
+                        df = df.select("*", *expanded_columns).drop(col_name)
 
-    df = rename_columns(df, replacements={"__": "_", ".": "_"})
-    return df
+            # Re-evaluate complex fields after flattening
+            complex_fields = {
+                field.name: field.dataType
+                for field in df.schema.fields
+                if isinstance(field.dataType, (ArrayType, StructType))
+            }
+            current_level += 1
+
+        # Convert any remaining complex fields to strings if the depth is reached
+        if current_level >= depth_level:
+            df = df.select(
+                [
+                    F.col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else F.col(c)
+                    for c in df.columns
+                ]
+            )
+
+        # Rename columns to replace '__' and '.' with '_'
+        df = rename_columns(df, replacements={"__": "_", ".": "_"})
+        return df
+
+    except Exception as e:
+        logger.log_message(f"Error flattening DataFrame: {e}", level="error")
+        logger.exit_notebook(f"Error flattening DataFrame")
 
 def _string_replace(s: str, replacements: dict) -> str:
     """Helper function to perform multiple string replacements."""
@@ -170,24 +206,76 @@ def read_json_from_binary(spark: SparkSession, schema: StructType, data_file_pat
         return df_final_with_filename.select(columns)
 
     except Exception as e:
-        raise RuntimeError(f"Error processing binary JSON files: {str(e)}")
+        logger.log_message(f"Error processing binary JSON files: {e}", level="error")
+        logger.exit_notebook(f"Error processing binary JSON files: {e}")
 
-def process_and_flatten_json(spark, config, schema_file_path, data_file_path, logger=None, depth_level=None, type_mapping=None) -> tuple:
-    """Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening."""
-    depth_level = depth_level if depth_level is not None else config.depth_level
-    if type_mapping is None:
-        type_mapping = reader.get_type_mapping()
+def process_and_flatten_json(
+    spark,
+    config,
+    schema_file_path,
+    data_file_path,
+    logger=None,
+    debug=False
+) -> tuple:
+    """
+    Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
+    
+    Args:
+        spark (SparkSession): The active Spark session.
+        config (Config): Configuration object containing various parameters.
+        schema_file_path (str): Path to the JSON schema file.
+        data_file_path (str): Path to the data file(s).
+        logger (Logger, optional): Logger object for logging. Defaults to None.
+        debug (bool, optional): If True, enables debug logging. Defaults to False.
 
-    schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
-    df = read_json_from_binary(spark, schema, data_file_path)
-    max_depth = reader.get_json_depth(schema_json, logger=logger, depth_level=depth_level)
-    df_flattened = flatten_df(df, depth_level=depth_level, max_depth=max_depth, type_mapping=type_mapping)
-    df = df.drop("input_file_name")
+    Returns:
+        tuple: Original DataFrame and the flattened DataFrame.
+    """
+    try:
+        # Reading schema and parsing JSON to Spark StructType
+        schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
+        
+        if logger:
+            logger.log_message(f"Schema file path: {schema_file_path}", level="info")
+            logger.log_message(f"Data file path: {data_file_path}", level="info")
 
-    if logger:
-        logger.log_message("Completed JSON processing and flattening.", level="info")
+            if debug:
+                # Pretty print the schema JSON
+                logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
 
-    return df, df_flattened
+        # Read the JSON data with binary fallback
+        df = read_json_from_binary(spark, schema, data_file_path)
+        
+        if logger and debug:
+            # Log the initial DataFrame schema and row count
+            logger.log_message("Initial DataFrame schema:", level="info")
+            df.printSchema()  # This will print the schema in a structured format
+            initial_row_count = df.count()
+            logger.log_message(f"Initial DataFrame row count: {initial_row_count}", level="info")
+
+        # Get the depth level and flatten the DataFrame
+        max_depth = reader.get_json_depth(schema_json, logger=logger, depth_level=config.depth_level)
+        df_flattened = flatten_df(df, depth_level=config.depth_level, max_depth=max_depth, type_mapping=reader.get_type_mapping())
+
+        if logger and debug:
+            # Log the flattened DataFrame schema and row count
+            logger.log_message("Flattened DataFrame schema:", level="info")
+            df_flattened.printSchema()
+            flattened_row_count = df_flattened.count()
+            logger.log_message(f"Flattened DataFrame row count: {flattened_row_count}", level="info")
+
+        # Drop the "input_file_name" column from the original DataFrame
+        df = df.drop("input_file_name")
+
+        if logger:
+            logger.log_message("Completed JSON processing and flattening.", level="info")
+
+        return df, df_flattened
+
+    except Exception as e:
+        if logger:
+            logger.log_message(f"Error during processing and flattening: {str(e)}", level="error")
+        raise
 
 def create_temp_view_with_most_recent_records(
     spark,
