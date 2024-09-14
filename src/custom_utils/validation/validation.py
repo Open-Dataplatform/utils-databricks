@@ -125,17 +125,19 @@ class PathValidator:
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
-            # Construct the full schema file path with '/dbfs/' prefix
+            # Construct the full schema file path and ensure it has the '/dbfs/' prefix
             schema_file_path = os.path.join("/dbfs", schema_directory_path, found_schema_file)
             schema_file_name = found_schema_file
 
-            # Return the full schema file path, directory path, filename, and file type
+            # Return the full schema file path with '/dbfs/' prefix
             return schema_directory_path, schema_file_path, schema_file_name, file_type
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
             self.logger.log_message(error_message, level="error")
             raise Exception(error_message)
+
+                raise Exception(error_message)
 
     def _verify_source_folder(self, mount_point: str) -> tuple:
         """
