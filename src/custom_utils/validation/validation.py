@@ -160,8 +160,8 @@ class PathValidator:
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
-            # Construct full paths for matched files
-            matched_file_paths = [os.path.join(source_directory_path, file.name) for file in matched_files]
+            # Construct full paths for matched files, assuming matched_files are strings (file names)
+            matched_file_paths = [os.path.join(source_directory_path, file) for file in matched_files]
 
             return source_directory_path, matched_file_paths
 
