@@ -16,6 +16,7 @@ from pyspark.sql.types import (
     FloatType,
 )
 from .connector import get_mount_point_name
+from custom_utils.logging.logger import Logger
 
 
 def get_dataset_path(data_config: dict) -> str:
@@ -159,14 +160,14 @@ def get_type_mapping() -> dict:
     }
 
 
-def get_columns_of_interest(df: DataFrame, helper=None) -> str:
+def get_columns_of_interest(df: DataFrame, logger: Logger = None) -> str:
     """
     Returns a comma-separated string of column names, excluding 'input_file_name'.
-    Optionally logs the columns if a helper is provided.
+    Optionally logs the columns if a logger is provided.
 
     Args:
         df (DataFrame): A PySpark DataFrame from which columns are extracted.
-        helper (optional): An optional logging helper object. If provided, logs the columns of interest.
+        logger (Logger, optional): A Logger object. If provided, logs the columns of interest.
 
     Returns:
         str: A string containing column names, separated by commas, excluding 'input_file_name'.
@@ -177,10 +178,11 @@ def get_columns_of_interest(df: DataFrame, helper=None) -> str:
     # Join the column names into a single string, separated by commas
     columns_of_interest_str = ", ".join(columns_of_interest)
 
-    # Log the columns if a helper is provided
-    if helper:
-        helper.write_message(
-            f"Columns of interest (excluding 'input_file_name'): {columns_of_interest_str}"
+    # Log the columns if a logger is provided
+    if logger:
+        logger.log_message(
+            f"Columns of interest (excluding 'input_file_name'): {columns_of_interest_str}",
+            level="info"
         )
 
     return columns_of_interest_str
