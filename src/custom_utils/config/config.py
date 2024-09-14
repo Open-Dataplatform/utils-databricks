@@ -92,8 +92,13 @@ def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
     """
     Initializes the Config class and returns the config object.
     """
+    # If dbutils is not provided, try to get it from globals()
     if dbutils is None:
-        dbutils = globals().get("dbutils", None)  # Attempt to get dbutils from globals if not provided
+        dbutils = globals().get("dbutils", None)
+
+    # Check if dbutils is still None and raise an error if it is required
+    if dbutils is None:
+        raise ValueError("dbutils is not available. Ensure that this code is running in a Databricks environment.")
 
     return Config(
         dbutils=dbutils,
@@ -119,11 +124,9 @@ def initialize_notebook(logger=None, debug=False):
         # Initialize logger if not provided
         logger = logger or Logger(debug=debug)
 
-        # Initialize dbutils if not in the function's parameters
+        # Attempt to retrieve dbutils from the global environment
         dbutils = globals().get("dbutils", None)
 
-        print(dbutils)
-        
         # Initialize configuration object
         config = initialize_config(dbutils=dbutils, logger=logger, debug=debug)
         config.unpack(globals())
@@ -138,4 +141,7 @@ def initialize_notebook(logger=None, debug=False):
     except Exception as e:
         error_message = f"Failed to initialize notebook: {str(e)}"
         logger.log_message(error_message, level="error")
-        logger.exit_notebook(error_message, dbutils)
+        if 'dbutils' in globals():
+            logger.exit_notebook(error_message, globals()['dbutils'])
+        else:
+            raise
