@@ -121,6 +121,8 @@ def initialize_notebook(logger=None, debug=False):
 
         # Initialize dbutils if not in the function's parameters
         dbutils = globals().get("dbutils", None)
+
+        print(dbutils)
         
         # Initialize configuration object
         config = initialize_config(dbutils=dbutils, logger=logger, debug=debug)
