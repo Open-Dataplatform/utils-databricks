@@ -22,10 +22,10 @@ class PathValidator:
     def verify_paths_and_files(self):
         """
         Verify that the schema folder, schema file, and source folder exist and contain the expected files.
-        Returns the schema file path, source file paths, matched files, and file type.
+        Returns the schema file path, wildcard file path, matched files, and file type.
 
         Returns:
-            tuple: Full schema file path, list of full source file paths, matched files, and file type.
+            tuple: Schema file path, source file path pattern, matched files, and file type.
 
         Raises:
             Exception: If validation fails.
@@ -38,10 +38,10 @@ class PathValidator:
             schema_directory_path, schema_file_path, schema_file_name, file_type = self._verify_schema_folder(mount_point)
 
             # Verify source folder and files
-            source_directory_path, source_file_paths, matched_files = self._verify_source_folder(mount_point)
+            source_directory_path, source_file_path, matched_files = self._verify_source_folder(mount_point)
 
             # Log path validation results
-            self.logger.log_path_validation(schema_directory_path, source_directory_path, len(matched_files))
+            self.logger.log_path_validation(schema_file_path, source_file_path, len(matched_files))
 
             # Log file validation results
             self.logger.log_file_validation(schema_file_name, matched_files, file_type, self.config.source_filename)
@@ -50,8 +50,8 @@ class PathValidator:
             self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.",
                                     level="info", single_info_prefix=True)
 
-            # Return schema file path, list of full source file paths, matched files, and file type
-            return schema_file_path, source_file_paths, matched_files, file_type
+            # Return schema file path, source file path pattern, matched files, and file type
+            return schema_file_path, source_file_path, matched_files, file_type
 
         except Exception as e:
             error_message = f"Failed to validate paths or files: {str(e)}"
@@ -109,6 +109,7 @@ class PathValidator:
             found_schema_file = None
             file_type = None
 
+            # Identify the schema file
             for file in schema_files:
                 for ext, ftype in schema_format_mapping.items():
                     if file.name == f"{expected_schema_filename}{ext}":
@@ -119,17 +120,17 @@ class PathValidator:
             if not found_schema_file:
                 available_files = [file.name for file in schema_files]
                 error_message = (f"Expected schema file '{expected_schema_filename}.json' or "
-                                 f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
-                                 f"Available files: {available_files}")
+                                f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
+                                f"Available files: {available_files}")
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
-            # Construct schema file path with '/dbfs/' prefix
+            # Construct the full schema file path with '/dbfs/' prefix
             schema_file_path = os.path.join("/dbfs", schema_directory_path, found_schema_file)
             schema_file_name = found_schema_file
 
-            # Return the full schema file path with '/dbfs/' prefix
-            return schema_file_path, schema_directory_path, schema_file_name, file_type
+            # Return the full schema file path, directory path, filename, and file type
+            return schema_directory_path, schema_file_path, schema_file_name, file_type
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
@@ -144,7 +145,7 @@ class PathValidator:
             mount_point (str): The mount point path.
 
         Returns:
-            tuple: The source directory path, a list of full paths to matched files, and a list of filenames.
+            tuple: The source directory path, the full source file path pattern, and a list of matched files.
 
         Raises:
             Exception: If no matching files are found or if an error occurs.
@@ -161,11 +162,11 @@ class PathValidator:
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
-            # Construct full paths for matched files
-            matched_file_paths = [os.path.join(source_directory_path, file) for file in matched_files]
+            # Construct the full path pattern using the source filename
+            source_file_pattern = os.path.join(source_directory_path, self.config.source_filename)
 
-            # Return the source directory path, full paths, and filenames
-            return source_directory_path, matched_file_paths, matched_files
+            # Return the source directory path, full path pattern, and matched filenames
+            return source_directory_path, source_file_pattern, matched_files
 
         except AnalysisException as e:
             error_message = f"Failed to access source folder: {str(e)}"
