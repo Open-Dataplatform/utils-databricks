@@ -1,5 +1,6 @@
 # File: custom_utils/validation/validation.py
 
+import os
 from pyspark.sql.utils import AnalysisException
 from custom_utils.config.config import Config
 from custom_utils.file_handler.file_handler import FileHandler
