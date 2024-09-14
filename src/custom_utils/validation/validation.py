@@ -124,14 +124,19 @@ class PathValidator:
                 raise Exception(error_message)
 
             # Construct schema file path
-            schema_file_path = f"/dbfs/{schema_directory_path}/{found_schema_file}"
+            schema_file_path = f"{schema_directory_path}/{found_schema_file}"
 
-            return schema_file_path, file_type
+            # Log the directory path (without filename) separately
+            self.logger.log_message(f"Schema directory path: {schema_directory_path}", level="info")
+
+            # Return the full schema file path with '/dbfs/' prefix
+            return f"/dbfs/{schema_file_path}", file_type
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
             self.logger.log_message(error_message, level="error")
             raise Exception(error_message)
+
 
     def _verify_source_folder(self, mount_point: str) -> tuple:
         """
@@ -158,12 +163,13 @@ class PathValidator:
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
 
-            # Construct the wildcard path using the source_filename parameter
-            wildcard_path = f"{source_directory_path}/{self.config.source_filename}"
+            # Log the source directory path (without filename pattern)
+            self.logger.log_message(f"Source directory path: {source_directory_path}", level="info")
 
-            return wildcard_path, matched_files
+            return source_directory_path, matched_files
 
         except AnalysisException as e:
             error_message = f"Failed to access source folder: {str(e)}"
             self.logger.log_message(error_message, level="error")
             raise Exception(error_message)
+
