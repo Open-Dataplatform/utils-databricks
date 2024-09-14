@@ -40,18 +40,20 @@ class Logger:
             self.log_message(line, level=level)
         print("------------------------------")
 
-    def log_path_validation(self, schema_file_path, source_directory_path, number_of_files):
+    def log_path_validation(self, schema_directory_path, source_directory_path, number_of_files):
         """
         Log the results of the path validation.
 
         Args:
-            schema_file_path (str): The path to the schema file.
+            schema_directory_path (str): The path to the schema directory.
             source_directory_path (str): The path to the source directory.
             number_of_files (int): The number of files found in the source directory.
         """
-        schema_file_path = schema_file_path.lstrip("/dbfs/")
+        # Remove only '/dbfs/' prefix if it exists
+        schema_directory_path = schema_directory_path if not schema_directory_path.startswith('/dbfs/') else schema_directory_path[5:]
+
         content_lines = [
-            f"Schema directory path: {schema_file_path}",
+            f"Schema directory path: {schema_directory_path}",
             f"Source directory path: {source_directory_path}",
             "Expected minimum files: 1",
             f"Actual number of files found: {number_of_files}"
@@ -63,6 +65,7 @@ class Logger:
         Log the results of the file validation.
 
         Args:
+            schema_file_name (str): The name of the schema file.
             matched_files (list): List of files that match the source filename pattern.
             file_type (str): The type of the schema file (e.g., 'json' or 'xml').
             source_filename (str): The filename pattern used for matching.

@@ -85,48 +85,54 @@ class PathValidator:
             self.logger.exit_notebook(error_message, self.dbutils)
 
     def _verify_schema_folder(self, mount_point: str) -> tuple:
-        """
-        Verify the schema folder and the expected schema file.
+            """
+            Verify the schema folder and the expected schema file.
 
-        Args:
-            mount_point (str): The mount point path.
+            Args:
+                mount_point (str): The mount point path.
 
-        Returns:
-            tuple: The schema directory path, full schema file path, schema file name, and file type (e.g., 'json').
+            Returns:
+                tuple: The schema file path (with '/dbfs/' prefix), schema directory path, schema file name, and file type.
 
-        Raises:
-            Exception: If the schema file is not found or if an error occurs.
-        """
-        schema_directory_path = f"{mount_point}/{self.config.schema_folder_name}/{self.config.source_datasetidentifier}"
+            Raises:
+                Exception: If the schema file is not found or if an error occurs.
+            """
+            schema_directory_path = os.path.join(mount_point, self.config.schema_folder_name, self.config.source_datasetidentifier)
 
-        try:
-            schema_files = self.dbutils.fs.ls(schema_directory_path)
-            expected_schema_filename = f"{self.config.source_datasetidentifier}_schema"
-            schema_format_mapping = {".json": "json", ".xsd": "xml"}
+            try:
+                schema_files = self.dbutils.fs.ls(schema_directory_path)
+                expected_schema_filename = f"{self.config.source_datasetidentifier}_schema"
+                schema_format_mapping = {".json": "json", ".xsd": "xml"}
 
-            found_schema_file = None
-            file_type = None
+                found_schema_file = None
+                file_type = None
 
-            for file in schema_files:
-                for ext, ftype in schema_format_mapping.items():
-                    if file.name == f"{expected_schema_filename}{ext}":
-                        found_schema_file = file.name
-                        file_type = ftype
-                        break
+                for file in schema_files:
+                    for ext, ftype in schema_format_mapping.items():
+                        if file.name == f"{expected_schema_filename}{ext}":
+                            found_schema_file = file.name
+                            file_type = ftype
+                            break
 
-            if not found_schema_file:
-                available_files = [file.name for file in schema_files]
-                error_message = (f"Expected schema file '{expected_schema_filename}.json' or "
-                                 f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
-                                 f"Available files: {available_files}")
+                if not found_schema_file:
+                    available_files = [file.name for file in schema_files]
+                    error_message = (f"Expected schema file '{expected_schema_filename}.json' or "
+                                    f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
+                                    f"Available files: {available_files}")
+                    self.logger.log_message(error_message, level="error")
+                    raise Exception(error_message)
+
+                # Construct schema file path using os.path.join to avoid double slashes
+                schema_file_path = os.path.join("/dbfs", schema_directory_path, found_schema_file)
+                schema_file_name = found_schema_file
+
+                # Return the full schema file path with '/dbfs/' prefix
+                return schema_directory_path, schema_file_path, schema_file_name, file_type
+
+            except AnalysisException as e:
+                error_message = f"Failed to access schema folder: {str(e)}"
                 self.logger.log_message(error_message, level="error")
                 raise Exception(error_message)
-
-            # Construct schema file path
-            schema_file_path = f"/dbfs/{schema_directory_path}/{found_schema_file}"
-            schema_file_name = found_schema_file
-
-            return schema_directory_path, schema_file_path, schema_file_name, file_type
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
