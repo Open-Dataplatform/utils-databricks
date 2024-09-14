@@ -49,7 +49,7 @@ class Logger:
             source_directory_path (str): The path to the source directory.
             number_of_files (int): The number of files found in the source directory.
         """
-        schema_file_path = schema_file_path.lstrip("/dbfs")
+        schema_file_path = schema_file_path.lstrip("/dbfs/")
         content_lines = [
             f"Schema directory path: {schema_file_path}",
             f"Source directory path: {source_directory_path}",

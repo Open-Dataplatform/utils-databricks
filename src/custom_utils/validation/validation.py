@@ -34,7 +34,7 @@ class PathValidator:
             mount_point = self._get_mount_point()
 
             # Verify schema folder and file
-            schema_directory_path, schema_file_path, file_type = self._verify_schema_folder(mount_point)
+            schema_directory_path, schema_file_path, schema_file_name, file_type = self._verify_schema_folder(mount_point)
 
             # Verify source folder and files
             wildcard_path, matched_files = self._verify_source_folder(mount_point)
@@ -43,7 +43,7 @@ class PathValidator:
             self.logger.log_path_validation(schema_directory_path, wildcard_path, len(matched_files))
 
             # Log file validation results
-            self.logger.log_file_validation(schema_file_path, matched_files, file_type, self.config.source_filename)
+            self.logger.log_file_validation(schema_file_name, matched_files, file_type, self.config.source_filename)
 
             # Log success message
             self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.",
@@ -124,13 +124,14 @@ class PathValidator:
                 raise Exception(error_message)
 
             # Construct schema file path
-            schema_file_path = f"/dbfs{schema_directory_path}/{found_schema_file}"
+            schema_file_path = f"/dbfs/{schema_directory_path}/{found_schema_file}"
+            schema_file_name = found_schema_file
 
             # Log the directory path (without filename) separately
             # self.logger.log_message(f"Schema directory path: {schema_directory_path}", level="info")
 
             # Return the full schema file path with '/dbfs/' prefix
-            return schema_directory_path, schema_file_path, file_type
+            return schema_directory_path, schema_file_path, schema_file_name, file_type
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
