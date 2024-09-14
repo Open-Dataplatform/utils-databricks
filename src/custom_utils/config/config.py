@@ -111,11 +111,14 @@ def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
     )
 
 
-def initialize_notebook(dbutils, logger=logger, debug=False):
+def initialize_notebook(dbutils, logger=None, debug=False):
     """
     Initializes the notebook, including configuration and Spark session setup.
     """
     try:
+        # Initialize logger if not provided
+        logger = logger or Logger(debug=debug)
+
         # Initialize configuration object
         config = initialize_config(dbutils=dbutils, logger=logger, debug=debug)
         config.unpack(globals())
@@ -126,7 +129,7 @@ def initialize_notebook(dbutils, logger=logger, debug=False):
         if debug:
             config.print_params()
 
-        return spark, config
+        return spark, config, logger
     except Exception as e:
         error_message = f"Failed to initialize notebook: {str(e)}"
         logger.log_message(error_message, level="error")
