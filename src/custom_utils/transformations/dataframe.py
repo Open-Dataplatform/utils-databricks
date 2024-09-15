@@ -1,4 +1,4 @@
-# File: custom_utils/transformations/dataframe.py
+# File: custom_utils/transformation/dataframe.py
 
 import json
 import pyspark.sql.functions as F
@@ -6,8 +6,8 @@ from typing import List
 from pyspark.sql.types import ArrayType, StructType, StringType
 from pyspark.sql import SparkSession, DataFrame
 from custom_utils.dp_storage import reader, writer
-from custom_utils.logging.logger import Logger  # Import the Logger class
-from custom_utils.config.config import Config # Import the Config class
+from custom_utils.logging.logger import Logger
+from custom_utils.config.config import Config
 
 # Create an instance of Logger (can be passed from outside or use default)
 logger = Logger(debug=True)  # Set debug=True or False based on the requirement
@@ -48,22 +48,6 @@ def flatten_struct_column(df: DataFrame, column_name: str, layer_separator: str 
         logger.log_message(f"Error flattening struct column '{column_name}': {e}", level="error")
         logger.exit_notebook(f"Error flattening struct column '{column_name}'")
 
-def flatten(df: DataFrame, layer_separator: str = "_") -> DataFrame:
-    """Return dataframe with flattened arrays and structs."""
-    try:
-        complex_columns = _get_array_and_struct_columns(df)
-        while complex_columns:
-            column_name, data_type = complex_columns[0]
-            if data_type == StructType:
-                df = flatten_struct_column(df, column_name, layer_separator)
-            elif data_type == ArrayType:
-                df = flatten_array_column(df, column_name)
-            complex_columns = _get_array_and_struct_columns(df)
-        return df
-    except Exception as e:
-        logger.log_message(f"Error flattening DataFrame: {e}", level="error")
-        logger.exit_notebook(f"Error flattening DataFrame")
-
 def flatten_df(
     df: DataFrame,
     depth_level: int = None,
@@ -86,7 +70,7 @@ def flatten_df(
     """
     try:
         # Determine the depth level to flatten to
-        depth_level = max_depth if depth_level is None or depth_level == "" else depth_level
+        depth_level = max_depth if depth_level is None else depth_level
         if current_level >= depth_level:
             return df
 
@@ -111,8 +95,10 @@ def flatten_df(
         while complex_fields and current_level < depth_level:
             for col_name, data_type in complex_fields.items():
                 if current_level + 1 == depth_level:
+                    # Convert nested structures to JSON strings if at the final depth level
                     df = df.withColumn(col_name, F.to_json(F.col(col_name)))
                 else:
+                    # Handle arrays and structs differently
                     if isinstance(data_type, ArrayType):
                         df = df.withColumn(col_name, F.explode_outer(F.col(col_name)))
                     if isinstance(data_type, StructType):
@@ -157,30 +143,6 @@ def rename_columns(df: DataFrame, replacements: dict) -> DataFrame:
     """Renames DataFrame columns based on a dictionary of replacement rules."""
     for column_name in df.columns:
         df = df.withColumnRenamed(column_name, _string_replace(column_name, replacements))
-    return df
-
-def rename_and_cast_columns(
-    df: DataFrame, column_mapping: dict = None, cast_type_mapping: dict = None
-) -> DataFrame:
-    """Renames specified columns and optionally casts them to a different data type."""
-    if column_mapping:
-        for old_name, new_name in column_mapping.items():
-            if old_name in df.columns:
-                df = df.withColumnRenamed(old_name, new_name)
-
-    if cast_type_mapping:
-        for col_name, new_type in cast_type_mapping.items():
-            if col_name in df.columns:
-                df = df.withColumn(col_name, F.col(col_name).cast(new_type))
-
-    return df
-
-def add_columns_that_are_not_in_df(df: DataFrame, column_names: List[str]) -> DataFrame:
-    """Add columns in column_names that are not already in dataframe."""
-    for column_name in column_names:
-        if column_name not in df.columns:
-            df = df.withColumn(column_name, F.lit(None))
-            logger.log_message(f'Column "{column_name}" was added.', level="info")
     return df
 
 def read_json_from_binary(spark: SparkSession, schema: StructType, data_file_path: str) -> DataFrame:
@@ -276,50 +238,4 @@ def process_and_flatten_json(
     except Exception as e:
         if logger:
             logger.log_message(f"Error during processing and flattening: {str(e)}", level="error")
-        raise
-
-def create_temp_view_with_most_recent_records(
-    spark,
-    view_name: str,
-    key_columns: str,
-    columns_of_interest: str,
-    order_by_columns: list = ["input_file_name DESC"],
-    logger=None
-) -> str:
-    """Creates a temporary view with the most recent version of records based on key columns and ordering logic."""
-    try:
-        if not key_columns:
-            raise ValueError("ERROR: No KeyColumns provided!")
-
-        key_columns_list = [col.strip() for col in key_columns.split(',')]
-        temp_view_name = f"temp_{view_name}"
-        new_data_sql = f"""
-        CREATE OR REPLACE TEMPORARY VIEW {temp_view_name} AS
-        SELECT {columns_of_interest}
-        FROM (
-            SELECT t.*, 
-                   row_number() OVER (PARTITION BY {', '.join(key_columns_list)} 
-                                      ORDER BY {', '.join(order_by_columns)}) AS rnr
-            FROM {view_name} t
-        ) x
-        WHERE rnr = 1;
-        """
-
-        if logger:
-            logger.log_message(f"Constructed SQL query: {new_data_sql}", level="info")
-
-        spark.sql(new_data_sql)
-        if logger:
-            logger.log_message(f"Temporary view {temp_view_name} created successfully.", level="info")
-
-        return temp_view_name
-
-    except ValueError as ve:
-        if logger:
-            logger.log_message(f"Configuration Error: {ve}", level="error")
-        raise
-
-    except Exception as e:
-        if logger:
-            logger.log_message(f"Error creating temporary view {temp_view_name}: {e}", level="error")
         raise
