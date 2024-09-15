@@ -9,6 +9,10 @@ from custom_utils.logging.logger import Logger  # Import Logger
 # Initialize the Logger
 logger = Logger()
 
+def write_message(message):
+    """Log or print a message."""
+    print(message)
+
 def exit_notebook(message, dbutils=None):
     """
     Exit the notebook with an error message. If `dbutils` is not available, raises a system exit.
