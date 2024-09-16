@@ -7,16 +7,18 @@ from custom_utils.file_handler.file_handler import FileHandler
 from custom_utils.logging.logger import Logger
 
 class PathValidator:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, logger: Logger = None):
         """
         Initialize the PathValidator with the given configuration.
 
         Args:
             config (Config): An instance of the Config class containing configuration parameters.
+            logger (Logger, optional): An instance of Logger for logging. Defaults to None.
         """
         self.config = config
         self.dbutils = config.dbutils
-        self.logger = config.logger  # Use logger from the config
+        # Use the provided logger if available; otherwise, use the one from config
+        self.logger = logger if logger else config.logger  
         self.file_handler = FileHandler(config)
 
     def verify_paths_and_files(self):
