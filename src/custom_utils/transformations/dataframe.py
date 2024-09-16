@@ -169,12 +169,13 @@ class DataFrameTransformer:
         return formatted_schema
 
     def process_and_flatten_json(
+        self,
         schema_file_path: str,
         data_file_path: str,
         logger: Logger = None,
         depth_level: int = None,
         debug: bool = False,
-        include_schema: bool = False  # New parameter to control schema logging
+        include_schema: bool = False
     ) -> Tuple[DataFrame, DataFrame]:
         """Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening."""
         transformer = DataFrameTransformer(logger=logger, debug=debug)
