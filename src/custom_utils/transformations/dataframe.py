@@ -1,11 +1,12 @@
+# File: custom_utils/transformations/dataframe.py
+
 import json
 import pyspark.sql.functions as F
-from typing import List, Tuple, Dict
+from typing import Dict, Tuple
 from pyspark.sql.types import ArrayType, StructType, StringType
 from pyspark.sql import SparkSession, DataFrame
 from custom_utils.dp_storage import reader, writer
 from custom_utils.logging.logger import Logger
-from custom_utils.config.config import Config
 
 class DataFrameTransformer:
     def __init__(self, logger: Logger = None, debug: bool = False):
@@ -29,7 +30,7 @@ class DataFrameTransformer:
         self.logger.log_message(f"\n=== {header} ===", level=level, single_info_prefix=True)
         print("------------------------------")
         for line in content_lines:
-            self.log_message(line, level=level)
+            self._log_message(line, level=level)
 
     def flatten_array_column(self, df: DataFrame, column_name: str) -> DataFrame:
         """Flatten an array column in the DataFrame."""
@@ -37,7 +38,7 @@ class DataFrameTransformer:
             return df.withColumn(column_name, F.explode_outer(F.col(column_name)))
         except Exception as e:
             self._log_message(f"Error flattening array column '{column_name}': {e}", level="error")
-            raise
+            raise RuntimeError(f"Error flattening array column '{column_name}'")
 
     def flatten_struct_column(self, df: DataFrame, column_name: str, layer_separator: str = "_") -> DataFrame:
         """Flatten a struct column in the DataFrame."""
@@ -46,9 +47,9 @@ class DataFrameTransformer:
             return df.select("*", *expanded_columns).drop(column_name)
         except Exception as e:
             self._log_message(f"Error flattening struct column '{column_name}': {e}", level="error")
-            raise
+            raise RuntimeError(f"Error flattening struct column '{column_name}'")
 
-    def _get_expanded_columns_with_aliases(self, df: DataFrame, column_name: str, layer_separator: str = "_") -> List[F.col]:
+    def _get_expanded_columns_with_aliases(self, df: DataFrame, column_name: str, layer_separator: str = "_") -> list:
         """Return a list of nested columns in a struct to be used in df.select()."""
         expanded_columns = []
         for nested_column in df.select(f"`{column_name}`.*").columns:
@@ -103,27 +104,16 @@ class DataFrameTransformer:
                 )
 
             # Rename columns to replace '__' and '.' with '_'
-            df = self.rename_columns(df, replacements={"__": "_", ".": "_"})
+            for column_name in df.columns:
+                new_name = column_name.replace("__", "_").replace(".", "_")
+                df = df.withColumnRenamed(column_name, new_name)
 
             return df
         except Exception as e:
             self._log_message(f"Error flattening DataFrame: {e}", level="error")
-            raise
+            raise RuntimeError(f"Error flattening DataFrame")
 
-    def rename_columns(self, df: DataFrame, replacements: Dict[str, str]) -> DataFrame:
-        """Rename DataFrame columns based on a dictionary of replacement rules."""
-        for column_name in df.columns:
-            new_name = self._string_replace(column_name, replacements)
-            df = df.withColumnRenamed(column_name, new_name)
-        return df
-
-    def _string_replace(self, s: str, replacements: Dict[str, str]) -> str:
-        """Helper function to perform multiple string replacements."""
-        for string_before, string_after in replacements.items():
-            s = s.replace(string_before, string_after)
-        return s
-    
-    def read_json_from_binary(spark: SparkSession, schema: StructType, data_file_path: str) -> DataFrame:
+    def read_json_from_binary(self, spark: SparkSession, schema: StructType, data_file_path: str) -> DataFrame:
         """Reads files as binary, parses the JSON content, and associates the `input_file_name`."""
         try:
             binary_df = spark.read.format("binaryFile").load(data_file_path)
@@ -147,9 +137,10 @@ class DataFrameTransformer:
             columns = ["input_file_name"] + [col for col in df_final_with_filename.columns if col != "input_file_name"]
             return df_final_with_filename.select(columns)
         except Exception as e:
-            raise RuntimeError(f"Error processing binary JSON files: {e}")
+            self._log_message(f"Error processing binary JSON files: {e}", level="error")
+            raise RuntimeError(f"Error processing binary JSON files")
 
-    def _format_schema(schema, indent_level=0):
+    def _format_schema(self, schema, indent_level=0):
         """Helper function to format schema with proper indentation."""
         formatted_schema = ""
         indent = " " * (indent_level * 2)
@@ -157,11 +148,11 @@ class DataFrameTransformer:
             field_type = field.dataType
             if isinstance(field_type, StructType):
                 formatted_schema += f"{indent}|-- {field.name}: struct (nullable = {field.nullable})\n"
-                formatted_schema += _format_schema(field_type, indent_level + 1)
+                formatted_schema += self._format_schema(field_type, indent_level + 1)
             elif isinstance(field_type, ArrayType) and isinstance(field_type.elementType, StructType):
                 formatted_schema += f"{indent}|-- {field.name}: array (nullable = {field.nullable})\n"
                 formatted_schema += f"{indent}    |-- element: struct (containsNull = {field_type.containsNull})\n"
-                formatted_schema += _format_schema(field_type.elementType, indent_level + 2)
+                formatted_schema += self._format_schema(field_type.elementType, indent_level + 2)
             elif isinstance(field_type, ArrayType):
                 formatted_schema += f"{indent}|-- {field.name}: array<{field_type.elementType.simpleString()}> (nullable = {field.nullable})\n"
             else:
@@ -178,8 +169,6 @@ class DataFrameTransformer:
         include_schema: bool = False
     ) -> Tuple[DataFrame, DataFrame]:
         """Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening."""
-        transformer = DataFrameTransformer(logger=logger, debug=debug)
-
         try:
             # Get the active Spark session
             spark = SparkSession.builder.getOrCreate()
@@ -188,53 +177,53 @@ class DataFrameTransformer:
             schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
 
             if logger:
-                transformer._log_message(f"Schema file path: {schema_file_path}", level="info")
-                transformer._log_message(f"Data file path: {data_file_path}", level="info")
+                self._log_message(f"Schema file path: {schema_file_path}", level="info")
+                self._log_message(f"Data file path: {data_file_path}", level="info")
 
                 # Only log the schema JSON if include_schema is True
                 if include_schema:
-                    transformer._log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
+                    self._log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
 
             # Read the JSON data
-            df = read_json_from_binary(spark, schema, data_file_path)
+            df = self.read_json_from_binary(spark, schema, data_file_path)
 
             if logger:
                 # Log initial DataFrame info block
-                transformer._log_block("Initial DataFrame Info", [])
+                self._log_block("Initial DataFrame Info", [])
                 
                 # Format and log the schema
-                initial_schema_str = _format_schema(df.schema)
-                transformer._log_message(f"Initial DataFrame schema:\nroot\n{initial_schema_str}", level="info")
+                initial_schema_str = self._format_schema(df.schema)
+                self._log_message(f"Initial DataFrame schema:\nroot\n{initial_schema_str}", level="info")
 
                 initial_row_count = df.count()
-                transformer._log_message(f"Initial DataFrame row count: {initial_row_count}", level="info")
+                self._log_message(f"Initial DataFrame row count: {initial_row_count}", level="info")
 
             # Determine the depth level to use
-            depth_level_to_use = depth_level if depth_level is not None else config.depth_level
+            depth_level_to_use = depth_level if depth_level is not None else 1  # Set default depth level
 
             # Get the max depth and flatten the DataFrame
             max_depth = reader.get_json_depth(schema_json, logger=logger if debug else None, depth_level=depth_level_to_use)
-            df_flattened = transformer.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth, type_mapping=reader.get_type_mapping())
+            df_flattened = self.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth, type_mapping=reader.get_type_mapping())
 
             if logger:
                 # Log flattened DataFrame info block
-                transformer._log_block("Flattened DataFrame Info", [])
+                self._log_block("Flattened DataFrame Info", [])
                 
                 # Format and log the flattened schema
-                flattened_schema_str = _format_schema(df_flattened.schema)
-                transformer._log_message(f"Flattened DataFrame schema:\nroot\n{flattened_schema_str}", level="info")
+                flattened_schema_str = self._format_schema(df_flattened.schema)
+                self._log_message(f"Flattened DataFrame schema:\nroot\n{flattened_schema_str}", level="info")
 
                 flattened_row_count = df_flattened.count()
-                transformer._log_message(f"Flattened DataFrame row count: {flattened_row_count}", level="info")
+                self._log_message(f"Flattened DataFrame row count: {flattened_row_count}", level="info")
 
             # Drop the "input_file_name" column from the original DataFrame
             df = df.drop("input_file_name")
 
-            transformer._log_message("Completed JSON processing and flattening.", level="info")
+            self._log_message("Completed JSON processing and flattening.", level="info")
 
             return df, df_flattened
 
         except Exception as e:
             if logger:
-                transformer._log_message(f"Error during processing and flattening: {str(e)}", level="error")
-            raise
+                self._log_message(f"Error during processing and flattening: {str(e)}", level="error")
+            raise RuntimeError(f"Error during processing and flattening: {e}")
