@@ -177,6 +177,7 @@ def process_and_flatten_json(
     schema_file_path,
     data_file_path,
     logger=None,
+    depth_level=None,  # Optional parameter to override the config depth_level 
     debug=False
 ) -> tuple:
     """
@@ -187,6 +188,7 @@ def process_and_flatten_json(
         data_file_path (str): Path to the data file(s).
         logger (Logger, optional): Logger object for logging. Defaults to None.
         debug (bool, optional): If True, enables debug logging. Defaults to False.
+        depth_level (int, optional): The maximum depth level to flatten. Defaults to None.
 
     Returns:
         tuple: Original DataFrame and the flattened DataFrame.
@@ -216,9 +218,12 @@ def process_and_flatten_json(
             initial_row_count = df.count()
             logger.log_message(f"Initial DataFrame row count: {initial_row_count}", level="info")
 
-        # Get the depth level and flatten the DataFrame
-        max_depth = reader.get_json_depth(schema_json, logger=logger, depth_level=config.depth_level)
-        df_flattened = flatten_df(df, depth_level=config.depth_level, max_depth=max_depth, type_mapping=reader.get_type_mapping())
+        # Determine the depth level to use
+        depth_level_to_use = depth_level if depth_level is not None else config.depth_level
+
+        # Get the max depth and flatten the DataFrame
+        max_depth = reader.get_json_depth(schema_json, logger=logger, depth_level=depth_level_to_use)
+        df_flattened = flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth, type_mapping=reader.get_type_mapping())
 
         if logger and debug:
             # Log the flattened DataFrame schema and row count
