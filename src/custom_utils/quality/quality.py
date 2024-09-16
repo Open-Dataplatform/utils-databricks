@@ -41,18 +41,20 @@ class Quality:
         raise RuntimeError(message)
 
     def check_for_duplicates(self, spark: SparkSession, df: DataFrame, key_columns: List[str]):
-        """Checks for duplicates using all columns, including 'input_file_name'."""
-        all_columns = key_columns + ['input_file_name']
-        content_lines = [f"Checking for duplicates based on columns: {all_columns}"]
+        """Checks for duplicates in the DataFrame using only the specified key columns."""
+        if not key_columns:
+            self._raise_error("Key columns must be provided for duplicate check.")
+        
+        content_lines = [f"Checking for duplicates based on key columns: {key_columns}"]
 
         # Construct and execute the duplicate check query
         df.createOrReplaceTempView("temp_view_check_duplicates")
         duplicate_check_query = f"""
             SELECT 
                 COUNT(*) AS duplicate_count, 
-                {', '.join(all_columns)}
+                {', '.join(key_columns)}
             FROM temp_view_check_duplicates
-            GROUP BY {', '.join(all_columns)}
+            GROUP BY {', '.join(key_columns)}
             HAVING COUNT(*) > 1
         """
         
@@ -60,7 +62,7 @@ class Quality:
         duplicate_count = duplicates_df.count()
 
         if duplicate_count > 0:
-            content_lines.append(f"Data Quality Check Failed: Found {duplicate_count} duplicates based on columns {all_columns}.")
+            content_lines.append(f"Data Quality Check Failed: Found {duplicate_count} duplicates based on key columns {key_columns}.")
             self._log_block("Duplicate Check", content_lines)
             self._raise_error(content_lines[-1])
         else:
@@ -131,8 +133,8 @@ class Quality:
         Applies all data quality checks on the provided DataFrame.
         """
         try:
-            # Handle multiple files and keep the most recent version based on input_file_name and EventTimestamp
-            content_lines = ["Handling multiple files and keeping the most recent version based on 'input_file_name' and 'EventTimestamp'."]
+            # Handle multiple files and keep the most recent version based on input_file_name and key_columns
+            content_lines = [f"Handling multiple files and keeping the most recent version based on 'input_file_name' and key columns: {key_columns}."]
             self._log_block("Handling Multiple Files", content_lines)
 
             df.createOrReplaceTempView("temp_original_data")
@@ -141,8 +143,8 @@ class Quality:
                 SELECT *
                 FROM (
                     SELECT t.*, 
-                           ROW_NUMBER() OVER (PARTITION BY Guid 
-                                              ORDER BY input_file_name DESC, EventTimestamp DESC) AS rnr
+                        ROW_NUMBER() OVER (PARTITION BY {', '.join(key_columns)} 
+                                            ORDER BY input_file_name DESC) AS rnr
                     FROM temp_original_data t
                 ) x
                 WHERE rnr = 1
@@ -173,9 +175,14 @@ class Quality:
 
             # Create the final view
             df.createOrReplaceTempView(temp_view_name)
-            self._log_message(f"New temporary view '{temp_view_name}' created.", level="info")
             
-            self._log_message("All quality checks completed successfully.", level="info")
+            # Finishing results section
+            finishing_lines = [
+                f"New temporary view '{temp_view_name}' created.",
+                "All quality checks completed successfully."
+            ]
+            self._log_block("Finishing Results", finishing_lines)
+
             return temp_view_name
 
         except Exception as e:
