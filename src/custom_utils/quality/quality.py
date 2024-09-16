@@ -13,10 +13,6 @@ class Quality:
         self.logger = logger
         self.debug = debug
 
-    def _log_section(self, section_title: str):
-        """Logs the section title in a formatted way for better readability."""
-        self.logger.log_message(f"\n=== {section_title} ===\n{'-' * 30}", level="info")
-
     def _raise_error(self, message: str):
         self.logger.log_message(message, level="error")
         if self.debug:
@@ -24,13 +20,10 @@ class Quality:
         raise RuntimeError(message)
 
     def check_for_duplicates(self, spark: SparkSession, df: DataFrame, key_columns: List[str]):
-        """
-        Checks for duplicates using all columns, including 'input_file_name'.
-        """
-        self._log_section("Duplicate Check")
+        """Checks for duplicates using all columns, including 'input_file_name'."""
         all_columns = key_columns + ['input_file_name']
-        self.logger.log_message(f"Checking for duplicates based on columns: {all_columns}", level="info")
-        
+        content_lines = [f"Checking for duplicates based on columns: {all_columns}"]
+
         # Construct and execute the duplicate check query
         df.createOrReplaceTempView("temp_view_check_duplicates")
         duplicate_check_query = f"""
@@ -44,114 +37,123 @@ class Quality:
         
         duplicates_df = spark.sql(duplicate_check_query)
         duplicate_count = duplicates_df.count()
-        
+
         if duplicate_count > 0:
-            self._raise_error(f"Data Quality Check Failed: Found {duplicate_count} duplicates based on columns {all_columns}.")
+            content_lines.append(f"Data Quality Check Failed: Found {duplicate_count} duplicates based on columns {all_columns}.")
+            self.logger.log_block("Duplicate Check", content_lines)
+            self._raise_error(content_lines[-1])
         else:
-            self.logger.log_message("Data Quality Check Passed: No duplicates found.", level="info")
+            content_lines.append("Data Quality Check Passed: No duplicates found.")
+            self.logger.log_block("Duplicate Check", content_lines)
 
     def check_for_nulls(self, df: DataFrame, critical_columns: List[str]):
-        self._log_section("Null Values Check")
-        self.logger.log_message(f"Checking for null values in columns: {critical_columns}", level="info")
+        content_lines = [f"Checking for null values in columns: {critical_columns}"]
         for col in critical_columns:
             null_count = df.filter(F.col(col).isNull()).count()
             if null_count > 0:
-                self._raise_error(f"Data Quality Check Failed: Column '{col}' has {null_count} missing values.")
+                content_lines.append(f"Data Quality Check Failed: Column '{col}' has {null_count} missing values.")
+                self.logger.log_block("Null Values Check", content_lines)
+                self._raise_error(content_lines[-1])
             else:
-                self.logger.log_message(f"Column '{col}' has no missing values.", level="info")
+                content_lines.append(f"Column '{col}' has no missing values.")
+        self.logger.log_block("Null Values Check", content_lines)
 
     def check_value_ranges(self, df: DataFrame, column_ranges: Dict[str, Tuple[float, float]]):
-        self._log_section("Value Range Check")
-        self.logger.log_message(f"Checking value ranges for columns: {list(column_ranges.keys())}", level="info")
+        content_lines = [f"Checking value ranges for columns: {list(column_ranges.keys())}"]
         for col, (min_val, max_val) in column_ranges.items():
             out_of_range_count = df.filter((F.col(col) < min_val) | (F.col(col) > max_val)).count()
             if out_of_range_count > 0:
-                self._raise_error(f"Data Quality Check Failed: Column '{col}' has {out_of_range_count} values out of range [{min_val}, {max_val}].")
+                content_lines.append(f"Data Quality Check Failed: Column '{col}' has {out_of_range_count} values out of range [{min_val}, {max_val}].")
+                self.logger.log_block("Value Range Check", content_lines)
+                self._raise_error(content_lines[-1])
             else:
-                self.logger.log_message(f"Column '{col}' values are within the specified range [{min_val}, {max_val}].", level="info")
+                content_lines.append(f"Column '{col}' values are within the specified range [{min_val}, {max_val}].")
+        self.logger.log_block("Value Range Check", content_lines)
 
     def check_referential_integrity(self, df: DataFrame, reference_df: DataFrame, join_column: str):
-        self._log_section("Referential Integrity Check")
-        self.logger.log_message(f"Checking referential integrity on column '{join_column}'", level="info")
+        content_lines = [f"Checking referential integrity on column '{join_column}'"]
         unmatched_count = df.join(reference_df, df[join_column] == reference_df[join_column], "left_anti").count()
         if unmatched_count > 0:
-            self._raise_error(f"Data Quality Check Failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
+            content_lines.append(f"Data Quality Check Failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
+            self.logger.log_block("Referential Integrity Check", content_lines)
+            self._raise_error(content_lines[-1])
         else:
-            self.logger.log_message(f"Referential integrity check passed for column '{join_column}'.", level="info")
+            content_lines.append(f"Referential integrity check passed for column '{join_column}'.")
+        self.logger.log_block("Referential Integrity Check", content_lines)
 
     def check_consistency_between_fields(self, df: DataFrame, consistency_pairs: List[Tuple[str, str]]):
-        self._log_section("Field Consistency Check")
-        self.logger.log_message(f"Checking consistency between field pairs: {consistency_pairs}", level="info")
+        content_lines = [f"Checking consistency between field pairs: {consistency_pairs}"]
         for col1, col2 in consistency_pairs:
             inconsistency_count = df.filter(F.col(col1) > F.col(col2)).count()
             if inconsistency_count > 0:
-                self._raise_error(f"Data Quality Check Failed: {inconsistency_count} records have '{col1}' greater than '{col2}'.")
+                content_lines.append(f"Data Quality Check Failed: {inconsistency_count} records have '{col1}' greater than '{col2}'.")
+                self.logger.log_block("Field Consistency Check", content_lines)
+                self._raise_error(content_lines[-1])
             else:
-                self.logger.log_message(f"Consistency check passed for '{col1}' and '{col2}'.", level="info")
+                content_lines.append(f"Consistency check passed for '{col1}' and '{col2}'.")
+        self.logger.log_block("Field Consistency Check", content_lines)
 
     def apply_all_checks(
         self,
-        spark,
+        spark: SparkSession,
         df: DataFrame,
         key_columns: List[str],
-        critical_columns: List[str] = None,
-        column_ranges: Dict[str, Tuple[float, float]] = None,
-        reference_database: str = None,
-        reference_table_name: str = None,
-        join_column: str = None,
-        consistency_pairs: List[Tuple[str, str]] = None,
-        columns_to_exclude: List[str] = None,
-        temp_view_name: str = None,
+        critical_columns: Optional[List[str]] = None,
+        column_ranges: Optional[Dict[str, Tuple[float, float]]] = None,
+        reference_df: Optional[DataFrame] = None,
+        join_column: Optional[str] = None,
+        consistency_pairs: Optional[List[Tuple[str, str]]] = None,
+        columns_to_exclude: Optional[List[str]] = None,
+        temp_view_name: Optional[str] = "cleaned_data_view"
     ) -> str:
+        """
+        Applies all data quality checks on the provided DataFrame.
+        """
         try:
-            # Load reference DataFrame if both database and table name are provided
-            reference_df = None
-            if reference_database and reference_table_name:
-                reference_df = spark.table(f"{reference_database}.{reference_table_name}")
-                self.logger.log_message(f"Loaded reference table: {reference_database}.{reference_table_name}", level="info")
+            # Handle multiple files and keep the most recent version based on input_file_name and EventTimestamp
+            content_lines = ["Handling multiple files and keeping the most recent version based on 'input_file_name' and 'EventTimestamp'."]
+            self.logger.log_block("Handling Multiple Files", content_lines)
 
-            # Perform quality checks based on provided parameters
-            self.check_for_duplicates(df, key_columns)
-            if critical_columns:
-                self.check_for_nulls(df, critical_columns)
-            if column_ranges:
-                self.check_value_ranges(df, column_ranges)
-            if reference_df and join_column:
-                self.check_referential_integrity(df, reference_df, join_column)
-            if consistency_pairs:
-                self.check_consistency_between_fields(df, consistency_pairs)
-
-            # Select the most recent version for duplicates based on input_file_name
+            df.createOrReplaceTempView("temp_original_data")
             recent_data_query = f"""
                 CREATE OR REPLACE TEMPORARY VIEW temp_recent_data AS
-                SELECT {', '.join([col for col in df.columns if col != 'rnr'])}  -- Exclude rnr column
+                SELECT *
                 FROM (
                     SELECT t.*, 
-                        row_number() OVER (PARTITION BY {', '.join(key_columns)} 
-                                            ORDER BY input_file_name DESC, EventTimestamp DESC) AS rnr
-                    FROM {df.createOrReplaceTempView("temp_view_for_dedup")}
+                           ROW_NUMBER() OVER (PARTITION BY Guid 
+                                              ORDER BY input_file_name DESC, EventTimestamp DESC) AS rnr
+                    FROM temp_original_data t
                 ) x
                 WHERE rnr = 1
             """
-            
             spark.sql(recent_data_query)
-            df = spark.sql("SELECT * FROM temp_recent_data")  # Exclude rnr column in this view
+            df = spark.sql("SELECT * FROM temp_recent_data").drop("rnr")
 
-            # Drop columns to be excluded before creating the final view
+            # Perform quality checks
+            self.check_for_duplicates(spark, df, key_columns)
+            
+            if critical_columns:
+                self.check_for_nulls(df, critical_columns)
+            
+            if column_ranges:
+                self.check_value_ranges(df, column_ranges)
+            
+            if reference_df and join_column:
+                self.check_referential_integrity(df, reference_df, join_column)
+            
+            if consistency_pairs:
+                self.check_consistency_between_fields(df, consistency_pairs)
+
+            # Exclude specified columns before returning the final view
             if columns_to_exclude:
-                self.logger.log_message(f"Excluded columns: {columns_to_exclude}", level="info")
+                content_lines = [f"Excluded columns: {columns_to_exclude}"]
                 df = df.drop(*columns_to_exclude)
+                self.logger.log_block("Excluding Columns", content_lines)
 
-            # Create the final temporary view
-            if temp_view_name:
-                df.createOrReplaceTempView(temp_view_name)
-                self.logger.log_message(f"New temporary view '{temp_view_name}' created with excluded columns.", level="info")
-            else:
-                temp_view_name = "default_temp_view"
-                df.createOrReplaceTempView(temp_view_name)
-                self.logger.log_message(f"New temporary view '{temp_view_name}' created with excluded columns.", level="info")
-
-            # Log success message
+            # Create the final view
+            df.createOrReplaceTempView(temp_view_name)
+            self.logger.log_message(f"New temporary view '{temp_view_name}' created.", level="info")
+            
             self.logger.log_message("All quality checks completed successfully.", level="info")
             return temp_view_name
 
