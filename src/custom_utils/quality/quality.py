@@ -4,7 +4,6 @@ import json
 from typing import List, Dict, Tuple, Optional
 import pyspark.sql.functions as F
 from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.types import ArrayType, StructType, StringType
 from pyspark.sql.utils import AnalysisException
 from custom_utils.logging.logger import Logger
 
@@ -13,10 +12,32 @@ class Quality:
         self.logger = logger
         self.debug = debug
 
-    def _raise_error(self, message: str):
-        self.logger.log_message(message, level="error")
+    def _log_message(self, message: str, level="info"):
+        """
+        Logs a message using the logger if debug mode is on or the log level is not 'info'.
+
+        Args:
+            message (str): The message to log.
+            level (str): The log level (e.g., 'info', 'warning', 'error').
+        """
+        if self.debug or level != "info":
+            self.logger.log_message(message, level=level)
+
+    def _log_block(self, header: str, content_lines: list):
+        """
+        Logs a block of messages using the logger if debug mode is on.
+
+        Args:
+            header (str): Header of the block.
+            content_lines (list): List of lines to include in the block.
+        """
         if self.debug:
-            self.logger.log_message(f"Debug mode: Aborting with error - {message}", level="error")
+            self.logger.log_block(header, content_lines)
+
+    def _raise_error(self, message: str):
+        self._log_message(message, level="error")
+        if self.debug:
+            self._log_message(f"Debug mode: Aborting with error - {message}", level="error")
         raise RuntimeError(message)
 
     def check_for_duplicates(self, spark: SparkSession, df: DataFrame, key_columns: List[str]):
@@ -40,11 +61,11 @@ class Quality:
 
         if duplicate_count > 0:
             content_lines.append(f"Data Quality Check Failed: Found {duplicate_count} duplicates based on columns {all_columns}.")
-            self.logger.log_block("Duplicate Check", content_lines)
+            self._log_block("Duplicate Check", content_lines)
             self._raise_error(content_lines[-1])
         else:
             content_lines.append("Data Quality Check Passed: No duplicates found.")
-            self.logger.log_block("Duplicate Check", content_lines)
+            self._log_block("Duplicate Check", content_lines)
 
     def check_for_nulls(self, df: DataFrame, critical_columns: List[str]):
         content_lines = [f"Checking for null values in columns: {critical_columns}"]
@@ -52,11 +73,11 @@ class Quality:
             null_count = df.filter(F.col(col).isNull()).count()
             if null_count > 0:
                 content_lines.append(f"Data Quality Check Failed: Column '{col}' has {null_count} missing values.")
-                self.logger.log_block("Null Values Check", content_lines)
+                self._log_block("Null Values Check", content_lines)
                 self._raise_error(content_lines[-1])
             else:
                 content_lines.append(f"Column '{col}' has no missing values.")
-        self.logger.log_block("Null Values Check", content_lines)
+        self._log_block("Null Values Check", content_lines)
 
     def check_value_ranges(self, df: DataFrame, column_ranges: Dict[str, Tuple[float, float]]):
         content_lines = [f"Checking value ranges for columns: {list(column_ranges.keys())}"]
@@ -64,22 +85,22 @@ class Quality:
             out_of_range_count = df.filter((F.col(col) < min_val) | (F.col(col) > max_val)).count()
             if out_of_range_count > 0:
                 content_lines.append(f"Data Quality Check Failed: Column '{col}' has {out_of_range_count} values out of range [{min_val}, {max_val}].")
-                self.logger.log_block("Value Range Check", content_lines)
+                self._log_block("Value Range Check", content_lines)
                 self._raise_error(content_lines[-1])
             else:
                 content_lines.append(f"Column '{col}' values are within the specified range [{min_val}, {max_val}].")
-        self.logger.log_block("Value Range Check", content_lines)
+        self._log_block("Value Range Check", content_lines)
 
     def check_referential_integrity(self, df: DataFrame, reference_df: DataFrame, join_column: str):
         content_lines = [f"Checking referential integrity on column '{join_column}'"]
         unmatched_count = df.join(reference_df, df[join_column] == reference_df[join_column], "left_anti").count()
         if unmatched_count > 0:
             content_lines.append(f"Data Quality Check Failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
-            self.logger.log_block("Referential Integrity Check", content_lines)
+            self._log_block("Referential Integrity Check", content_lines)
             self._raise_error(content_lines[-1])
         else:
             content_lines.append(f"Referential integrity check passed for column '{join_column}'.")
-        self.logger.log_block("Referential Integrity Check", content_lines)
+        self._log_block("Referential Integrity Check", content_lines)
 
     def check_consistency_between_fields(self, df: DataFrame, consistency_pairs: List[Tuple[str, str]]):
         content_lines = [f"Checking consistency between field pairs: {consistency_pairs}"]
@@ -87,11 +108,11 @@ class Quality:
             inconsistency_count = df.filter(F.col(col1) > F.col(col2)).count()
             if inconsistency_count > 0:
                 content_lines.append(f"Data Quality Check Failed: {inconsistency_count} records have '{col1}' greater than '{col2}'.")
-                self.logger.log_block("Field Consistency Check", content_lines)
+                self._log_block("Field Consistency Check", content_lines)
                 self._raise_error(content_lines[-1])
             else:
                 content_lines.append(f"Consistency check passed for '{col1}' and '{col2}'.")
-        self.logger.log_block("Field Consistency Check", content_lines)
+        self._log_block("Field Consistency Check", content_lines)
 
     def apply_all_checks(
         self,
@@ -112,7 +133,7 @@ class Quality:
         try:
             # Handle multiple files and keep the most recent version based on input_file_name and EventTimestamp
             content_lines = ["Handling multiple files and keeping the most recent version based on 'input_file_name' and 'EventTimestamp'."]
-            self.logger.log_block("Handling Multiple Files", content_lines)
+            self._log_block("Handling Multiple Files", content_lines)
 
             df.createOrReplaceTempView("temp_original_data")
             recent_data_query = f"""
@@ -148,13 +169,13 @@ class Quality:
             if columns_to_exclude:
                 content_lines = [f"Excluded columns: {columns_to_exclude}"]
                 df = df.drop(*columns_to_exclude)
-                self.logger.log_block("Excluding Columns", content_lines)
+                self._log_block("Excluding Columns", content_lines)
 
             # Create the final view
             df.createOrReplaceTempView(temp_view_name)
-            self.logger.log_message(f"New temporary view '{temp_view_name}' created.", level="info")
+            self._log_message(f"New temporary view '{temp_view_name}' created.", level="info")
             
-            self.logger.log_message("All quality checks completed successfully.", level="info")
+            self._log_message("All quality checks completed successfully.", level="info")
             return temp_view_name
 
         except Exception as e:
