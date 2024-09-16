@@ -75,6 +75,10 @@ class PathValidator:
                 ]
             )
 
+            # Limit the number of files to display to 10
+            files_to_display = matched_files[:10]
+            more_files_text = f"...and {len(matched_files) - 10} more files." if len(matched_files) > 10 else ""
+
             # Log file validation results
             self._log_block(
                 "File Validation Results", 
@@ -82,7 +86,7 @@ class PathValidator:
                     f"File Type: {file_type}",
                     f"Schema file name: {schema_file_name}",
                     f"Files found matching the pattern '{self.config.source_filename}':"
-                ] + [f"- {file.name if hasattr(file, 'name') else file}" for file in matched_files]
+                ] + [f"- {file.name if hasattr(file, 'name') else file}" for file in files_to_display] + ([more_files_text] if more_files_text else [])
             )
 
             # Log success message
