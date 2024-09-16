@@ -176,9 +176,13 @@ class DataFrameTransformer:
             # Reading schema and parsing JSON to Spark StructType
             schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
 
+            # Log the start of the processing with a block header
             if logger:
-                self._log_message(f"Schema file path: {schema_file_path}", level="info")
-                self._log_message(f"Data file path: {data_file_path}", level="info")
+                start_lines = [
+                    f"Schema file path: {schema_file_path}",
+                    f"Data file path: {data_file_path}"
+                ]
+                self._log_block("Starting Processing", start_lines)
 
                 # Only log the schema JSON if include_schema is True
                 if include_schema:
