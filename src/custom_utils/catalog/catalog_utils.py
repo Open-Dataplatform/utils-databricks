@@ -1,3 +1,5 @@
+# File: custom_utils/catalog/catalog_utils.py
+
 from custom_utils.dp_storage import writer  # Import writer module
 from pyspark.sql import SparkSession, DataFrame
 from typing import List
@@ -14,23 +16,25 @@ class DataStorageManager:
 
     def _log_message(self, message, level="info"):
         """
-        Logs a message using the logger.
-        
+        Logs a message using the logger if debug mode is on or the log level is not 'info'.
+
         Args:
             message (str): The message to log.
             level (str): The log level (e.g., 'info', 'warning', 'error'). Defaults to 'info'.
         """
-        self.logger.log_message(message, level=level)
+        if self.debug or level != "info":
+            self.logger.log_message(message, level=level)
 
     def _log_section(self, section_title: str, content_lines: list = None):
         """
-        Logs a section with the provided title and optional content lines using `log_block`.
-        
+        Logs a section with the provided title and optional content lines using `log_block`
+        if debug mode is on.
+
         Args:
             section_title (str): The title of the section to log.
             content_lines (list, optional): Lines of content to log under the section.
         """
-        if section_title not in self.sections_logged:
+        if self.debug and section_title not in self.sections_logged:
             content_lines = content_lines if content_lines else []
             self.logger.log_block(section_title, content_lines)
             self.sections_logged.add(section_title)
