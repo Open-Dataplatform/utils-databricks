@@ -10,21 +10,7 @@ from custom_utils.path_utils import (
 )
 
 class Config:
-    def __init__(
-        self,
-        dbutils=None,
-        logger=None,
-        source_environment=None,
-        destination_environment=None,
-        source_container=None,
-        source_datasetidentifier=None,
-        source_filename="*",
-        key_columns="",
-        feedback_column="",
-        schema_folder_name="schemachecks",
-        depth_level=None,
-        debug=False,
-    ):
+    def __init__(self, dbutils=None, logger=None, debug=False):
         # Attempt to use dbutils from the global import if not explicitly passed
         self.dbutils = dbutils or globals().get("dbutils", None)
         self.logger = logger or Logger(debug=debug)
@@ -34,18 +20,18 @@ class Config:
         self.logger.log_start("Config Initialization")
 
         try:
-            # Core parameters fetched from widgets, environment variables, or default values
-            self.source_environment = get_param_value(self.dbutils, "SourceStorageAccount", source_environment, required=True)
-            self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", destination_environment, required=True)
-            self.source_container = get_param_value(self.dbutils, "SourceContainer", source_container, required=True)
-            self.source_datasetidentifier = get_param_value(self.dbutils, "SourceDatasetidentifier", source_datasetidentifier, required=True)
-            self.source_filename = get_param_value(self.dbutils, "SourceFileName", source_filename)
-            self.key_columns = get_param_value(self.dbutils, "KeyColumns", key_columns, required=True).replace(" ", "")
-            self.feedback_column = get_param_value(self.dbutils, "FeedbackColumn", feedback_column, required=True)
-            self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", schema_folder_name)
+            # Core parameters fetched from widgets or environment variables directly
+            self.source_environment = get_param_value(self.dbutils, "SourceStorageAccount", required=True)
+            self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", required=True)
+            self.source_container = get_param_value(self.dbutils, "SourceContainer", required=True)
+            self.source_datasetidentifier = get_param_value(self.dbutils, "SourceDatasetidentifier", required=True)
+            self.source_filename = get_param_value(self.dbutils, "SourceFileName", "*")
+            self.key_columns = get_param_value(self.dbutils, "KeyColumns", required=True).replace(" ", "")
+            self.feedback_column = get_param_value(self.dbutils, "FeedbackColumn", required=True)
+            self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", "schemachecks")
 
             # Convert depth level to integer if provided
-            depth_level_str = get_param_value(self.dbutils, "DepthLevel", depth_level)
+            depth_level_str = get_param_value(self.dbutils, "DepthLevel")
             self.depth_level = int(depth_level_str) if depth_level_str else None
 
             # Construct paths using utility functions
@@ -109,3 +95,10 @@ class Config:
             self.logger.log_message(error_message, level="error")
             self.logger.exit_notebook(error_message, self.dbutils)
             raise
+
+    @classmethod
+    def initialize(cls, dbutils=None, logger=None, debug=False):
+        """
+        Class method to initialize the Config object with optional dbutils, logger, and debug parameters.
+        """
+        return cls(dbutils=dbutils, logger=logger, debug=debug)
