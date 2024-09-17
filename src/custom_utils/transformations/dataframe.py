@@ -191,62 +191,67 @@ class Transformer:
             raise RuntimeError(f"Error flattening DataFrame")
 
     def process_and_flatten_json(self, schema_file_path: str, data_file_path: str, depth_level: int = None, include_schema: bool = False) -> Tuple[DataFrame, DataFrame]:
-        """
-        Orchestrates the JSON processing pipeline, including schema reading, data flattening, and logging.
+            """
+            Processes and flattens a JSON file based on the provided schema.
 
-        Args:
-            schema_file_path (str): The path to the schema file.
-            data_file_path (str): The path to the JSON data file.
-            depth_level (int, optional): The flattening depth level. Defaults to None.
-            include_schema (bool, optional): If True, includes the schema JSON in logs. Defaults to False.
+            Args:
+                schema_file_path (str): Path to the JSON schema file.
+                data_file_path (str): Path to the JSON data file.
+                depth_level (int, optional): Depth level for flattening. Defaults to None.
+                include_schema (bool, optional): If True, includes the schema JSON in logs.
 
-        Returns:
-            Tuple[DataFrame, DataFrame]: The original DataFrame and the flattened DataFrame.
+            Returns:
+                Tuple[DataFrame, DataFrame]: The original and flattened DataFrames.
 
-        Raises:
-            RuntimeError: If the processing and flattening fail.
-        """
-        self.logger.log_start("process_and_flatten_json")
-        try:
-            schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
-            depth_level_to_use = depth_level if depth_level is not None else 1
-            max_depth = self._get_json_depth(schema_json)
+            Raises:
+                RuntimeError: If processing fails.
+            """
+            self.logger.log_start("process_and_flatten_json")
+            try:
+                # Use the internal method to parse the schema file
+                schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
+                depth_level_to_use = depth_level if depth_level is not None else 1
+                max_depth = self._get_json_depth(schema_json)
 
-            start_lines = [
-                f"Schema file path: {schema_file_path}",
-                f"Data file path: {data_file_path}",
-                f"Flattened depth level of the JSON file: {depth_level_to_use}"
-            ]
-            self.logger.log_block("Starting Processing", start_lines)
+                # Log start of processing
+                start_lines = [
+                    f"Schema file path: {schema_file_path}",
+                    f"Data file path: {data_file_path}",
+                    f"Flattened depth level of the JSON file: {depth_level_to_use}"
+                ]
+                self.logger.log_block("Starting Processing", start_lines)
 
-            if include_schema:
-                self.logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
+                if include_schema:
+                    self.logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
 
-            df = self._read_json_from_binary(schema, data_file_path)
+                # Read the JSON data
+                df = self._read_json_from_binary(schema, data_file_path)
 
-            if self.debug:
-                self.logger.log_block("Initial DataFrame Info", [])
-                initial_row_count = df.count()
-                self.logger.log_message(f"Initial DataFrame row count: {initial_row_count}", level="info")
-                initial_schema_str = self._format_schema(df.schema)
-                self.logger.log_message(f"Initial DataFrame schema:\nroot\n{initial_schema_str}", level="info")
+                if self.debug:
+                    self.logger.log_block("Initial DataFrame Info", [])
+                    initial_row_count = df.count()
+                    self.logger.log_message(f"Initial DataFrame row count: {initial_row_count}", level="info")
+                    # Use the built-in printSchema method to log the schema
+                    schema_str = df._jdf.schema().treeString()  # Convert schema to a string
+                    self.logger.log_message(f"Initial DataFrame schema:\n{schema_str}", level="info")
 
-            df_flattened = self.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth)
+                # Flatten the DataFrame
+                df_flattened = self.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth)
 
-            if self.debug:
-                self.logger.log_block("Flattened DataFrame Info", [])
-                flattened_row_count = df_flattened.count()
-                self.logger.log_message(f"Flattened DataFrame row count: {flattened_row_count}", level="info")
-                flattened_schema_str = self._format_schema(df_flattened.schema)
-                self.logger.log_message(f"Flattened DataFrame schema:\nroot\n{flattened_schema_str}", level="info")
+                if self.debug:
+                    self.logger.log_block("Flattened DataFrame Info", [])
+                    flattened_row_count = df_flattened.count()
+                    self.logger.log_message(f"Flattened DataFrame row count: {flattened_row_count}", level="info")
+                    # Use the built-in printSchema method to log the flattened schema
+                    schema_str_flattened = df_flattened._jdf.schema().treeString()  # Convert schema to a string
+                    self.logger.log_message(f"Flattened DataFrame schema:\n{schema_str_flattened}", level="info")
 
-            df = df.drop("input_file_name")
+                df = df.drop("input_file_name")
+                self.logger.log_message("Completed JSON processing and flattening.", level="info")
+                self.logger.log_end("process_and_flatten_json", success=True, additional_message="Proceeding with notebook execution.")
+                return df, df_flattened
 
-            self.logger.log_message("Completed JSON processing and flattening.", level="info")
-            self.logger.log_end("process_and_flatten_json", success=True, additional_message="Proceeding with notebook execution.")
-            return df, df_flattened
-
-        except Exception as e:
-            self.logger.log_message(f"Error during processing and flattening: {str(e)}", level="error")
-            self.logger.log_end("process_and_flatten_json", success=False)
-            raise RuntimeError(f"Error during processing and flattening: {e}")
+            except Exception as e:
+                self.logger.log_message(f"Error during processing and flattening: {str(e)}", level="error")
+                self.logger.log_end("process_and_flatten_json", success=False)
+                raise RuntimeError(f"Error during processing and flattening: {e}")
