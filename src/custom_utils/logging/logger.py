@@ -56,18 +56,19 @@ class Logger:
         if not content_lines:
             return
 
-        # Print the block header
-        self.log_message(f"\n=== {header} ===", level=level, single_info_prefix=True)
-        
+        # Print the block header without newline prefix
+        self.log_message(f"=== {header} ===", level=level, single_info_prefix=True)
+
         # Print separator only if there are content lines
         if content_lines:
             print("------------------------------")
-        
-        for line in content_lines:
-            self.log_message(line, level=level)
-        
-        # End with separator if there were content lines
-        if content_lines:
+            
+            # Log each content line, ensuring no empty lines are logged
+            for line in content_lines:
+                if line.strip():  # Only log non-empty lines
+                    self.log_message(line, level=level)
+            
+            # End with separator
             print("------------------------------")
 
     def log_start(self, method_name):
