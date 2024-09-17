@@ -52,9 +52,6 @@ class Validator:
             # Log file validation results
             self._log_file_validation(schema_file_name, matched_files, file_type, self.config.source_filename)
 
-            # Log success message
-            self.logger.log_message("All paths and files verified successfully.", level="info")
-
             # Log the end of the process with the additional message
             self.logger.log_end("verify_paths_and_files", success=True, additional_message="Proceeding with notebook execution.")
 
