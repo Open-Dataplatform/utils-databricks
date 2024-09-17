@@ -51,12 +51,12 @@ class Config:
             self._log_params()
 
             # Log the end of configuration
-            self.logger.log_end("Config Initialization", success=True)
+            self.logger.log_end("Config Initialization", success=True, additional_message="Proceeding with notebook execution.")
 
         except Exception as e:
             error_message = f"Failed to initialize configuration: {str(e)}"
             self.logger.log_error(error_message)
-            self.logger.log_end("Config Initialization", success=False)
+            self.logger.log_end("Config Initialization", success=False, additional_message="Check error logs for details.")
             raise
 
     @staticmethod
