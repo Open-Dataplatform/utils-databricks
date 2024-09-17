@@ -60,54 +60,40 @@ class Logger:
         print("------------------------------")
 
     def log_error(self, message):
-        """
-        Log an error message.
-
-        Args:
-            message (str): The error message to log.
-        """
+        """Log an error message."""
         self.log_message(message, level="error")
 
     def log_warning(self, message):
-        """
-        Log a warning message.
-
-        Args:
-            message (str): The warning message to log.
-        """
+        """Log a warning message."""
         self.log_message(message, level="warning")
 
     def log_critical(self, message):
-        """
-        Log a critical message.
-
-        Args:
-            message (str): The critical message to log.
-        """
+        """Log a critical message."""
         self.log_message(message, level="critical")
 
     def log_debug(self, message):
-        """
-        Log a debug message.
-
-        Args:
-            message (str): The debug message to log.
-        """
+        """Log a debug message."""
         self.log_message(message, level="debug")
 
-    def exit_notebook(self, message, dbutils=None):
+    def log_start(self, process_name):
         """
-        Exit the notebook with an error message.
+        Log the start of a process.
 
         Args:
-            message (str): The error message to display.
-            dbutils (object, optional): Databricks dbutils object for notebook exit.
+            process_name (str): The name of the process starting.
         """
-        self.log_error(message)
-        if dbutils:
-            dbutils.notebook.exit(f"[ERROR] {message}")
-        else:
-            raise SystemExit(f"[ERROR] {message}")
+        self.log_message(f"Starting {process_name}...", level="info")
+
+    def log_end(self, process_name, success=True):
+        """
+        Log the end of a process.
+
+        Args:
+            process_name (str): The name of the process ending.
+            success (bool): Whether the process completed successfully.
+        """
+        status = "successfully" if success else "with errors"
+        self.log_message(f"Finished {process_name} {status}.", level="info")
 
     def log_function_entry_exit(self, func):
         """
@@ -123,3 +109,17 @@ class Logger:
             self.log_debug(f"Exiting {func.__name__} with result: {result}")
             return result
         return wrapper
+
+    def exit_notebook(self, message, dbutils=None):
+        """
+        Exit the notebook with an error message.
+
+        Args:
+            message (str): The error message to display.
+            dbutils (object, optional): Databricks dbutils object for notebook exit.
+        """
+        self.log_error(message)
+        if dbutils:
+            dbutils.notebook.exit(f"[ERROR] {message}")
+        else:
+            raise SystemExit(f"[ERROR] {message}")

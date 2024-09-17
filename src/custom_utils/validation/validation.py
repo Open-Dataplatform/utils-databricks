@@ -64,34 +64,6 @@ class Validator:
             self.logger.log_error(error_message)
             self.logger.exit_notebook(error_message, self.dbutils)
 
-    def _get_mount_point(self) -> str:
-        """
-        Retrieve the mount point for the specified source environment.
-
-        Returns:
-            str: The mount point path.
-
-        Raises:
-            Exception: If the mount point is not found or if an error occurs.
-        """
-        try:
-            target_mount = [
-                m.mountPoint
-                for m in self.dbutils.fs.mounts()
-                if self.config.source_environment in m.source
-            ]
-            if not target_mount:
-                error_message = f"No mount point found for environment: {self.config.source_environment}"
-                self.logger.log_error(error_message)
-                raise Exception(error_message)
-
-            return target_mount[0]
-
-        except Exception as e:
-            error_message = f"Error while retrieving mount points: {str(e)}"
-            self.logger.log_error(error_message)
-            self.logger.exit_notebook(error_message, self.dbutils)
-
     def _verify_schema_folder(self, mount_point: str) -> tuple:
         """
         Verify the schema folder and the expected schema file.
@@ -214,3 +186,31 @@ class Validator:
         ] + [f"- {file.name if hasattr(file, 'name') else file}" for file in files_to_display] + ([more_files_text] if more_files_text else [])
 
         self.logger.log_block("File Validation Results", content_lines)
+
+    def _get_mount_point(self) -> str:
+        """
+        Retrieve the mount point for the specified source environment.
+
+        Returns:
+            str: The mount point path.
+
+        Raises:
+            Exception: If the mount point is not found or if an error occurs.
+        """
+        try:
+            target_mount = [
+                m.mountPoint
+                for m in self.dbutils.fs.mounts()
+                if self.config.source_environment in m.source
+            ]
+            if not target_mount:
+                error_message = f"No mount point found for environment: {self.config.source_environment}"
+                self.logger.log_error(error_message)
+                raise Exception(error_message)
+
+            return target_mount[0]
+
+        except Exception as e:
+            error_message = f"Error while retrieving mount points: {str(e)}"
+            self.logger.log_error(error_message)
+            self.logger.exit_notebook(error_message, self.dbutils)
