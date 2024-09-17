@@ -54,7 +54,7 @@ class Logger:
             level (str): Log level for the block.
         """
         # Directly print the block header without using log_message to avoid the prefix
-        print(f"=== {header} ===")
+        print(f"\n=== {header} ===")
         self._write_log(f"=== {header} ===")
 
         # Print separator
