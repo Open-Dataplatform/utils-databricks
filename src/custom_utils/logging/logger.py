@@ -1,5 +1,7 @@
 # File: custom_utils/logging/logger.py
 
+import time  # To track execution time
+
 class Logger:
     def __init__(self, debug=False):
         """
@@ -40,6 +42,29 @@ class Logger:
             self.log_message(line, level=level)
         print("------------------------------")
 
+    def log_final_status(self, process_name, total_rows, output_path=None, execution_time=None):
+        """
+        Log the final status of the process.
+
+        Args:
+            process_name (str): The name of the process that was completed.
+            total_rows (int): The total number of rows processed.
+            output_path (str, optional): The path where the final output was saved. Defaults to None.
+            execution_time (float, optional): Total time taken for the process in seconds. Defaults to None.
+        """
+        content_lines = [
+            f"Process '{process_name}' completed successfully.",
+            f"Total rows processed: {total_rows}"
+        ]
+
+        if output_path:
+            content_lines.append(f"Output saved to: {output_path}")
+
+        if execution_time:
+            content_lines.append(f"Total execution time: {execution_time:.2f} seconds")
+
+        self.log_block("Final Status", content_lines)
+
     def log_path_validation(self, schema_directory_path, source_directory_path, number_of_files):
         """
         Log the results of the path validation.
@@ -49,7 +74,6 @@ class Logger:
             source_directory_path (str): The path to the source directory.
             number_of_files (int): The number of files found in the source directory.
         """
-        # Remove only '/dbfs/' prefix if it exists
         schema_directory_path = schema_directory_path if not schema_directory_path.startswith('/dbfs/') else schema_directory_path[5:]
 
         content_lines = [
