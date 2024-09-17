@@ -62,7 +62,7 @@ class Config:
             self.full_source_file_path = generate_source_file_path(self.full_source_folder_path, self.source_filename)
             self.full_schema_file_path = generate_schema_file_path(self.full_source_schema_folder_path, self.source_schema_filename)
 
-            # New: Construct the destination folder path using the destination_environment
+            # Construct the destination folder path using the destination_environment
             self.full_destination_folder_path = generate_source_path(
                 self.destination_environment, self.source_container, self.source_datasetidentifier
             )
@@ -100,51 +100,40 @@ class Config:
         """Unpacks all configuration attributes into the provided namespace (e.g., globals())."""
         namespace.update(vars(self))
 
-
-def initialize_config(dbutils=None, logger=None, depth_level=None, debug=False):
-    """
-    Initializes the Config class and returns the config object.
-    """
-    # Attempt to use global dbutils if not provided
-    dbutils = dbutils or globals().get("dbutils", None)
-
-    return Config(
-        dbutils=dbutils,
-        logger=logger,
-        source_environment=get_adf_parameter(dbutils, "SourceStorageAccount"),
-        destination_environment=get_adf_parameter(dbutils, "DestinationStorageAccount"),
-        source_container=get_adf_parameter(dbutils, "SourceContainer"),
-        source_datasetidentifier=get_adf_parameter(dbutils, "SourceDatasetidentifier"),
-        source_filename=get_adf_parameter(dbutils, "SourceFileName"),
-        key_columns=get_adf_parameter(dbutils, "KeyColumns"),
-        feedback_column=get_adf_parameter(dbutils, "FeedbackColumn"),
-        schema_folder_name=get_adf_parameter(dbutils, "SchemaFolderName"),
-        depth_level=depth_level,
-        debug=debug,
-    )
-
-
-def initialize_notebook(dbutils=None, logger=None, debug=False):
-    """
-    Initializes the notebook, including configuration and Spark session setup.
-    """
-    try:
+    @classmethod
+    def initialize_config(cls, dbutils=None, logger=None, depth_level=None, debug=False):
+        """
+        Class method to initialize the Config object.
+        """
         # Attempt to use global dbutils if not provided
         dbutils = dbutils or globals().get("dbutils", None)
 
-        # Initialize logger if not provided
-        logger = logger or Logger(debug=debug)
+        return cls(
+            dbutils=dbutils,
+            logger=logger,
+            source_environment=get_adf_parameter(dbutils, "SourceStorageAccount"),
+            destination_environment=get_adf_parameter(dbutils, "DestinationStorageAccount"),
+            source_container=get_adf_parameter(dbutils, "SourceContainer"),
+            source_datasetidentifier=get_adf_parameter(dbutils, "SourceDatasetidentifier"),
+            source_filename=get_adf_parameter(dbutils, "SourceFileName"),
+            key_columns=get_adf_parameter(dbutils, "KeyColumns"),
+            feedback_column=get_adf_parameter(dbutils, "FeedbackColumn"),
+            schema_folder_name=get_adf_parameter(dbutils, "SchemaFolderName"),
+            depth_level=depth_level,
+            debug=debug,
+        )
 
-        # Initialize configuration object
-        config = initialize_config(dbutils=dbutils, logger=logger, debug=debug)
-        config.unpack(globals())
+    def initialize_notebook(self):
+        """
+        Initializes the notebook, including configuration and Spark session setup.
+        """
+        try:
+            # Initialize the Spark session
+            spark = SparkSession.builder.appName(f"Data Processing Pipeline: {self.source_datasetidentifier}").getOrCreate()
+            self.unpack(globals())  # Unpack config into the global namespace if needed
+            return spark
 
-        # Initialize the Spark session
-        spark = SparkSession.builder.appName(f"Data Processing Pipeline: {config.source_datasetidentifier}").getOrCreate()
-
-        return spark, config, logger
-
-    except Exception as e:
-        error_message = f"Failed to initialize notebook: {str(e)}"
-        logger.log_message(error_message, level="error")
-        logger.exit_notebook(error_message, dbutils)
+        except Exception as e:
+            error_message = f"Failed to initialize notebook: {str(e)}"
+            self.logger.log_message(error_message, level="error")
+            self.logger.exit_notebook(error_message, self.dbutils)
