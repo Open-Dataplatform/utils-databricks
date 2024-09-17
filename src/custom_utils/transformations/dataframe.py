@@ -1,13 +1,12 @@
-# File: custom_utils/transformations/dataframe.py
+# File: custom_utils/transformations/transformer.py
 
 import json
 import pyspark.sql.functions as F
 from typing import Dict, Tuple, List
-from pyspark.sql.types import ArrayType, StructType, StringType
+from pyspark.sql.types import ArrayType, StructType, StringType, StructField, IntegerType, BooleanType, DoubleType
 from pyspark.sql import DataFrame
 from custom_utils.config.config import Config
 from custom_utils.logging.logger import Logger
-
 
 class Transformer:
     def __init__(self, config: Config, logger: Logger = None, debug: bool = None):
@@ -40,7 +39,6 @@ class Transformer:
             for line in content_lines:
                 self.logger.log_message(line, level=level)
 
-            # End with a separator
             self.logger.log_message("------------------------------", level=level)
 
     def _flatten_array_column(self, df: DataFrame, column_name: str) -> DataFrame:
@@ -149,13 +147,70 @@ class Transformer:
                 formatted_schema += f"{indent}|-- {field.name}: {field_type.simpleString()} (nullable = {field.nullable})\n"
         return formatted_schema
 
+    def _json_schema_to_spark_struct(self, schema_file_path: str) -> Tuple[dict, StructType]:
+        """Converts a JSON schema file to a PySpark StructType."""
+        try:
+            with open(schema_file_path, "r") as f:
+                json_schema = json.load(f)
+        except Exception as e:
+            raise ValueError(f"Failed to load or parse schema file '{schema_file_path}': {e}")
+
+        def parse_type(field_props):
+            if isinstance(field_props, list):
+                valid_types = [parse_type(fp) for fp in field_props if fp.get("type") != "null"]
+                return valid_types[0] if valid_types else StringType()
+
+            json_type = field_props.get("type")
+            if isinstance(json_type, list):
+                json_type = next((t for t in json_type if t != "null"), None)
+
+            if json_type == "string":
+                return StringType()
+            elif json_type == "integer":
+                return IntegerType()
+            elif json_type == "boolean":
+                return BooleanType()
+            elif json_type == "number":
+                return DoubleType()
+            elif json_type == "array":
+                items = field_props.get("items")
+                return ArrayType(parse_type(items) if items else StringType())
+            elif json_type == "object":
+                properties = field_props.get("properties", {})
+                return StructType([StructField(k, parse_type(v), True) for k, v in properties.items()])
+            else:
+                return StringType()
+
+        def parse_properties(properties):
+            return StructType([StructField(name, parse_type(props), True) for name, props in properties.items()])
+
+        return json_schema, parse_properties(json_schema.get("properties", {}))
+
+    def _get_json_depth(self, json_schema: dict, current_depth=0) -> int:
+        """Recursively determines the maximum depth of a JSON schema."""
+        def calculate_depth(schema, current_depth):
+            if isinstance(schema, dict) and '$ref' in schema:
+                return calculate_depth(definitions.get(schema['$ref'].split('/')[-1], {}), current_depth)
+            
+            max_depth = current_depth
+            if 'properties' in schema:
+                properties_depth = max(calculate_depth(v, current_depth + 1) for v in schema['properties'].values())
+                max_depth = max(max_depth, properties_depth)
+            if 'items' in schema:
+                items_depth = calculate_depth(schema['items'], current_depth + 1)
+                max_depth = max(max_depth, items_depth)
+
+            return max_depth
+
+        definitions = json_schema.get('definitions', {})
+        return calculate_depth(json_schema, current_depth)
+
     def process_and_flatten_json(self, schema_file_path: str, data_file_path: str, depth_level: int = None, include_schema: bool = False) -> Tuple[DataFrame, DataFrame]:
-        """Orchestrates the JSON processing pipeline, including schema reading, data flattening, and logging."""
         self.logger.log_start("process_and_flatten_json")
         try:
-            schema_json, schema = self.config.json_schema_to_spark_struct(schema_file_path)
+            schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
             depth_level_to_use = depth_level if depth_level is not None else 1
-            max_depth = self.config.get_json_depth(schema_json, depth_level=depth_level_to_use)
+            max_depth = self._get_json_depth(schema_json)
 
             start_lines = [
                 f"Schema file path: {schema_file_path}",
@@ -176,7 +231,7 @@ class Transformer:
                 initial_schema_str = self._format_schema(df.schema)
                 self.logger.log_message(f"Initial DataFrame schema:\nroot\n{initial_schema_str}", level="info")
 
-            df_flattened = self.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth, type_mapping=self.config.get_type_mapping())
+            df_flattened = self.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth)
 
             if self.debug:
                 self._log_block("Flattened DataFrame Info", [])
