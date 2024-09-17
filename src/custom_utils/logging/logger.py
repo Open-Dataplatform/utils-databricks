@@ -15,18 +15,13 @@ class Logger:
         self.debug = debug
         self.log_to_file = log_to_file
 
-    def _get_log_prefix(self, level):
-        """Helper to get the log prefix based on the level and current timestamp."""
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        return f"[{level.upper()}] {timestamp} - "
-
     def _write_log(self, message):
         """Helper method to write log messages to a file if log_to_file is set."""
         if self.log_to_file:
             with open(self.log_to_file, 'a') as log_file:
                 log_file.write(f"{message}\n")
 
-    def log_message(self, message, level="info", single_info_prefix=False):
+    def log_message(self, message, level="info", single_info_prefix=False, include_timestamp=False):
         """
         Log a message.
 
@@ -34,22 +29,25 @@ class Logger:
             message (str): The message to log.
             level (str): The log level (e.g., 'info', 'warning', 'error', 'debug'). Defaults to 'info'.
             single_info_prefix (bool): If True, only print '[INFO]' once at the start.
+            include_timestamp (bool): If True, includes a timestamp in the log message.
         """
+        # Skip logging info and debug messages if debug mode is off
         if level in ["info", "debug"] and not self.debug:
             return
 
-        prefix = self._get_log_prefix(level) if not (single_info_prefix and level == "info") else ""
-        full_message = f"{prefix}{message}"
+        prefix = f"[{level.upper()}] " if not (single_info_prefix and level == "info") else ""
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") if include_timestamp else ""
+        full_message = f"{prefix}{timestamp} - {message}".strip()
         print(full_message)
         self._write_log(full_message)
 
     def log_start(self, method_name):
-        """Log the start of a method."""
-        self.log_message(f"Starting {method_name}...")
+        """Log the start of a method, including a timestamp."""
+        self.log_message(f"Starting {method_name}...", include_timestamp=True)
 
     def log_end(self, method_name, success=True, additional_message=""):
         """
-        Log the end of a method.
+        Log the end of a method, including a timestamp.
 
         Args:
             method_name (str): The name of the method.
@@ -58,7 +56,7 @@ class Logger:
         """
         status = "successfully" if success else "with errors"
         end_message = f"Finished {method_name} {status}. {additional_message}"
-        self.log_message(end_message)
+        self.log_message(end_message, include_timestamp=True)
 
     def log_block(self, header, content_lines, level="info"):
         """
@@ -83,6 +81,33 @@ class Logger:
             message (str): The error message to log.
         """
         self.log_message(message, level="error")
+
+    def log_warning(self, message):
+        """
+        Log a warning message.
+
+        Args:
+            message (str): The warning message to log.
+        """
+        self.log_message(message, level="warning")
+
+    def log_critical(self, message):
+        """
+        Log a critical message.
+
+        Args:
+            message (str): The critical message to log.
+        """
+        self.log_message(message, level="critical")
+
+    def log_debug(self, message):
+        """
+        Log a debug message.
+
+        Args:
+            message (str): The debug message to log.
+        """
+        self.log_message(message, level="debug")
 
     def exit_notebook(self, message, dbutils=None):
         """
