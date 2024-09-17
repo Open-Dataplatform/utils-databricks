@@ -8,6 +8,7 @@ from pyspark.sql import SparkSession, DataFrame
 from custom_utils.dp_storage import reader, writer
 from custom_utils.logging.logger import Logger
 
+
 class DataFrameTransformer:
     def __init__(self, logger: Logger = None, debug: bool = False):
         """
@@ -203,14 +204,14 @@ class DataFrameTransformer:
 
     def _format_schema(self, schema: StructType, indent_level: int = 0) -> str:
         """
-        Formats the schema into a human-readable string with proper indentation.
+        Formats the schema of a DataFrame for logging.
 
         Args:
             schema (StructType): The schema to format.
-            indent_level (int): The level of indentation. Defaults to 0.
+            indent_level (int, optional): The indentation level for nested fields. Defaults to 0.
 
         Returns:
-            str: A formatted string representation of the schema.
+            str: A formatted string representing the schema.
         """
         formatted_schema = ""
         indent = " " * (indent_level * 2)
@@ -263,7 +264,7 @@ class DataFrameTransformer:
             # Determine the depth level to use
             depth_level_to_use = depth_level if depth_level is not None else 1
 
-            # Get the maximum depth of the JSON schema without internal logging
+            # Get the maximum depth of the JSON schema
             max_depth = reader.get_json_depth(schema_json, logger=None, depth_level=depth_level_to_use)
 
             # Log the start of the processing
