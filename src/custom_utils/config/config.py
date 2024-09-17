@@ -126,6 +126,9 @@ class Config:
     def initialize_notebook(self):
         """
         Initializes the notebook, including configuration and Spark session setup.
+        
+        Returns:
+            SparkSession: The initialized Spark session.
         """
         try:
             # Initialize the Spark session
