@@ -6,10 +6,10 @@ from custom_utils.config.config import Config
 from custom_utils.file_handler.file_handler import FileHandler
 from custom_utils.logging.logger import Logger
 
-class PathValidator:
+class Validator:
     def __init__(self, config: Config, logger: Logger = None, debug=False):
         """
-        Initialize the PathValidator with the given configuration.
+        Initialize the Validator with the given configuration.
 
         Args:
             config (Config): An instance of the Config class containing configuration parameters.
@@ -22,67 +22,7 @@ class PathValidator:
         self.file_handler = FileHandler(config)
         self.debug = debug
 
-    def _log_message(self, message: str, level="info"):
-        """
-        Logs a message using the logger if debug mode is on or the log level is not 'info'.
-
-        Args:
-            message (str): The message to log.
-            level (str): The log level (e.g., 'info', 'warning', 'error').
-        """
-        if self.debug or level != "info":
-            self.logger.log_message(message, level=level)
-
-    def _log_block(self, header: str, content_lines: list):
-        """
-        Logs a block of messages using the logger if debug mode is on.
-
-        Args:
-            header (str): Header of the block.
-            content_lines (list): List of lines to include in the block.
-        """
-        if self.debug:
-            self.logger.log_block(header, content_lines)
-
-    def _log_path_validation(self, schema_directory_path, source_directory_path, number_of_files):
-        """
-        Log the results of the path validation.
-
-        Args:
-            schema_directory_path (str): The path to the schema directory.
-            source_directory_path (str): The path to the source directory.
-            number_of_files (int): The number of files found in the source directory.
-        """
-        schema_directory_path = schema_directory_path if not schema_directory_path.startswith('/dbfs/') else schema_directory_path[5:]
-        content_lines = [
-            f"Schema directory path: {schema_directory_path}",
-            f"Source directory path: {source_directory_path}",
-            f"Number of files found: {number_of_files}"
-        ]
-        self._log_block("Path Validation Results", content_lines)
-
-    def _log_file_validation(self, schema_file_name, matched_files, file_type, source_filename):
-        """
-        Log the results of the file validation.
-
-        Args:
-            schema_file_name (str): The name of the schema file.
-            matched_files (list): List of files that match the source filename pattern.
-            file_type (str): The type of the schema file (e.g., 'json' or 'xml').
-            source_filename (str): The filename pattern used for matching.
-        """
-        num_files = len(matched_files)
-        files_to_display = matched_files[:10]  # Limit to 10 files
-        more_files_text = f"...and {num_files - 10} more files." if num_files > 10 else ""
-
-        content_lines = [
-            f"File Type: {file_type}",
-            f"Schema file name: {schema_file_name}",
-            f"Files found matching the pattern '{source_filename}':"
-        ] + [f"- {file.name if hasattr(file, 'name') else file}" for file in files_to_display] + ([more_files_text] if more_files_text else [])
-
-        self._log_block("File Validation Results", content_lines)
-
+    @logger.log_function_entry_exit
     def verify_paths_and_files(self):
         """
         Verify that the schema folder, schema file, and source folder exist and contain the expected files.
@@ -111,14 +51,14 @@ class PathValidator:
             self._log_file_validation(schema_file_name, matched_files, file_type, self.config.source_filename)
 
             # Log success message
-            self._log_message("All paths and files verified successfully. Proceeding with notebook execution.", level="info")
+            self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.", level="info")
 
             # Return schema file path, full source file path, matched files, and file type
             return schema_file_path, full_source_file_path, matched_files, file_type
 
         except Exception as e:
             error_message = f"Failed to validate paths or files: {str(e)}"
-            self._log_message(error_message, level="error")
+            self.logger.log_error(error_message)
             self.logger.exit_notebook(error_message, self.dbutils)
 
     def _get_mount_point(self) -> str:
@@ -139,14 +79,14 @@ class PathValidator:
             ]
             if not target_mount:
                 error_message = f"No mount point found for environment: {self.config.source_environment}"
-                self._log_message(error_message, level="error")
+                self.logger.log_error(error_message)
                 raise Exception(error_message)
 
             return target_mount[0]
 
         except Exception as e:
             error_message = f"Error while retrieving mount points: {str(e)}"
-            self._log_message(error_message, level="error")
+            self.logger.log_error(error_message)
             self.logger.exit_notebook(error_message, self.dbutils)
 
     def _verify_schema_folder(self, mount_point: str) -> tuple:
@@ -173,7 +113,7 @@ class PathValidator:
             file_type = None
 
             for file in schema_files:
-                file_name = file.name if hasattr(file, 'name') else file  # Check if it's a FileInfo object
+                file_name = file.name if hasattr(file, 'name') else file
                 for ext, ftype in schema_format_mapping.items():
                     if file_name == f"{expected_schema_filename}{ext}":
                         found_schema_file = file_name
@@ -183,9 +123,9 @@ class PathValidator:
             if not found_schema_file:
                 available_files = [file.name if hasattr(file, 'name') else file for file in schema_files]
                 error_message = (f"Expected schema file '{expected_schema_filename}.json' or "
-                                f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
-                                f"Available files: {available_files}")
-                self._log_message(error_message, level="error")
+                                 f"'{expected_schema_filename}.xsd' not found in {schema_directory_path}. "
+                                 f"Available files: {available_files}")
+                self.logger.log_error(error_message)
                 raise Exception(error_message)
             
             # Construct the schema file path
@@ -195,7 +135,7 @@ class PathValidator:
 
         except AnalysisException as e:
             error_message = f"Failed to access schema folder: {str(e)}"
-            self._log_message(error_message, level="error")
+            self.logger.log_error(error_message)
             raise Exception(error_message)
 
     def _verify_source_folder(self, mount_point: str) -> tuple:
@@ -220,7 +160,7 @@ class PathValidator:
             if not matched_files:
                 available_files = [file.name if hasattr(file, 'name') else file for file in source_files]
                 error_message = f"No files matching '{self.config.source_filename}' found in {source_directory_path}. Available files: {available_files}"
-                self._log_message(error_message, level="error")
+                self.logger.log_error(error_message)
                 raise Exception(error_message)
 
             # Construct the full source file path with wildcard pattern
@@ -230,5 +170,44 @@ class PathValidator:
 
         except AnalysisException as e:
             error_message = f"Failed to access source folder: {str(e)}"
-            self._log_message(error_message, level="error")
+            self.logger.log_error(error_message)
             raise Exception(error_message)
+
+    def _log_path_validation(self, schema_directory_path, source_directory_path, number_of_files):
+        """
+        Log the results of the path validation.
+
+        Args:
+            schema_directory_path (str): The path to the schema directory.
+            source_directory_path (str): The path to the source directory.
+            number_of_files (int): The number of files found in the source directory.
+        """
+        schema_directory_path = schema_directory_path if not schema_directory_path.startswith('/dbfs/') else schema_directory_path[5:]
+        content_lines = [
+            f"Schema directory path: {schema_directory_path}",
+            f"Source directory path: {source_directory_path}",
+            f"Number of files found: {number_of_files}"
+        ]
+        self.logger.log_block("Path Validation Results", content_lines)
+
+    def _log_file_validation(self, schema_file_name, matched_files, file_type, source_filename):
+        """
+        Log the results of the file validation.
+
+        Args:
+            schema_file_name (str): The name of the schema file.
+            matched_files (list): List of files that match the source filename pattern.
+            file_type (str): The type of the schema file (e.g., 'json' or 'xml').
+            source_filename (str): The filename pattern used for matching.
+        """
+        num_files = len(matched_files)
+        files_to_display = matched_files[:10]  # Limit to 10 files
+        more_files_text = f"...and {num_files - 10} more files." if num_files > 10 else ""
+
+        content_lines = [
+            f"File Type: {file_type}",
+            f"Schema file name: {schema_file_name}",
+            f"Files found matching the pattern '{source_filename}':"
+        ] + [f"- {file.name if hasattr(file, 'name') else file}" for file in files_to_display] + ([more_files_text] if more_files_text else [])
+
+        self.logger.log_block("File Validation Results", content_lines)
