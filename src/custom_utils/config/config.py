@@ -16,7 +16,6 @@ class Config:
         self.dbutils = dbutils or globals().get("dbutils", None)
         self.logger = logger or Logger(debug=debug)
         self.debug = debug
-        self.spark = None  # Spark session placeholder
 
         # Log the start of configuration
         self.logger.log_start("Config Initialization")
@@ -55,6 +54,9 @@ class Config:
             # Log all configuration parameters
             self._log_params()
 
+            # Initialize the Spark session automatically
+            self._initialize_spark()
+
             # Log the end of configuration
             self.logger.log_end("Config Initialization", success=True)
 
@@ -81,11 +83,9 @@ class Config:
         ]
         self.logger.log_block("Configuration Parameters", params)
 
-    def initialize_spark(self):
-        """
-        Initializes the Spark session if it's not already initialized.
-        """
-        if not self.spark:
+    def _initialize_spark(self):
+        """Initializes the Spark session automatically when the Config object is created."""
+        if not hasattr(self, 'spark') or self.spark is None:
             try:
                 self.spark = SparkSession.builder.appName(f"Data Processing Pipeline: {self.source_datasetidentifier}").getOrCreate()
                 self.logger.log_message("Spark session initialized successfully.", level="info")
@@ -94,21 +94,14 @@ class Config:
                 self.logger.log_message(error_message, level="error")
                 self.logger.exit_notebook(error_message, self.dbutils)
                 raise
-        return self.spark
 
     def unpack(self, namespace: dict):
-        """
-        Unpacks all configuration attributes into the provided namespace (e.g., globals()).
-        Args:
-            namespace (dict): The namespace where attributes will be added (e.g., globals()).
-        """
+        """Unpacks all configuration attributes into the provided namespace (e.g., globals())."""
         for key, value in vars(self).items():
             if not key.startswith('_'):  # Avoid unpacking private attributes
                 namespace[key] = value
 
     @classmethod
     def initialize(cls, dbutils=None, logger=None, debug=False):
-        """
-        Class method to initialize the Config object with optional dbutils, logger, and debug parameters.
-        """
+        """Class method to initialize the Config object."""
         return cls(dbutils=dbutils, logger=logger, debug=debug)
