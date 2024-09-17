@@ -1,7 +1,11 @@
 # File: custom_utils/config/__init__.py
 
-from .config import Config, initialize_config, initialize_notebook  # Import Config, initialize_config, and initialize_notebook
+from .config import Config
 
-# Automatically call the initialize_notebook function when this module is imported
-if "dbutils" in globals() in globals():
-    spark, config, logger = initialize_notebook(dbutils)
+# Automatically initialize the Config object if `dbutils` is available in the global scope
+if "dbutils" in globals():
+    config = Config.initialize(dbutils=dbutils, debug=True)  # Initialize Config
+    config.initialize_spark()  # Initialize Spark session within Config
+
+    # Optionally unpack config attributes into globals (use cautiously)
+    config.unpack(globals())
