@@ -28,9 +28,6 @@ class Config:
         env_init_messages = []
 
         try:
-            # Log successful logger initialization
-            env_init_messages.append("Logger successfully initialized.")
-
             # Initialize parameters
             self._initialize_parameters()
 
@@ -43,6 +40,9 @@ class Config:
             # Initialize Spark session
             self.spark = self._initialize_spark()
             env_init_messages.append("Spark session initialized successfully.")
+
+            # Log successful logger initialization
+            env_init_messages.append("Logger initialized successfully.")
 
             # Log environment initialization block
             self.logger.log_block("Environment Initialization", env_init_messages)
