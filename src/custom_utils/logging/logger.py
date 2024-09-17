@@ -53,13 +53,14 @@ class Logger:
             content_lines (list): List of lines to include in the block.
             level (str): Log level for the block.
         """
-        # Print the block header
-        self.log_message(f"=== {header} ===", level=level, single_info_prefix=True)
+        # Directly print the block header without using log_message to avoid the prefix
+        print(f"=== {header} ===")
+        self._write_log(f"=== {header} ===")
 
         # Print separator
         print("------------------------------")
 
-        # Log each content line, avoiding empty lines and unnecessary prefixes
+        # Log each content line
         for line in content_lines:
             if line.strip():
                 self.log_message(f"{line}", level=level, single_info_prefix=False)
