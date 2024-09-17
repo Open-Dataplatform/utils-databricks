@@ -90,9 +90,9 @@ class Config:
             f"Key Columns: {self.key_columns}",
             f"Feedback Column: {self.feedback_column}",
             f"Depth Level: {self.depth_level}",
-            f"Source Folder Path: {self.full_source_folder_path}",
             f"Source Schema Folder Path: {self.full_source_schema_folder_path}",
-            f"Destination Folder Path: {self.full_destination_folder_path}",  # New: Log destination folder path
+            f"Source Folder Path: {self.full_source_folder_path}",
+            f"Destination Folder Path: {self.full_destination_folder_path}",
         ]
         self.logger.log_block("Configuration Parameters", params)
 
