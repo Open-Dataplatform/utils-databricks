@@ -1,5 +1,3 @@
-# File: custom_utils/logging/logger.py
-
 import datetime
 import functools
 
@@ -35,11 +33,34 @@ class Logger:
         if level in ["info", "debug"] and not self.debug:
             return
 
+        # Avoid logging empty messages
+        if not message.strip():
+            return
+
         prefix = f"[{level.upper()}] " if not (single_info_prefix and level == "info") else ""
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") if include_timestamp else ""
         full_message = f"{prefix}{timestamp} - {message}".strip()
         print(full_message)
         self._write_log(full_message)
+
+    def log_block(self, header, content_lines, level="info"):
+        """
+        Utility method to log blocks of messages with a header and separators.
+
+        Args:
+            header (str): Header of the block.
+            content_lines (list): List of lines to include in the block.
+            level (str): Log level for the block.
+        """
+        # Avoid logging blocks with no content
+        if not content_lines:
+            return
+
+        self.log_message(f"\n=== {header} ===", level=level, single_info_prefix=True)
+        print("------------------------------")
+        for line in content_lines:
+            self.log_message(line, level=level)
+        print("------------------------------")
 
     def log_start(self, method_name):
         """Log the start of a method, including a timestamp."""
@@ -57,21 +78,6 @@ class Logger:
         status = "successfully" if success else "with errors"
         end_message = f"Finished {method_name} {status}. {additional_message}"
         self.log_message(end_message, include_timestamp=True)
-
-    def log_block(self, header, content_lines, level="info"):
-        """
-        Utility method to log blocks of messages with a header and separators.
-
-        Args:
-            header (str): Header of the block.
-            content_lines (list): List of lines to include in the block.
-            level (str): Log level for the block.
-        """
-        self.log_message(f"\n=== {header} ===", level=level, single_info_prefix=True)
-        print("------------------------------")
-        for line in content_lines:
-            self.log_message(line, level=level)
-        print("------------------------------")
 
     def log_error(self, message):
         """
