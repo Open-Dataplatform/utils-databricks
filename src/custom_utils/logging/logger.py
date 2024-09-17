@@ -58,7 +58,7 @@ class Logger:
             return
 
         # Log the block header using log_message
-        self.log_message(f"=== {header} ===", level=level, single_info_prefix=True)
+        self.log_message(f"\n=== {header} ===", level=level, single_info_prefix=True)
 
         # Print separator
         print("------------------------------")
