@@ -142,9 +142,6 @@ def initialize_notebook(dbutils=None, logger=None, debug=False):
         # Initialize the Spark session
         spark = SparkSession.builder.appName(f"Data Processing Pipeline: {config.source_datasetidentifier}").getOrCreate()
 
-        if debug:
-            config._log_params()
-
         return spark, config, logger
 
     except Exception as e:
