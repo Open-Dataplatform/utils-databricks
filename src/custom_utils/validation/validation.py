@@ -33,8 +33,9 @@ class Validator:
         Raises:
             Exception: If validation fails.
         """
+        # Log the start of the process
         self.logger.log_start("verify_paths_and_files")
-        
+
         try:
             # Retrieve the mount point for the source environment
             mount_point = self._get_mount_point()
@@ -52,16 +53,23 @@ class Validator:
             self._log_file_validation(schema_file_name, matched_files, file_type, self.config.source_filename)
 
             # Log success message
-            self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.", level="info")
+            self.logger.log_message("All paths and files verified successfully.", level="info")
 
-            self.logger.log_end("verify_paths_and_files")
+            # Log the end of the process with the additional message
+            self.logger.log_end("verify_paths_and_files", success=True, additional_message="Proceeding with notebook execution.")
 
             # Return schema file path, full source file path, matched files, and file type
             return schema_file_path, full_source_file_path, matched_files, file_type
 
         except Exception as e:
+            # Log error message
             error_message = f"Failed to validate paths or files: {str(e)}"
-            self.logger.log_error(error_message)
+            self.logger.log_message(error_message, level="error")
+
+            # Log the end of the process with failure
+            self.logger.log_end("verify_paths_and_files", success=False, additional_message="Check error logs for details.")
+
+            # Exit the notebook with an error
             self.logger.exit_notebook(error_message, self.dbutils)
 
     def _verify_schema_folder(self, mount_point: str) -> tuple:
