@@ -7,7 +7,6 @@ from pyspark.sql.types import ArrayType, StructType, StringType
 from pyspark.sql import DataFrame
 from custom_utils.config.config import Config
 from custom_utils.logging.logger import Logger
-from custom_utils.dp_storage.writer import json_schema_to_spark_struct
 
 class Transformer:
     def __init__(self, config: Config, logger: Logger = None, debug: bool = None):
