@@ -25,6 +25,9 @@ class Validator:
         # Use the debug flag from the parameter if provided, else use config's debug setting
         self.debug = debug if debug is not None else config.debug
         
+        # Update the logger's debug flag to match the one passed to Validator
+        self.logger.debug = self.debug
+
         # Create a new FileHandler with the config
         self.file_handler = FileHandler(config)
 
