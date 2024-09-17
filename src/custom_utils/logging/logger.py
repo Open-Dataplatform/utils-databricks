@@ -82,7 +82,7 @@ class Logger:
             additional_message (str): Additional message to log.
         """
         status = "successfully" if success else "with errors"
-        end_message = f"Finished {method_name} {status}. {additional_message}"
+        end_message = f"\nFinished {method_name} {status}. {additional_message}"
         self.log_message(end_message, include_timestamp=True)
 
     def log_error(self, message):
