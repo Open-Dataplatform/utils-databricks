@@ -37,9 +37,10 @@ class Logger:
         if not message.strip():
             return
 
-        prefix = f"[{level.upper()}] " if not (single_info_prefix and level == "info") else ""
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") if include_timestamp else ""
-        full_message = f"{prefix}{timestamp} - {message}".strip()
+        # Construct the log prefix
+        prefix = f"[{level.upper()}] " if not (single_info_prefix and level == "info") else "[INFO] "
+        timestamp = f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - " if include_timestamp else ""
+        full_message = f"{prefix}{timestamp}{message}".strip()
         print(full_message)
         self._write_log(full_message)
 
@@ -52,24 +53,19 @@ class Logger:
             content_lines (list): List of lines to include in the block.
             level (str): Log level for the block.
         """
-        # Avoid logging blocks with no content
-        if not content_lines:
-            return
-
-        # Print the block header without newline prefix
+        # Print the block header
         self.log_message(f"=== {header} ===", level=level, single_info_prefix=True)
 
-        # Print separator only if there are content lines
-        if content_lines:
-            print("------------------------------")
-            
-            # Log each content line, ensuring no empty lines are logged
-            for line in content_lines:
-                if line.strip():  # Only log non-empty lines
-                    self.log_message(line, level=level)
-            
-            # End with separator
-            print("------------------------------")
+        # Print separator
+        print("------------------------------")
+
+        # Log each content line, avoiding empty lines and unnecessary prefixes
+        for line in content_lines:
+            if line.strip():
+                self.log_message(f"{line}", level=level, single_info_prefix=False)
+
+        # End with a separator
+        print("------------------------------")
 
     def log_start(self, method_name):
         """Log the start of a method, including a timestamp."""
@@ -89,39 +85,19 @@ class Logger:
         self.log_message(end_message, include_timestamp=True)
 
     def log_error(self, message):
-        """
-        Log an error message.
-
-        Args:
-            message (str): The error message to log.
-        """
+        """Log an error message."""
         self.log_message(message, level="error")
 
     def log_warning(self, message):
-        """
-        Log a warning message.
-
-        Args:
-            message (str): The warning message to log.
-        """
+        """Log a warning message."""
         self.log_message(message, level="warning")
 
     def log_critical(self, message):
-        """
-        Log a critical message.
-
-        Args:
-            message (str): The critical message to log.
-        """
+        """Log a critical message."""
         self.log_message(message, level="critical")
 
     def log_debug(self, message):
-        """
-        Log a debug message.
-
-        Args:
-            message (str): The debug message to log.
-        """
+        """Log a debug message."""
         self.log_message(message, level="debug")
 
     def exit_notebook(self, message, dbutils=None):
