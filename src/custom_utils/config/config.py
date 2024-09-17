@@ -16,15 +16,22 @@ class Config:
         """
         Initialize the Config class with basic parameters and set up logger and Spark session.
         """
-        # Log the start of configuration as the first line
+        # Logger initialization
         self.dbutils = dbutils or globals().get("dbutils", None)
         self.logger = logger or Logger(debug=debug)
         self.debug = debug
 
+        # Log the start of configuration as the first line
         self.logger.log_start("Config Initialization")
 
+        # Collect environment initialization messages
+        env_init_messages = []
+
         try:
-            # Initialize core parameters
+            # Log successful logger initialization
+            env_init_messages.append("Logger successfully initialized.")
+
+            # Initialize parameters
             self._initialize_parameters()
 
             # Construct paths (keeping the required ones)
@@ -33,11 +40,15 @@ class Config:
             )
             self.full_source_file_path = generate_source_file_path(self.full_source_folder_path, self.source_filename)
 
-            # Log configuration parameters
-            self._log_params()
-
             # Initialize Spark session
             self.spark = self._initialize_spark()
+            env_init_messages.append("Spark session initialized successfully.")
+
+            # Log environment initialization block
+            self.logger.log_block("Environment Initialization", env_init_messages)
+
+            # Log configuration parameters
+            self._log_params()
 
             # Log the end of configuration
             self.logger.log_end("Config Initialization", success=True)
@@ -85,7 +96,6 @@ class Config:
         """Initializes the Spark session."""
         try:
             spark = SparkSession.builder.appName(f"Data Processing Pipeline: {self.source_datasetidentifier}").getOrCreate()
-            self.logger.log_message("Spark session initialized successfully.", level="info")
             return spark
         except Exception as e:
             error_message = f"Failed to initialize Spark session: {str(e)}"
