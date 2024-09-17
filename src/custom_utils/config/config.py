@@ -1,3 +1,14 @@
+import os
+from pyspark.sql import SparkSession
+from custom_utils.logging.logger import Logger
+from custom_utils.helper import get_param_value
+from custom_utils.path_utils import (
+    generate_source_path,
+    generate_source_file_path,
+    generate_schema_path,
+    generate_schema_file_path,
+)
+
 class Config:
     def __init__(
         self,
@@ -85,13 +96,16 @@ class Config:
     def initialize_notebook(self):
         """
         Initializes the notebook, including configuration and Spark session setup.
+        Returns the Spark session.
         """
         try:
             # Initialize the Spark session
-            self.spark = SparkSession.builder.appName(f"Data Processing Pipeline: {self.source_datasetidentifier}").getOrCreate()
+            spark = SparkSession.builder.appName(f"Data Processing Pipeline: {self.source_datasetidentifier}").getOrCreate()
             self.logger.log_message("Spark session initialized successfully.", level="info")
+            return spark
 
         except Exception as e:
             error_message = f"Failed to initialize notebook: {str(e)}"
             self.logger.log_message(error_message, level="error")
             self.logger.exit_notebook(error_message, self.dbutils)
+            raise
