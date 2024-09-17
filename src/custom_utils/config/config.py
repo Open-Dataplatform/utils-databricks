@@ -1,3 +1,5 @@
+# File: custom_utils/config/config.py
+
 import os
 from pyspark.sql import SparkSession
 from custom_utils.logging.logger import Logger
@@ -11,16 +13,16 @@ from custom_utils.path_utils import (
 
 class Config:
     def __init__(self, dbutils=None, logger=None, debug=False):
-        # Attempt to use dbutils from the global import if not explicitly passed
         self.dbutils = dbutils or globals().get("dbutils", None)
         self.logger = logger or Logger(debug=debug)
         self.debug = debug
+        self.spark = None  # Spark session placeholder
 
         # Log the start of configuration
         self.logger.log_start("Config Initialization")
 
         try:
-            # Core parameters fetched from widgets or environment variables directly
+            # Core parameters fetched from widgets or environment variables
             self.source_environment = get_param_value(self.dbutils, "SourceStorageAccount", required=True)
             self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", required=True)
             self.source_container = get_param_value(self.dbutils, "SourceContainer", required=True)
@@ -50,7 +52,7 @@ class Config:
                 self.destination_environment, self.source_container, self.source_datasetidentifier
             )
 
-            # Log all configuration parameters (only once here)
+            # Log all configuration parameters
             self._log_params()
 
             # Log the end of configuration
@@ -79,22 +81,30 @@ class Config:
         ]
         self.logger.log_block("Configuration Parameters", params)
 
-    def initialize_notebook(self):
+    def initialize_spark(self):
         """
-        Initializes the notebook, including configuration and Spark session setup.
-        Returns the Spark session.
+        Initializes the Spark session if it's not already initialized.
         """
-        try:
-            # Initialize the Spark session
-            spark = SparkSession.builder.appName(f"Data Processing Pipeline: {self.source_datasetidentifier}").getOrCreate()
-            self.logger.log_message("Spark session initialized successfully.", level="info")
-            return spark
+        if not self.spark:
+            try:
+                self.spark = SparkSession.builder.appName(f"Data Processing Pipeline: {self.source_datasetidentifier}").getOrCreate()
+                self.logger.log_message("Spark session initialized successfully.", level="info")
+            except Exception as e:
+                error_message = f"Failed to initialize Spark session: {str(e)}"
+                self.logger.log_message(error_message, level="error")
+                self.logger.exit_notebook(error_message, self.dbutils)
+                raise
+        return self.spark
 
-        except Exception as e:
-            error_message = f"Failed to initialize notebook: {str(e)}"
-            self.logger.log_message(error_message, level="error")
-            self.logger.exit_notebook(error_message, self.dbutils)
-            raise
+    def unpack(self, namespace: dict):
+        """
+        Unpacks all configuration attributes into the provided namespace (e.g., globals()).
+        Args:
+            namespace (dict): The namespace where attributes will be added (e.g., globals()).
+        """
+        for key, value in vars(self).items():
+            if not key.startswith('_'):  # Avoid unpacking private attributes
+                namespace[key] = value
 
     @classmethod
     def initialize(cls, dbutils=None, logger=None, debug=False):
