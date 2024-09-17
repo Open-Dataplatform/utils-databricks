@@ -44,6 +44,45 @@ class PathValidator:
         if self.debug:
             self.logger.log_block(header, content_lines)
 
+    def _log_path_validation(self, schema_directory_path, source_directory_path, number_of_files):
+        """
+        Log the results of the path validation.
+
+        Args:
+            schema_directory_path (str): The path to the schema directory.
+            source_directory_path (str): The path to the source directory.
+            number_of_files (int): The number of files found in the source directory.
+        """
+        schema_directory_path = schema_directory_path if not schema_directory_path.startswith('/dbfs/') else schema_directory_path[5:]
+        content_lines = [
+            f"Schema directory path: {schema_directory_path}",
+            f"Source directory path: {source_directory_path}",
+            f"Number of files found: {number_of_files}"
+        ]
+        self._log_block("Path Validation Results", content_lines)
+
+    def _log_file_validation(self, schema_file_name, matched_files, file_type, source_filename):
+        """
+        Log the results of the file validation.
+
+        Args:
+            schema_file_name (str): The name of the schema file.
+            matched_files (list): List of files that match the source filename pattern.
+            file_type (str): The type of the schema file (e.g., 'json' or 'xml').
+            source_filename (str): The filename pattern used for matching.
+        """
+        num_files = len(matched_files)
+        files_to_display = matched_files[:10]  # Limit to 10 files
+        more_files_text = f"...and {num_files - 10} more files." if num_files > 10 else ""
+
+        content_lines = [
+            f"File Type: {file_type}",
+            f"Schema file name: {schema_file_name}",
+            f"Files found matching the pattern '{source_filename}':"
+        ] + [f"- {file.name if hasattr(file, 'name') else file}" for file in files_to_display] + ([more_files_text] if more_files_text else [])
+
+        self._log_block("File Validation Results", content_lines)
+
     def verify_paths_and_files(self):
         """
         Verify that the schema folder, schema file, and source folder exist and contain the expected files.
@@ -66,28 +105,10 @@ class PathValidator:
             source_directory_path, full_source_file_path, matched_files = self._verify_source_folder(mount_point)
 
             # Log path validation results
-            self._log_block(
-                "Path Validation Results", 
-                [
-                    f"Schema directory path: {schema_directory_path}",
-                    f"Source directory path: {source_directory_path}",
-                    f"Number of files found: {len(matched_files)}"
-                ]
-            )
-
-            # Limit the number of files to display to 10
-            files_to_display = matched_files[:10]
-            more_files_text = f"...and {len(matched_files) - 10} more files." if len(matched_files) > 10 else ""
+            self._log_path_validation(schema_directory_path, source_directory_path, len(matched_files))
 
             # Log file validation results
-            self._log_block(
-                "File Validation Results", 
-                [
-                    f"File Type: {file_type}",
-                    f"Schema file name: {schema_file_name}",
-                    f"Files found matching the pattern '{self.config.source_filename}':"
-                ] + [f"- {file.name if hasattr(file, 'name') else file}" for file in files_to_display] + ([more_files_text] if more_files_text else [])
-            )
+            self._log_file_validation(schema_file_name, matched_files, file_type, self.config.source_filename)
 
             # Log success message
             self._log_message("All paths and files verified successfully. Proceeding with notebook execution.", level="info")
