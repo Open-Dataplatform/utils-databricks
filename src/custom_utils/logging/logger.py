@@ -53,20 +53,25 @@ class Logger:
             content_lines (list): List of lines to include in the block.
             level (str): Log level for the block.
         """
-        # Directly print the block header without using log_message to avoid the prefix
-        print(f"\n=== {header} ===")
-        self._write_log(f"=== {header} ===")
+        # Skip block logging if debug mode is off and the level is 'info' or 'debug'
+        if level in ["info", "debug"] and not self.debug:
+            return
+
+        # Log the block header using log_message
+        self.log_message(f"=== {header} ===", level=level, single_info_prefix=True)
 
         # Print separator
         print("------------------------------")
+        self._write_log("------------------------------")
 
         # Log each content line
         for line in content_lines:
             if line.strip():
-                self.log_message(f"{line}", level=level, single_info_prefix=False)
+                self.log_message(line, level=level)
 
         # End with a separator
         print("------------------------------")
+        self._write_log("------------------------------")
 
     def log_start(self, method_name):
         """Log the start of a method, including a timestamp."""
