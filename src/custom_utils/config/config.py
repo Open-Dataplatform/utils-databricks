@@ -1,6 +1,3 @@
-# File: custom_utils/config/config.py
-
-import os
 from pyspark.sql import SparkSession
 from custom_utils.logging.logger import Logger
 from custom_utils.helper import get_param_value, get_adf_parameter
@@ -28,10 +25,10 @@ class Config:
         depth_level=None,
         debug=False,
     ):
-        # Attempt to use dbutils from the global import if not explicitly passed
         self.dbutils = dbutils or globals().get("dbutils", None)
         self.logger = logger or Logger(debug=debug)
         self.debug = debug
+        self.spark = None  # Initialize spark attribute to None
 
         # Log the start of configuration
         self.logger.log_start("Config Initialization")
@@ -62,7 +59,7 @@ class Config:
             self.full_source_file_path = generate_source_file_path(self.full_source_folder_path, self.source_filename)
             self.full_schema_file_path = generate_schema_file_path(self.full_source_schema_folder_path, self.source_schema_filename)
 
-            # Construct the destination folder path using the destination_environment
+            # New: Construct the destination folder path using the destination_environment
             self.full_destination_folder_path = generate_source_path(
                 self.destination_environment, self.source_container, self.source_datasetidentifier
             )
@@ -78,6 +75,46 @@ class Config:
             self.logger.log_message(error_message, level="error")
             self.logger.log_end("Config Initialization", success=False)
             raise
+
+    @classmethod
+    def initialize_config(cls, dbutils=None, logger=None, depth_level=None, debug=False):
+        """
+        Class method to initialize the Config object.
+        """
+        dbutils = dbutils or globals().get("dbutils", None)
+
+        return cls(
+            dbutils=dbutils,
+            logger=logger,
+            source_environment=get_adf_parameter(dbutils, "SourceStorageAccount"),
+            destination_environment=get_adf_parameter(dbutils, "DestinationStorageAccount"),
+            source_container=get_adf_parameter(dbutils, "SourceContainer"),
+            source_datasetidentifier=get_adf_parameter(dbutils, "SourceDatasetidentifier"),
+            source_filename=get_adf_parameter(dbutils, "SourceFileName"),
+            key_columns=get_adf_parameter(dbutils, "KeyColumns"),
+            feedback_column=get_adf_parameter(dbutils, "FeedbackColumn"),
+            schema_folder_name=get_adf_parameter(dbutils, "SchemaFolderName"),
+            depth_level=depth_level,
+            debug=debug,
+        )
+
+    def initialize_spark(self):
+        """Initialize and store the Spark session in the config instance."""
+        if self.spark is None:
+            self.spark = SparkSession.builder.appName(f"Data Processing Pipeline: {self.source_datasetidentifier}").getOrCreate()
+            self.logger.log_message("Spark session initialized successfully.", level="info")
+
+    def initialize_notebook(self):
+        """Initialize the notebook, setting up Spark and any other configurations needed."""
+        try:
+            # Initialize the Spark session
+            self.initialize_spark()
+            self._log_params()  # Log the configuration parameters if needed
+            self.logger.log_end("Config Initialization", success=True)
+        except Exception as e:
+            error_message = f"Failed to initialize notebook: {str(e)}"
+            self.logger.log_message(error_message, level="error")
+            self.logger.exit_notebook(error_message, self.dbutils)
 
     def _log_params(self):
         """Logs all configuration parameters in a structured format using the logger."""
@@ -99,44 +136,3 @@ class Config:
     def unpack(self, namespace: dict):
         """Unpacks all configuration attributes into the provided namespace (e.g., globals())."""
         namespace.update(vars(self))
-
-    @classmethod
-    def initialize_config(cls, dbutils=None, logger=None, depth_level=None, debug=False):
-        """
-        Class method to initialize the Config object.
-        """
-        # Attempt to use global dbutils if not provided
-        dbutils = dbutils or globals().get("dbutils", None)
-
-        return cls(
-            dbutils=dbutils,
-            logger=logger,
-            source_environment=get_adf_parameter(dbutils, "SourceStorageAccount"),
-            destination_environment=get_adf_parameter(dbutils, "DestinationStorageAccount"),
-            source_container=get_adf_parameter(dbutils, "SourceContainer"),
-            source_datasetidentifier=get_adf_parameter(dbutils, "SourceDatasetidentifier"),
-            source_filename=get_adf_parameter(dbutils, "SourceFileName"),
-            key_columns=get_adf_parameter(dbutils, "KeyColumns"),
-            feedback_column=get_adf_parameter(dbutils, "FeedbackColumn"),
-            schema_folder_name=get_adf_parameter(dbutils, "SchemaFolderName"),
-            depth_level=depth_level,
-            debug=debug,
-        )
-
-    def initialize_notebook(self):
-        """
-        Initializes the notebook, including configuration and Spark session setup.
-        
-        Returns:
-            SparkSession: The initialized Spark session.
-        """
-        try:
-            # Initialize the Spark session
-            spark = SparkSession.builder.appName(f"Data Processing Pipeline: {self.source_datasetidentifier}").getOrCreate()
-            self.unpack(globals())  # Unpack config into the global namespace if needed
-            return spark
-
-        except Exception as e:
-            error_message = f"Failed to initialize notebook: {str(e)}"
-            self.logger.log_message(error_message, level="error")
-            self.logger.exit_notebook(error_message, self.dbutils)
