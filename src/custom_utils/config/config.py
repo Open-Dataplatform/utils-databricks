@@ -20,6 +20,9 @@ class Config:
         self.logger = logger or Logger(debug=debug)
         self.debug = debug
 
+        # Log the initialization of the logger
+        self.logger.log_block("Logger Initialization", ["Logger successfully initialized."])
+
         # Log the start of configuration
         self.logger.log_start("Config Initialization")
 
