@@ -55,6 +55,13 @@ class Config:
             self.logger.log_end("Config Initialization", success=False)
             raise
 
+    @staticmethod
+    def initialize(dbutils=None, logger=None, debug=False):
+        """
+        Static method to create and return a Config instance.
+        """
+        return Config(dbutils=dbutils, logger=logger, debug=debug)
+
     def _log_params(self):
         """Logs all configuration parameters in a structured format using the logger."""
         params = [
