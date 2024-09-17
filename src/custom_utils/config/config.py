@@ -24,21 +24,8 @@ class Config:
         self.logger.log_start("Config Initialization")
 
         try:
-            # Log the initialization of environment (logger and Spark)
-            self.logger.log_block("Environment Initialization", ["Logger successfully initialized."])
-
-            # Initialize Spark session
-            self.spark = self._initialize_spark()
-
-            # Core parameters (keeping it simple here)
-            self.source_environment = get_param_value(self.dbutils, "SourceStorageAccount", required=True)
-            self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", required=True)
-            self.source_container = get_param_value(self.dbutils, "SourceContainer", required=True)
-            self.source_datasetidentifier = get_param_value(self.dbutils, "SourceDatasetidentifier", required=True)
-            self.source_filename = get_param_value(self.dbutils, "SourceFileName", "*")
-            self.key_columns = get_param_value(self.dbutils, "KeyColumns", required=True).replace(" ", "")
-            self.feedback_column = get_param_value(self.dbutils, "FeedbackColumn", required=True)
-            self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", "schemachecks")
+            # Initialize core parameters
+            self._initialize_parameters()
 
             # Construct paths (keeping the required ones)
             self.full_source_folder_path = generate_source_path(
@@ -48,6 +35,9 @@ class Config:
 
             # Log configuration parameters
             self._log_params()
+
+            # Initialize Spark session
+            self.spark = self._initialize_spark()
 
             # Log the end of configuration
             self.logger.log_end("Config Initialization", success=True)
@@ -64,6 +54,18 @@ class Config:
         Static method to create and return a Config instance.
         """
         return Config(dbutils=dbutils, logger=logger, debug=debug)
+
+    def _initialize_parameters(self):
+        """Initialize configuration parameters."""
+        # Core parameters (keeping it simple here)
+        self.source_environment = get_param_value(self.dbutils, "SourceStorageAccount", required=True)
+        self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", required=True)
+        self.source_container = get_param_value(self.dbutils, "SourceContainer", required=True)
+        self.source_datasetidentifier = get_param_value(self.dbutils, "SourceDatasetidentifier", required=True)
+        self.source_filename = get_param_value(self.dbutils, "SourceFileName", "*")
+        self.key_columns = get_param_value(self.dbutils, "KeyColumns", required=True).replace(" ", "")
+        self.feedback_column = get_param_value(self.dbutils, "FeedbackColumn", required=True)
+        self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", "schemachecks")
 
     def _log_params(self):
         """Logs all configuration parameters in a structured format using the logger."""
