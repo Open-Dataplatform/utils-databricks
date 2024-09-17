@@ -1,5 +1,3 @@
-# File: custom_utils/dp_storage/reader.py
-
 """Functions related to reading from storage"""
 
 import os
@@ -69,6 +67,69 @@ def verify_source_path_and_source_config(
     assert identifier_from_trigger == config_for_triggered_dataset["dataset"]
 
 
+def get_json_depth(json_schema, current_depth=0, definitions=None, helper=None, depth_level=None) -> int:
+    """
+    Recursively determines the maximum depth of a JSON schema, including handling references and mixed structures.
+
+    Args:
+        json_schema (dict): A JSON schema represented as a dictionary.
+        current_depth (int): The current depth level (used internally).
+        definitions (dict, optional): Definitions from the JSON schema to resolve $ref references. Defaults to None.
+        helper (object, optional): Helper object used for logging. If provided, logs the maximum depth.
+        depth_level (int, optional): The specified flattening depth level for comparison in the log message.
+
+    Returns:
+        int: The maximum depth level of the JSON schema.
+    """
+    def calculate_depth(schema, current_depth, definitions):
+        # Handle $ref references
+        if isinstance(schema, dict) and '$ref' in schema:
+            ref_key = schema['$ref'].split('/')[-1]
+            ref_schema = definitions.get(ref_key, {})
+            if ref_schema:
+                return calculate_depth(ref_schema, current_depth, definitions)
+            else:
+                raise ValueError(f"Reference '{ref_key}' not found in definitions.")
+
+        # Initialize the max depth as the current depth
+        max_depth = current_depth
+
+        if isinstance(schema, dict):
+            # Handle properties (objects)
+            if 'properties' in schema:
+                properties_depth = max(
+                    calculate_depth(v, current_depth + 1, definitions)
+                    for v in schema['properties'].values()
+                )
+                max_depth = max(max_depth, properties_depth)
+
+            # Handle items (arrays)
+            if 'items' in schema:
+                # Only increase depth if items contain nested structures
+                if isinstance(schema['items'], dict):
+                    items_depth = calculate_depth(schema['items'], current_depth + 1, definitions)
+                    max_depth = max(max_depth, items_depth)
+
+        if isinstance(schema, list):
+            # Handle cases where items is a list of objects
+            list_depths = [
+                calculate_depth(item, current_depth + 1, definitions)
+                for item in schema
+            ]
+            max_depth = max(max_depth, *list_depths)
+
+        return max_depth
+
+    # Calculate the depth
+    max_depth = calculate_depth(json_schema, current_depth, definitions or json_schema.get('definitions', {}))
+
+    # Log the depth once if the helper is provided
+    if helper:
+        helper.write_message(f"Maximum depth level of the JSON schema: {max_depth}; Flattened depth level of the JSON file: {depth_level}")
+
+    return max_depth
+
+
 def get_type_mapping() -> dict:
     """
     Returns a dictionary that maps JSON data types to corresponding PySpark SQL types.
@@ -96,3 +157,30 @@ def get_type_mapping() -> dict:
         "time": StringType(),  # Treats time as a string (time-only types)
         "binary": BinaryType(),  # Maps binary data to PySpark's BinaryType
     }
+
+
+def get_columns_of_interest(df: DataFrame, helper=None) -> str:
+    """
+    Returns a comma-separated string of column names, excluding 'input_file_name'.
+    Optionally logs the columns if a helper is provided.
+
+    Args:
+        df (DataFrame): A PySpark DataFrame from which columns are extracted.
+        helper (optional): An optional logging helper object. If provided, logs the columns of interest.
+
+    Returns:
+        str: A string containing column names, separated by commas, excluding 'input_file_name'.
+    """
+    # Generate a list of column names excluding 'input_file_name'
+    columns_of_interest = [col for col in df.columns if col != "input_file_name"]
+
+    # Join the column names into a single string, separated by commas
+    columns_of_interest_str = ", ".join(columns_of_interest)
+
+    # Log the columns if a helper is provided
+    if helper:
+        helper.write_message(
+            f"Columns of interest (excluding 'input_file_name'): {columns_of_interest_str}"
+        )
+
+    return columns_of_interest_str

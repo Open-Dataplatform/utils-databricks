@@ -1,9 +1,7 @@
-# File: custom_utils/transformations/dataframe.py
-
 import json
 import pyspark.sql.functions as F
 from typing import Dict, Tuple, List
-from pyspark.sql.types import ArrayType, StructType, StringType, StructField, IntegerType, BooleanType, DoubleType
+from pyspark.sql.types import ArrayType, StructType, StringType
 from pyspark.sql import DataFrame
 from custom_utils.config.config import Config
 from custom_utils.logging.logger import Logger
@@ -32,6 +30,9 @@ class Transformer:
 
         Returns:
             tuple: A tuple containing the original JSON schema as a dictionary and the corresponding PySpark StructType.
+
+        Raises:
+            ValueError: If the schema file cannot be loaded or parsed.
         """
         try:
             with open(schema_file_path, "r") as f:
@@ -39,23 +40,11 @@ class Transformer:
         except Exception as e:
             raise ValueError(f"Failed to load or parse schema file '{schema_file_path}': {e}")
 
+        # Simplified parsing to StructType
         def parse_type(field_props):
-            if isinstance(field_props, list):
-                valid_types = [parse_type(fp) for fp in field_props if fp.get("type") != "null"]
-                return valid_types[0] if valid_types else StringType()
-
             json_type = field_props.get("type")
-            if isinstance(json_type, list):
-                json_type = next((t for t in json_type if t != "null"), None)
-
             if json_type == "string":
                 return StringType()
-            elif json_type == "integer":
-                return IntegerType()
-            elif json_type == "boolean":
-                return BooleanType()
-            elif json_type == "number":
-                return DoubleType()
             elif json_type == "array":
                 items = field_props.get("items")
                 return ArrayType(parse_type(items) if items else StringType())
@@ -63,86 +52,59 @@ class Transformer:
                 properties = field_props.get("properties", {})
                 return StructType([StructField(k, parse_type(v), True) for k, v in properties.items()])
             else:
-                return StringType()
+                return StringType()  # Default to StringType for unsupported types
 
         def parse_properties(properties):
             return StructType([StructField(name, parse_type(props), True) for name, props in properties.items()])
 
         return json_schema, parse_properties(json_schema.get("properties", {}))
 
-    def _get_json_depth(self, json_schema: dict, current_depth=0) -> int:
+    def _get_array_and_struct_columns(self, df: DataFrame) -> List[Tuple[str, type]]:
         """
-        Recursively determines the maximum depth of a JSON schema.
+        Returns a list of columns in the DataFrame that are of type ArrayType or StructType.
 
         Args:
-            json_schema (dict): A JSON schema represented as a dictionary.
-            current_depth (int): The current depth level (used internally).
+            df (DataFrame): The DataFrame to analyze.
 
         Returns:
-            int: The maximum depth level of the JSON schema.
+            List[Tuple[str, type]]: A list of tuples containing column names and their data types.
         """
-        def calculate_depth(schema, current_depth):
-            if isinstance(schema, dict) and '$ref' in schema:
-                return calculate_depth(definitions.get(schema['$ref'].split('/')[-1], {}), current_depth)
-            
-            max_depth = current_depth
-            if 'properties' in schema:
-                properties_depth = max(calculate_depth(v, current_depth + 1) for v in schema['properties'].values())
-                max_depth = max(max_depth, properties_depth)
-            if 'items' in schema:
-                items_depth = calculate_depth(schema['items'], current_depth + 1)
-                max_depth = max(max_depth, items_depth)
+        complex_columns = []
+        for field in df.schema.fields:
+            data_type = type(field.dataType)
+            if data_type == ArrayType or data_type == StructType:
+                complex_columns.append((field.name, data_type))
+        return complex_columns
 
-            return max_depth
-
-        definitions = json_schema.get('definitions', {})
-        return calculate_depth(json_schema, current_depth)
-
-    def _read_json_from_binary(self, schema: StructType, data_file_path: str) -> DataFrame:
+    def _get_expanded_columns_with_aliases(self, df: DataFrame, column_name: str, layer_separator: str = "_") -> List[F.Column]:
         """
-        Reads JSON files as binary, parses the JSON content, and associates the `input_file_name`.
+        Expands nested columns in a struct column for use in DataFrame.select().
 
         Args:
-            schema (StructType): The schema for parsing the JSON files.
-            data_file_path (str): The path to the JSON data files.
+            df (DataFrame): The DataFrame containing the struct column.
+            column_name (str): The name of the struct column to expand.
+            layer_separator (str): Separator to use when naming nested fields.
 
         Returns:
-            DataFrame: A DataFrame containing parsed JSON content and file metadata.
+            List[F.Column]: A list of Columns representing the expanded fields.
         """
-        try:
-            binary_df = self.config.spark.read.format("binaryFile").load(data_file_path)
-            df_with_filename = (
-                binary_df.withColumn("json_string", F.col("content").cast("string"))
-                .withColumn("input_file_name", F.col("path"))
-                .withColumn("id", F.monotonically_increasing_id())
-            )
-
-            df_parsed = (
-                self.config.spark.read.schema(schema)
-                .json(df_with_filename.select("json_string").rdd.map(lambda row: row.json_string))
-                .withColumn("id", F.monotonically_increasing_id())
-            )
-
-            df_final_with_filename = df_parsed.join(df_with_filename, on="id", how="inner").drop(
-                "json_string", "content", "path", "modificationTime", "length", "id"
-            )
-
-            columns = ["input_file_name"] + [col for col in df_final_with_filename.columns if col != "input_file_name"]
-            return df_final_with_filename.select(columns)
-        except Exception as e:
-            self.logger.log_message(f"Error processing binary JSON files: {e}", level="error")
-            raise RuntimeError(f"Error processing binary JSON files")
+        expanded_columns = []
+        for nested_column in df.select(f"`{column_name}`.*").columns:
+            expanded_column = f"`{column_name}`.`{nested_column}`"
+            expanded_column_alias = f"{column_name}{layer_separator}{nested_column}"
+            expanded_columns.append(F.col(expanded_column).alias(expanded_column_alias))
+        return expanded_columns
 
     def _flatten_array_column(self, df: DataFrame, column_name: str) -> DataFrame:
         """
         Flattens an array column in the DataFrame using `explode_outer`.
 
         Args:
-            df (DataFrame): The DataFrame containing the array column to be flattened.
+            df (DataFrame): The DataFrame containing the array column.
             column_name (str): The name of the array column to flatten.
 
         Returns:
-            DataFrame: A new DataFrame with the specified array column flattened.
+            DataFrame: A DataFrame with the specified array column flattened.
         """
         return df.withColumn(column_name, F.explode_outer(F.col(column_name)))
 
@@ -151,53 +113,48 @@ class Transformer:
         Flattens a struct column in the DataFrame by expanding its nested fields.
 
         Args:
-            df (DataFrame): The DataFrame containing the struct column to be flattened.
+            df (DataFrame): The DataFrame containing the struct column.
             column_name (str): The name of the struct column to flatten.
-            layer_separator (str): Separator to use when naming nested fields. Defaults to "_".
+            layer_separator (str): Separator to use when naming nested fields.
 
         Returns:
-            DataFrame: A new DataFrame with the specified struct column flattened.
+            DataFrame: A DataFrame with the specified struct column flattened.
         """
-        expanded_columns = [
-            F.col(f"`{column_name}`.`{nested_column}`").alias(f"{column_name}{layer_separator}{nested_column}")
-            for nested_column in df.select(f"`{column_name}`.*").columns
-        ]
+        expanded_columns = self._get_expanded_columns_with_aliases(df, column_name, layer_separator)
         return df.select("*", *expanded_columns).drop(column_name)
 
-    def flatten_df(self, df: DataFrame, depth_level: int) -> DataFrame:
+    def flatten_df(self, df: DataFrame, depth_level: int = None, current_level: int = 0, max_depth: int = 1) -> DataFrame:
         """
-        Recursively flattens complex fields in a DataFrame up to a specified depth level.
+        Flattens complex fields in a DataFrame up to a specified depth level.
 
         Args:
-            df (DataFrame): The DataFrame to flatten.
-            depth_level (int): The level of depth up to which flattening should occur.
+            df (DataFrame): A PySpark DataFrame containing nested structures.
+            depth_level (int, optional): The maximum depth level to flatten. If None, max_depth is used.
+            current_level (int): The current depth level (used internally during recursion).
+            max_depth (int): The maximum depth calculated from the schema.
 
         Returns:
-            DataFrame: A new DataFrame with nested fields flattened.
+            DataFrame: A flattened DataFrame.
         """
-        current_level = 0
-        while current_level < depth_level:
-            complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
+        depth_level = max_depth if depth_level is None else depth_level
 
-            if not complex_fields:
-                break
-
-            for col_name, data_type in complex_fields.items():
-                if isinstance(data_type, ArrayType):
-                    df = self._flatten_array_column(df, col_name)
-                elif isinstance(data_type, StructType):
-                    df = self._flatten_struct_column(df, col_name)
-            
-            current_level += 1
-
-        # Convert remaining complex fields to strings if the maximum depth is reached
         if current_level >= depth_level:
-            df = df.select([F.col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else F.col(c) for c in df.columns])
+            return df
 
-        # Clean up column names
-        for column_name in df.columns:
-            new_name = column_name.replace("__", "_").replace(".", "_")
-            df = df.withColumnRenamed(column_name, new_name)
+        complex_columns = self._get_array_and_struct_columns(df)
+
+        while complex_columns and current_level < depth_level:
+            for column_name, data_type in complex_columns:
+                if current_level + 1 == depth_level:
+                    df = df.withColumn(column_name, F.to_json(F.col(column_name)))
+                else:
+                    if data_type == ArrayType:
+                        df = self._flatten_array_column(df, column_name)
+                    elif data_type == StructType:
+                        df = self._flatten_struct_column(df, column_name)
+
+            complex_columns = self._get_array_and_struct_columns(df)
+            current_level += 1
 
         return df
 
@@ -217,11 +174,13 @@ class Transformer:
         self.logger.log_start("process_and_flatten_json")
         try:
             schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
-            depth_level_to_use = depth_level if depth_level is not None else 1
+            max_depth = self._get_json_depth(schema_json)
+            depth_level_to_use = depth_level if depth_level is not None else max_depth
 
             self.logger.log_block("Starting Processing", [
                 f"Schema file path: {schema_file_path}",
                 f"Data file path: {data_file_path}",
+                f"Maximum depth level of the JSON schema: {max_depth}",
                 f"Flattened depth level of the JSON file: {depth_level_to_use}"
             ])
 
