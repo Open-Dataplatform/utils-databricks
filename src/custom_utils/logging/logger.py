@@ -56,11 +56,19 @@ class Logger:
         if not content_lines:
             return
 
+        # Print the block header
         self.log_message(f"\n=== {header} ===", level=level, single_info_prefix=True)
-        print("------------------------------")
+        
+        # Print separator only if there are content lines
+        if content_lines:
+            print("------------------------------")
+        
         for line in content_lines:
             self.log_message(line, level=level)
-        print("------------------------------")
+        
+        # End with separator if there were content lines
+        if content_lines:
+            print("------------------------------")
 
     def log_start(self, method_name):
         """Log the start of a method, including a timestamp."""
