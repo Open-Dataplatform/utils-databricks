@@ -7,20 +7,26 @@ from custom_utils.file_handler.file_handler import FileHandler
 from custom_utils.logging.logger import Logger
 
 class Validator:
-    def __init__(self, config: Config, logger: Logger = None, debug=False):
+    def __init__(self, config: Config, logger: Logger = None, debug=None):
         """
         Initialize the Validator with the given configuration.
 
         Args:
             config (Config): An instance of the Config class containing configuration parameters.
             logger (Logger, optional): An instance of Logger for logging. Defaults to None.
-            debug (bool): Flag to control the verbosity of logging. Defaults to False.
+            debug (bool, optional): Flag to control the verbosity of logging. If None, use the config's debug setting.
         """
         self.config = config
         self.dbutils = config.dbutils
+        
+        # Use the logger from config if not provided
         self.logger = logger if logger else config.logger
+        
+        # Use the debug flag from the parameter if provided, else use config's debug setting
+        self.debug = debug if debug is not None else config.debug
+        
+        # Create a new FileHandler with the config
         self.file_handler = FileHandler(config)
-        self.debug = debug
 
     def verify_paths_and_files(self):
         """
