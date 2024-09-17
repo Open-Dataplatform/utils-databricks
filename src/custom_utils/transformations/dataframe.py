@@ -32,9 +32,6 @@ class Transformer:
 
         Returns:
             tuple: A tuple containing the original JSON schema as a dictionary and the corresponding PySpark StructType.
-
-        Raises:
-            ValueError: If the schema file cannot be loaded or parsed.
         """
         try:
             with open(schema_file_path, "r") as f:
@@ -111,9 +108,6 @@ class Transformer:
 
         Returns:
             DataFrame: A DataFrame containing parsed JSON content and file metadata.
-
-        Raises:
-            RuntimeError: If the binary JSON reading process fails.
         """
         try:
             binary_df = self.config.spark.read.format("binaryFile").load(data_file_path)
@@ -170,47 +164,42 @@ class Transformer:
         ]
         return df.select("*", *expanded_columns).drop(column_name)
 
-    def flatten_df(self, df: DataFrame, depth_level: int, max_depth: int) -> DataFrame:
+    def flatten_df(self, df: DataFrame, depth_level: int) -> DataFrame:
         """
-        Flattens complex fields in a DataFrame up to a specified depth level.
+        Recursively flattens complex fields in a DataFrame up to a specified depth level.
 
         Args:
             df (DataFrame): The DataFrame to flatten.
             depth_level (int): The level of depth up to which flattening should occur.
-            max_depth (int): The maximum depth of nested fields in the DataFrame.
 
         Returns:
             DataFrame: A new DataFrame with nested fields flattened.
         """
-        try:
-            current_level = 0
-            while current_level < depth_level:
-                complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
+        current_level = 0
+        while current_level < depth_level:
+            complex_fields = {field.name: field.dataType for field in df.schema.fields if isinstance(field.dataType, (ArrayType, StructType))}
 
-                if not complex_fields:
-                    break
+            if not complex_fields:
+                break
 
-                for col_name, data_type in complex_fields.items():
-                    if current_level + 1 == depth_level:
-                        df = df.withColumn(col_name, F.to_json(F.col(col_name)))
-                    else:
-                        df = self._flatten_array_column(df, col_name) if isinstance(data_type, ArrayType) else self._flatten_struct_column(df, col_name)
+            for col_name, data_type in complex_fields.items():
+                if isinstance(data_type, ArrayType):
+                    df = self._flatten_array_column(df, col_name)
+                elif isinstance(data_type, StructType):
+                    df = self._flatten_struct_column(df, col_name)
+            
+            current_level += 1
 
-                current_level += 1
+        # Convert remaining complex fields to strings if the maximum depth is reached
+        if current_level >= depth_level:
+            df = df.select([F.col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else F.col(c) for c in df.columns])
 
-            if current_level >= depth_level:
-                df = df.select(
-                    [F.col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else F.col(c) for c in df.columns]
-                )
+        # Clean up column names
+        for column_name in df.columns:
+            new_name = column_name.replace("__", "_").replace(".", "_")
+            df = df.withColumnRenamed(column_name, new_name)
 
-            for column_name in df.columns:
-                new_name = column_name.replace("__", "_").replace(".", "_")
-                df = df.withColumnRenamed(column_name, new_name)
-
-            return df
-        except Exception as e:
-            self.logger.log_message(f"Error flattening DataFrame: {e}", level="error")
-            raise RuntimeError(f"Error flattening DataFrame")
+        return df
 
     def process_and_flatten_json(self, schema_file_path: str, data_file_path: str, depth_level: int = None, include_schema: bool = False) -> Tuple[DataFrame, DataFrame]:
         """
@@ -229,14 +218,12 @@ class Transformer:
         try:
             schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
             depth_level_to_use = depth_level if depth_level is not None else 1
-            max_depth = self._get_json_depth(schema_json)
 
-            start_lines = [
+            self.logger.log_block("Starting Processing", [
                 f"Schema file path: {schema_file_path}",
                 f"Data file path: {data_file_path}",
                 f"Flattened depth level of the JSON file: {depth_level_to_use}"
-            ]
-            self.logger.log_block("Starting Processing", start_lines)
+            ])
 
             if include_schema:
                 self.logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
@@ -245,17 +232,15 @@ class Transformer:
 
             if self.debug:
                 self.logger.log_block("Initial DataFrame Info", [])
-                initial_row_count = df.count()
-                self.logger.log_message(f"Initial DataFrame row count: {initial_row_count}", level="info")
+                self.logger.log_message(f"Initial DataFrame row count: {df.count()}", level="info")
                 self.logger.log_message("Initial DataFrame schema:", level="info")
                 df.printSchema()
 
-            df_flattened = self.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth)
+            df_flattened = self.flatten_df(df, depth_level=depth_level_to_use)
 
             if self.debug:
                 self.logger.log_block("Flattened DataFrame Info", [])
-                flattened_row_count = df_flattened.count()
-                self.logger.log_message(f"Flattened DataFrame row count: {flattened_row_count}", level="info")
+                self.logger.log_message(f"Flattened DataFrame row count: {df_flattened.count()}", level="info")
                 self.logger.log_message("Flattened DataFrame schema:", level="info")
                 df_flattened.printSchema()
 
