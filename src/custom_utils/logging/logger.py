@@ -38,8 +38,12 @@ class Logger:
         """
         Utility method to log blocks of messages with a header and separators.
         """
+        # Skip logging blocks if debug mode is off and level is "info" or "debug"
+        if level in ["info", "debug"] and not self.debug:
+            return
+
         # Directly print the block header without using log_message to avoid the prefix
-        print(f"\n=== {header} ===")  # Add a single newline before the header
+        print(f"\n=== {header} ===")
         self._write_log(f"=== {header} ===")
 
         # Print separator
@@ -48,7 +52,7 @@ class Logger:
         # Log each content line
         for line in content_lines:
             if line.strip():
-                self.log_message(line, level=level, single_info_prefix=False)
+                self.log_message(f"{line}", level=level, single_info_prefix=False)
 
         # End with a separator
         print("------------------------------")
