@@ -5,10 +5,6 @@ class Logger:
     def __init__(self, debug=False, log_to_file=None):
         """
         Initialize the Logger.
-
-        Args:
-            debug (bool): Flag to enable or disable debug logging.
-            log_to_file (str): Optional file path to log messages to. If None, logging is only done to the console.
         """
         self.debug = debug
         self.log_to_file = log_to_file
@@ -22,12 +18,6 @@ class Logger:
     def log_message(self, message, level="info", single_info_prefix=False, include_timestamp=False):
         """
         Log a message.
-
-        Args:
-            message (str): The message to log.
-            level (str): The log level (e.g., 'info', 'warning', 'error', 'debug'). Defaults to 'info'.
-            single_info_prefix (bool): If True, only print '[INFO]' once at the start.
-            include_timestamp (bool): If True, includes a timestamp in the log message.
         """
         # Skip logging info and debug messages if debug mode is off
         if level in ["info", "debug"] and not self.debug:
@@ -47,23 +37,13 @@ class Logger:
     def log_block(self, header, content_lines, level="info"):
         """
         Utility method to log blocks of messages with a header and separators.
-
-        Args:
-            header (str): Header of the block.
-            content_lines (list): List of lines to include in the block.
-            level (str): Log level for the block.
         """
-        # Print a newline for spacing
-        print("\n")
-        self._write_log("\n")
-
-        # Print the block header without the log prefix
-        print(f"=== {header} ===")
+        # Directly print the block header without using log_message to avoid the prefix
+        print(f"\n=== {header} ===")  # Add a single newline before the header
         self._write_log(f"=== {header} ===")
 
         # Print separator
         print("------------------------------")
-        self._write_log("------------------------------")
 
         # Log each content line
         for line in content_lines:
@@ -72,7 +52,6 @@ class Logger:
 
         # End with a separator
         print("------------------------------")
-        self._write_log("------------------------------")
 
     def log_start(self, method_name):
         """Log the start of a method, including a timestamp."""
@@ -81,11 +60,6 @@ class Logger:
     def log_end(self, method_name, success=True, additional_message=""):
         """
         Log the end of a method, including a timestamp.
-
-        Args:
-            method_name (str): The name of the method.
-            success (bool): Whether the method completed successfully.
-            additional_message (str): Additional message to log.
         """
         status = "successfully" if success else "with errors"
         end_message = f"Finished {method_name} {status}. {additional_message}"
@@ -110,10 +84,6 @@ class Logger:
     def exit_notebook(self, message, dbutils=None):
         """
         Exit the notebook with an error message.
-
-        Args:
-            message (str): The error message to display.
-            dbutils (object, optional): Databricks dbutils object for notebook exit.
         """
         self.log_error(message)
         if dbutils:
@@ -124,9 +94,6 @@ class Logger:
     def log_function_entry_exit(self, func):
         """
         Decorator to log the entry and exit of a function, including arguments and return value.
-
-        Args:
-            func (callable): The function to decorate.
         """
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
