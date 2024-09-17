@@ -7,6 +7,7 @@ from pyspark.sql.types import ArrayType, StructType, StringType
 from pyspark.sql import DataFrame
 from custom_utils.config.config import Config
 from custom_utils.logging.logger import Logger
+from custom_utils.dp_storage.writer import json_schema_to_spark_struct
 
 class Transformer:
     def __init__(self, config: Config, logger: Logger = None, debug: bool = None):
@@ -123,12 +124,155 @@ class Transformer:
                 formatted_schema += f"{indent}|-- {field.name}: {field_type.simpleString()} (nullable = {field.nullable})\n"
         return formatted_schema
 
+    def json_schema_to_spark_struct(schema_file_path, definitions=None):
+        """
+        Reads a JSON schema file, parses it, and converts it to a PySpark StructType.
+
+        Args:
+            schema_file_path (str): Path to the JSON schema file.
+            definitions (dict, optional): The schema definitions. Defaults to None.
+
+        Returns:
+            tuple: A tuple containing the original JSON schema as a dictionary and the corresponding PySpark StructType.
+        """
+        try:
+            # Read and parse the schema JSON file
+            with open(schema_file_path, "r") as f:
+                json_schema = json.load(f)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to load or parse schema file '{schema_file_path}': {e}"
+            )
+
+        # Initialize definitions if not provided
+        if definitions is None:
+            definitions = json_schema.get("definitions", {})
+
+        def resolve_ref(ref):
+            """Resolve a JSON schema $ref to its definition."""
+            ref_path = ref.split("/")[-1]
+            return definitions.get(ref_path, {})
+
+        def parse_type(field_props):
+            """Recursively parse the JSON schema properties and map them to PySpark data types."""
+            if isinstance(field_props, list):
+                # Handle lists of possible types, ignoring 'null' if present
+                valid_types = [
+                    parse_type(fp) for fp in field_props if fp.get("type") != "null"
+                ]
+                return valid_types[0] if valid_types else StringType()
+
+            # Resolve references if present
+            if "$ref" in field_props:
+                field_props = resolve_ref(field_props["$ref"])
+
+            # Determine the JSON type and map it to a corresponding PySpark type
+            json_type = field_props.get("type")
+            if isinstance(json_type, list):
+                # Handle lists of types (e.g., ["null", "string"])
+                json_type = next((t for t in json_type if t != "null"), None)
+
+            # Map JSON types to PySpark types
+            if json_type == "string":
+                return StringType()
+            elif json_type == "integer":
+                return IntegerType()
+            elif json_type == "boolean":
+                return BooleanType()
+            elif json_type == "number":
+                return DoubleType()
+            elif json_type == "array":
+                items = field_props.get("items")
+                return ArrayType(parse_type(items) if items else StringType())
+            elif json_type == "object":
+                properties = field_props.get("properties", {})
+                return StructType(
+                    [StructField(k, parse_type(v), True) for k, v in properties.items()]
+                )
+            else:
+                # Default to StringType for unsupported or missing types
+                return StringType()
+
+        def parse_properties(properties):
+            """Parse the top-level properties in the JSON schema."""
+            return StructType(
+                [
+                    StructField(name, parse_type(props), True)
+                    for name, props in properties.items()
+                ]
+            )
+
+        # Return both the original JSON schema as a dictionary and the parsed PySpark StructType
+        return json_schema, parse_properties(json_schema.get("properties", {}))
+
+    def get_json_depth(json_schema, current_depth=0, definitions=None, logger=None, depth_level=None) -> int:
+        """
+        Recursively determines the maximum depth of a JSON schema, including handling references and mixed structures.
+
+        Args:
+            json_schema (dict): A JSON schema represented as a dictionary.
+            current_depth (int): The current depth level (used internally).
+            definitions (dict, optional): Definitions from the JSON schema to resolve $ref references. Defaults to None.
+            logger (Logger, optional): Logger object used for logging. If provided, logs the maximum depth.
+            depth_level (int, optional): The specified flattening depth level for comparison in the log message.
+
+        Returns:
+            int: The maximum depth level of the JSON schema.
+        """
+        def calculate_depth(schema, current_depth, definitions):
+            # Handle $ref references
+            if isinstance(schema, dict) and '$ref' in schema:
+                ref_key = schema['$ref'].split('/')[-1]
+                ref_schema = definitions.get(ref_key, {})
+                if ref_schema:
+                    return calculate_depth(ref_schema, current_depth, definitions)
+                else:
+                    raise ValueError(f"Reference '{ref_key}' not found in definitions.")
+
+            # Initialize the max depth as the current depth
+            max_depth = current_depth
+
+            if isinstance(schema, dict):
+                # Handle properties (objects)
+                if 'properties' in schema:
+                    properties_depth = max(
+                        calculate_depth(v, current_depth + 1, definitions)
+                        for v in schema['properties'].values()
+                    )
+                    max_depth = max(max_depth, properties_depth)
+
+                # Handle items (arrays)
+                if 'items' in schema:
+                    # Only increase depth if items contain nested structures
+                    if isinstance(schema['items'], dict):
+                        items_depth = calculate_depth(schema['items'], current_depth + 1, definitions)
+                        max_depth = max(max_depth, items_depth)
+
+            if isinstance(schema, list):
+                # Handle cases where items is a list of objects
+                list_depths = [
+                    calculate_depth(item, current_depth + 1, definitions)
+                    for item in schema
+                ]
+                max_depth = max(max_depth, *list_depths)
+
+            return max_depth
+
+        # Calculate the depth
+        max_depth = calculate_depth(json_schema, current_depth, definitions or json_schema.get('definitions', {}))
+
+        # Log the depth using the logger, if provided
+        if logger:
+            logger.log_message(f"Maximum depth level of the JSON schema: {max_depth}; Flattened depth level of the JSON file: {depth_level}")
+
+        return max_depth
+
     def process_and_flatten_json(self, schema_file_path: str, data_file_path: str, depth_level: int = None, include_schema: bool = False) -> Tuple[DataFrame, DataFrame]:
         self.logger.log_start("process_and_flatten_json")
         try:
-            schema_json, schema = writer.json_schema_to_spark_struct(schema_file_path)
+            schema_json, schema = json_schema_to_spark_struct(schema_file_path)
             depth_level_to_use = depth_level if depth_level is not None else 1
-            max_depth = reader.get_json_depth(schema_json, logger=None, depth_level=depth_level_to_use)
+            max_depth = get_json_depth(schema_json, logger=None, depth_level=depth_level_to_use)
 
             start_lines = [
                 f"Schema file path: {schema_file_path}",
