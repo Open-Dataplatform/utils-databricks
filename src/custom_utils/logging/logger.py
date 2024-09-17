@@ -53,12 +53,13 @@ class Logger:
             content_lines (list): List of lines to include in the block.
             level (str): Log level for the block.
         """
-        # Skip block logging if debug mode is off and the level is 'info' or 'debug'
-        if level in ["info", "debug"] and not self.debug:
-            return
+        # Print a newline for spacing
+        print("\n")
+        self._write_log("\n")
 
-        # Log the block header using log_message
-        self.log_message(f"=== {header} ===", level=level, single_info_prefix=True)
+        # Print the block header without the log prefix
+        print(f"=== {header} ===")
+        self._write_log(f"=== {header} ===")
 
         # Print separator
         print("------------------------------")
@@ -67,7 +68,7 @@ class Logger:
         # Log each content line
         for line in content_lines:
             if line.strip():
-                self.log_message(line, level=level)
+                self.log_message(line, level=level, single_info_prefix=False)
 
         # End with a separator
         print("------------------------------")

@@ -16,17 +16,20 @@ class Config:
         """
         Initialize the Config class with basic parameters and set up logger and Spark session.
         """
+        # Log the start of configuration as the first line
         self.dbutils = dbutils or globals().get("dbutils", None)
         self.logger = logger or Logger(debug=debug)
         self.debug = debug
 
-        # Log the initialization of the logger
-        self.logger.log_block("Logger Initialization", ["Logger successfully initialized."])
-
-        # Log the start of configuration
         self.logger.log_start("Config Initialization")
 
         try:
+            # Log the initialization of environment (logger and Spark)
+            self.logger.log_block("Environment Initialization", ["Logger successfully initialized."])
+
+            # Initialize Spark session
+            self.spark = self._initialize_spark()
+
             # Core parameters (keeping it simple here)
             self.source_environment = get_param_value(self.dbutils, "SourceStorageAccount", required=True)
             self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", required=True)
@@ -42,9 +45,6 @@ class Config:
                 self.source_environment, self.source_container, self.source_datasetidentifier
             )
             self.full_source_file_path = generate_source_file_path(self.full_source_folder_path, self.source_filename)
-            
-            # Initialize Spark session
-            self.spark = self._initialize_spark()
 
             # Log configuration parameters
             self._log_params()
