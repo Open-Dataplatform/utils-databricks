@@ -6,14 +6,6 @@ from custom_utils.config.config import Config
 from custom_utils.file_handler.file_handler import FileHandler
 from custom_utils.logging.logger import Logger
 
-# File: custom_utils/validation/validation.py
-
-import os
-from pyspark.sql.utils import AnalysisException
-from custom_utils.config.config import Config
-from custom_utils.file_handler.file_handler import FileHandler
-from custom_utils.logging.logger import Logger
-
 class Validator:
     def __init__(self, config: Config, logger: Logger = None, debug=False):
         """
@@ -41,8 +33,7 @@ class Validator:
         Raises:
             Exception: If validation fails.
         """
-        # Manually log the entry and exit of this function
-        self.logger.log_message("Entering: verify_paths_and_files", level="info")
+        self.logger.log_start("verify_paths_and_files")
         
         try:
             # Retrieve the mount point for the source environment
@@ -63,8 +54,7 @@ class Validator:
             # Log success message
             self.logger.log_message("All paths and files verified successfully. Proceeding with notebook execution.", level="info")
 
-            # Log the exit of this function
-            self.logger.log_message("Exiting: verify_paths_and_files", level="info")
+            self.logger.log_end("verify_paths_and_files")
 
             # Return schema file path, full source file path, matched files, and file type
             return schema_file_path, full_source_file_path, matched_files, file_type
