@@ -91,7 +91,7 @@ class DataQualityManager:
         # Ensure key_columns is a list and include 'input_file_name'
         if isinstance(key_columns, str):
             key_columns = [key_columns]
-        key_columns = list(set(key_columns + ['input_file_name']))
+        key_columns = list(set(['input_file_name'] + key_columns))
 
         # Default to ordering by 'input_file_name' if order_by is not provided
         if not order_by:
