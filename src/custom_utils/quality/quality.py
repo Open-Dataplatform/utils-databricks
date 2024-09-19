@@ -75,7 +75,7 @@ class DataQualityManager:
         available_checks = self._list_available_checks()
         self._log_block("Available Quality Checks", [f"{check}: {description}" for check, description in available_checks.items()])
 
-    def _handle_multiple_files(self, df: DataFrame, key_columns: [str, List[str]], order_by: Optional[Union[str, List[str]]] = None, use_sql: bool = False) -> DataFrame:
+    def _handle_multiple_files(self, spark: SparkSession, df: DataFrame, key_columns: [str, List[str]], order_by: Optional[Union[str, List[str]]] = None, use_sql: bool = False) -> DataFrame:
         """
         Handles multiple files by keeping the latest record per key based on 'input_file_name' and the specified 'order_by' columns.
 
