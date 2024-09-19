@@ -329,7 +329,7 @@ class DataQualityManager:
         try:
             # Handling multiple files
             if key_columns:
-                df = self._handle_multiple_files(df, key_columns, order_by=order_by, use_sql=use_sql)
+                df = self._handle_multiple_files(spark, df, key_columns, order_by=order_by, use_sql=use_sql)
 
             # Check for duplicates
             self._check_for_duplicates(spark, df, key_columns, use_sql=use_sql)
