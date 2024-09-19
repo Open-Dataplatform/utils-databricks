@@ -58,7 +58,7 @@ class DataStorageManager:
             self._log_message(f"Error retrieving destination details: {e}", level="error")
             raise
 
-    def generate_feedback_timestamps(self, spark: SparkSession, cleaned_data_view: str, feedback_column: str) -> str:
+    def generate_feedback_timestamps(self, spark: SparkSession, view_name: str, feedback_column: str) -> str:
         """
         Orchestrates the entire process of calculating and returning feedback timestamps.
         """
