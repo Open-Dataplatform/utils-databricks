@@ -58,6 +58,19 @@ class DataStorageManager:
             self._log_message(f"Error retrieving destination details: {e}", level="error")
             raise
 
+    def generate_feedback_timestamps(self, spark: SparkSession, view_name: str, feedback_column: str) -> str:
+        """
+        Orchestrates the entire process of calculating and returning feedback timestamps.
+        """
+        # Generate the feedback SQL query
+        feedback_sql = self.construct_feedback_sql(view_name, feedback_column)
+
+        # Execute the feedback SQL query
+        df_min_max = self.execute_feedback_sql(spark, feedback_sql)
+
+        # Handle the result and return the feedback output as JSON
+        return self.handle_feedback_result(df_min_max, view_name)
+
     def ensure_path_exists(self, dbutils, destination_path: str):
         """
         Ensures the destination path exists in DBFS.
