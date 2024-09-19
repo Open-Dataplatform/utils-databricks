@@ -58,7 +58,7 @@ class DataStorageManager:
             self._log_message(f"Error retrieving destination details: {e}", level="error")
             raise
 
-    def generate_feedback_timestamps(self, spark: SparkSession, view_name: str, feedback_column: str) -> str:
+    def generate_feedback_timestamps(self, spark: SparkSession, cleaned_data_view: str, feedback_column: str) -> str:
         """
         Orchestrates the entire process of calculating and returning feedback timestamps.
         """
@@ -70,6 +70,43 @@ class DataStorageManager:
 
         # Handle the result and return the feedback output as JSON
         return self.handle_feedback_result(df_min_max, view_name)
+
+    def execute_feedback_sql(self, spark: SparkSession, feedback_sql: str) -> DataFrame:
+        """
+        Executes the SQL query to get the minimum and maximum timestamps.
+        """
+        try:
+            return spark.sql(feedback_sql)
+        except Exception as e:
+            self._log_message(f"Error executing SQL query: {e}", level="error")
+            raise
+
+    def handle_feedback_result(self, df_min_max: DataFrame, view_name: str) -> str:
+        """
+        Handles the result of the feedback SQL query and converts it to JSON.
+        """
+        if df_min_max.head(1):  # Efficient way to check if the DataFrame is empty
+            notebook_output = df_min_max.toJSON().first()
+            self._log_message(f"Notebook output: {notebook_output}")
+            return notebook_output
+        else:
+            error_message = f"No data found in {view_name} to calculate the feedback timestamps."
+            self._log_message(error_message, level="error")
+            raise ValueError(error_message)
+
+    def construct_feedback_sql(self, view_name: str, feedback_column: str) -> str:
+        """
+        Constructs an SQL query to get the minimum and maximum timestamps for the feedback column.
+        """
+        feedback_sql = f"""
+        SELECT
+            MIN({feedback_column}) AS from_datetime,
+            MAX({feedback_column}) AS to_datetime
+        FROM {view_name}
+        """
+        formatted_sql = self._format_sql_query(feedback_sql)  # Use the imported formatting method
+        self._log_message(f"Executing SQL query:\n{formatted_sql}")
+        return feedback_sql
 
     def ensure_path_exists(self, dbutils, destination_path: str):
         """
