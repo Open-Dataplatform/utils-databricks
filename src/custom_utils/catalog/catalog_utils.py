@@ -2,7 +2,7 @@
 
 from custom_utils.dp_storage import writer
 from pyspark.sql import SparkSession, DataFrame
-from typing import List, Optional
+from typing import List, Optional, Union
 from custom_utils.logging.logger import Logger
 import sqlparse
 

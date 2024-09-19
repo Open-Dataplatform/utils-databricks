@@ -4,6 +4,7 @@ import pyspark.sql.functions as F
 import sqlparse
 from typing import List, Dict, Tuple, Optional, Union
 from pyspark.sql import DataFrame, SparkSession, Window
+from pyspark.sql.utils import AnalysisException
 
 class DataQualityManager:
     def __init__(self, logger, debug=False):
