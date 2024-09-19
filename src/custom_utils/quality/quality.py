@@ -4,7 +4,6 @@ import pyspark.sql.functions as F
 import sqlparse
 from typing import List, Dict, Tuple, Optional, Union
 from pyspark.sql import DataFrame, SparkSession, Window
-from pyspark.sql.utils import AnalysisException
 
 class DataQualityManager:
     def __init__(self, logger, debug=False):
@@ -163,64 +162,141 @@ class DataQualityManager:
         except Exception as e:
             self._raise_error(f"Failed to check for duplicates: {e}")
 
-    def _check_for_nulls(self, df: DataFrame, critical_columns: List[str]):
-        """Checks for null values in the specified critical columns."""
+    def _check_for_nulls(self, spark: SparkSession, df: DataFrame, critical_columns: List[str], use_python: bool = False):
+        """Checks for null values in the specified critical columns using either SQL or Python."""
         self._log_block("Null Values Check", [f"Checking for null values in columns: {critical_columns}"])
-        for col in critical_columns:
-            try:
-                null_count = df.filter(F.col(col).isNull()).count()
-                self._log_message(f"DataFrame operation used: F.col('{col}').isNull()")
+        try:
+            if use_python:
+                for col in critical_columns:
+                    # Python approach
+                    null_count = df.filter(F.col(col).isNull()).count()
+                    python_code = f"df.filter(F.col('{col}').isNull()).count()"
+                    self._log_message(f"Python code: {python_code}")
 
-                if null_count > 0:
-                    self._raise_error(f"Null values check failed: Column '{col}' has {null_count} missing values.")
-                else:
-                    self._log_message(f"Column '{col}' has no missing values.")
-            except Exception as e:
-                self._raise_error(f"Failed to check for null values in column '{col}': {e}")
+                    if null_count > 0:
+                        self._raise_error(f"Null values check failed: Column '{col}' has {null_count} missing values.")
+                    else:
+                        self._log_message(f"Column '{col}' has no missing values.")
+            else:
+                # SQL approach
+                df.createOrReplaceTempView("temp_view_check_nulls")
+                null_check_query = " UNION ALL ".join([
+                    f"SELECT COUNT(*) AS null_count, '{col}' AS column_name FROM temp_view_check_nulls WHERE {col} IS NULL"
+                    for col in critical_columns
+                ])
+                formatted_query = self._format_sql_query(null_check_query)
+                self._log_message(f"The following SQL query is used to check for null values:\n{formatted_query}\n")
 
-    def _check_value_ranges(self, df: DataFrame, column_ranges: Dict[str, Tuple[float, float]]):
-        """Checks if values in the specified columns are within the provided ranges."""
+                nulls_df = spark.sql(null_check_query)
+                for row in nulls_df.collect():
+                    if row['null_count'] > 0:
+                        self._raise_error(f"Null values check failed: Column '{row['column_name']}' has {row['null_count']} missing values.")
+                self._log_message("Null values check passed: No missing values found in specified columns.")
+        except Exception as e:
+            self._raise_error(f"Failed to check for null values: {e}")
+
+    def _check_value_ranges(self, spark: SparkSession, df: DataFrame, column_ranges: Dict[str, Tuple[float, float]], use_python: bool = False):
+        """Checks if values in the specified columns are within the provided ranges using either SQL or Python."""
         self._log_block("Value Range Check", [f"Checking value ranges for columns: {list(column_ranges.keys())}"])
-        for col, (min_val, max_val) in column_ranges.items():
-            try:
-                out_of_range_count = df.filter((F.col(col) < min_val) | (F.col(col) > max_val)).count()
-                self._log_message(f"DataFrame operation used: F.col('{col}') < {min_val} or F.col('{col}') > {max_val}")
+        try:
+            if use_python:
+                for col, (min_val, max_val) in column_ranges.items():
+                    # Python approach
+                    out_of_range_count = df.filter((F.col(col) < min_val) | (F.col(col) > max_val)).count()
+                    python_code = f"df.filter((F.col('{col}') < {min_val}) | (F.col('{col}') > {max_val})).count()"
+                    self._log_message(f"Python code: {python_code}")
 
-                if out_of_range_count > 0:
-                    self._raise_error(f"Value range check failed: Column '{col}' has {out_of_range_count} values out of range [{min_val}, {max_val}].")
-                else:
-                    self._log_message(f"Column '{col}' values are within the specified range [{min_val}, {max_val}].")
-            except Exception as e:
-                self._raise_error(f"Failed to check value ranges for column '{col}': {e}")
+                    if out_of_range_count > 0:
+                        self._raise_error(f"Value range check failed: Column '{col}' has {out_of_range_count} values out of range [{min_val}, {max_val}].")
+                    else:
+                        self._log_message(f"Column '{col}' values are within the specified range [{min_val}, {max_val}].")
+            else:
+                # SQL approach
+                df.createOrReplaceTempView("temp_view_check_ranges")
+                range_check_query = " UNION ALL ".join([
+                    f"SELECT COUNT(*) AS out_of_range_count, '{col}' AS column_name FROM temp_view_check_ranges WHERE {col} < {min_val} OR {col} > {max_val}"
+                    for col, (min_val, max_val) in column_ranges.items()
+                ])
+                formatted_query = self._format_sql_query(range_check_query)
+                self._log_message(f"The following SQL query is used to check value ranges:\n{formatted_query}\n")
 
-    def _check_referential_integrity(self, df: DataFrame, reference_df: DataFrame, join_column: str):
-        """Checks if all records in the DataFrame have matching references in the reference DataFrame."""
+                ranges_df = spark.sql(range_check_query)
+                for row in ranges_df.collect():
+                    if row['out_of_range_count'] > 0:
+                        self._raise_error(f"Value range check failed: Column '{row['column_name']}' has {row['out_of_range_count']} values out of range.")
+                self._log_message("Value range check passed: All values are within the specified ranges.")
+        except Exception as e:
+            self._raise_error(f"Failed to check value ranges: {e}")
+
+    def _check_referential_integrity(self, spark: SparkSession, df: DataFrame, reference_df: DataFrame, join_column: str, use_python: bool = False):
+        """Checks if all records in the DataFrame have matching references in the reference DataFrame using either SQL or Python."""
         self._log_block("Referential Integrity Check", [f"Checking referential integrity on column '{join_column}'"])
         try:
-            unmatched_count = df.join(reference_df, df[join_column] == reference_df[join_column], "left_anti").count()
-            self._log_message(f"DataFrame operation used: df.join(reference_df, df['{join_column}'] == reference_df['{join_column}'], 'left_anti')")
+            if use_python:
+                # Python approach
+                unmatched_count = df.join(reference_df, df[join_column] == reference_df[join_column], "left_anti").count()
+                python_code = f"df.join(reference_df, df['{join_column}'] == reference_df['{join_column}'], 'left_anti').count()"
+                self._log_message(f"Python code: {python_code}")
 
-            if unmatched_count > 0:
-                self._raise_error(f"Referential integrity check failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
-            else:
-                self._log_message(f"Referential integrity check passed for column '{join_column}'.")
-        except Exception as e:
-            self._raise_error(f"Failed to check referential integrity for column '{join_column}': {e}")
-
-    def _check_consistency_between_fields(self, df: DataFrame, consistency_pairs: List[Tuple[str, str]]):
-        """Checks consistency between specified field pairs."""
-        self._log_block("Field Consistency Check", [f"Checking consistency between field pairs: {consistency_pairs}"])
-        for col1, col2 in consistency_pairs:
-            try:
-                inconsistency_count = df.filter(F.col(col1) > F.col(col2)).count()
-                self._log_message(f"DataFrame operation used: F.col('{col1}') > F.col('{col2}')")
-
-                if inconsistency_count > 0:
-                    self._raise_error(f"Consistency check failed: {inconsistency_count} records have '{col1}' greater than '{col2}'.")
+                if unmatched_count > 0:
+                    self._raise_error(f"Referential integrity check failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
                 else:
-                    self._log_message(f"Consistency check passed for '{col1}' and '{col2}'.")
-            except Exception as e:
-                self._raise_error(f"Failed to check consistency between fields '{col1}' and '{col2}': {e}")
+                    self._log_message(f"Referential integrity check passed for column '{join_column}'.")
+            else:
+                # SQL approach
+                df.createOrReplaceTempView("temp_view_check_referential")
+                reference_df.createOrReplaceTempView("reference_view")
+                referential_query = f"""
+                    SELECT COUNT(*) AS unmatched_count
+                    FROM temp_view_check_referential t
+                    LEFT JOIN reference_view r ON t.{join_column} = r.{join_column}
+                    WHERE r.{join_column} IS NULL
+                """
+                formatted_query = self._format_sql_query(referential_query)
+                self._log_message(f"The following SQL query is used to check referential integrity:\n{formatted_query}\n")
+
+                referential_df = spark.sql(referential_query)
+                unmatched_count = referential_df.collect()[0]['unmatched_count']
+
+                if unmatched_count > 0:
+                    self._raise_error(f"Referential integrity check failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
+                else:
+                    self._log_message(f"Referential integrity check passed for column '{join_column}'.")
+        except Exception as e:
+            self._raise_error(f"Failed to check referential integrity: {e}")
+
+    def _check_consistency_between_fields(self, spark: SparkSession, df: DataFrame, consistency_pairs: List[Tuple[str, str]], use_python: bool = False):
+        """Checks consistency between specified field pairs using either SQL or Python."""
+        self._log_block("Field Consistency Check", [f"Checking consistency between field pairs: {consistency_pairs}"])
+        try:
+            if use_python:
+                for col1, col2 in consistency_pairs:
+                    # Python approach
+                    inconsistency_count = df.filter(F.col(col1) > F.col(col2)).count()
+                    python_code = f"df.filter(F.col('{col1}') > F.col('{col2}')).count()"
+                    self._log_message(f"Python code: {python_code}")
+
+                    if inconsistency_count > 0:
+                        self._raise_error(f"Consistency check failed: {inconsistency_count} records have '{col1}' greater than '{col2}'.")
+                    else:
+                        self._log_message(f"Consistency check passed for '{col1}' and '{col2}'.")
+            else:
+                # SQL approach
+                df.createOrReplaceTempView("temp_view_check_consistency")
+                consistency_queries = " UNION ALL ".join([
+                    f"SELECT COUNT(*) AS inconsistency_count, '{col1}' AS column_1, '{col2}' AS column_2 FROM temp_view_check_consistency WHERE {col1} > {col2}"
+                    for col1, col2 in consistency_pairs
+                ])
+                formatted_query = self._format_sql_query(consistency_queries)
+                self._log_message(f"The following SQL query is used to check field consistency:\n{formatted_query}\n")
+
+                consistency_df = spark.sql(consistency_queries)
+                for row in consistency_df.collect():
+                    if row['inconsistency_count'] > 0:
+                        self._raise_error(f"Consistency check failed: {row['inconsistency_count']} records have '{row['column_1']}' greater than '{row['column_2']}'.")
+                self._log_message("Consistency check passed for all specified pairs.")
+        except Exception as e:
+            self._raise_error(f"Failed to check field consistency: {e}")
 
     def run_all_checks(
         self,
@@ -285,7 +361,7 @@ class DataQualityManager:
         consistency_pairs: Optional[List[Tuple[str, str]]] = None,
         columns_to_exclude: Optional[List[str]] = None,
         order_by: Optional[Union[str, List[str]]] = None,  # Add order_by parameter
-        use_sql: bool = False
+        use_python: Optional[bool] = None  # Optional parameter, defaults to None
     ) -> str:
         """
         Main method to start the data quality process.
@@ -301,7 +377,7 @@ class DataQualityManager:
             consistency_pairs (Optional[List[Tuple[str, str]]]): Column pairs for consistency check.
             columns_to_exclude (Optional[List[str]]): Columns to exclude from the final DataFrame.
             order_by (Optional[Union[str, List[str]]]): Columns to use for ordering. Defaults to 'input_file_name'.
-            use_sql (bool): Whether to use SQL or DataFrame operations.
+            use_python (bool): If True, uses Python syntax for operations. Defaults to False, which uses SQL.
 
         Returns:
             str: Name of the temporary view created.
@@ -309,49 +385,46 @@ class DataQualityManager:
         # Log start of the process
         self.logger.log_start("Data Quality Check Process")
 
-        # List checks to be performed
-        checks_to_perform = []
-        if key_columns:
-            checks_to_perform.append("Handling Multiple Files")
-        if critical_columns:
-            checks_to_perform.append("Null Values Check")
-        if column_ranges:
-            checks_to_perform.append("Value Range Check")
-        if reference_df and join_column:
-            checks_to_perform.append("Referential Integrity Check")
-        if consistency_pairs:
-            checks_to_perform.append("Field Consistency Check")
-        if columns_to_exclude:
-            checks_to_perform.append("Exclude Columns")
+        # Get the list of checks to perform
+        checks_to_perform = self._list_checks_to_perform(
+            key_columns=key_columns,
+            critical_columns=critical_columns,
+            column_ranges=column_ranges,
+            reference_df=reference_df,
+            join_column=join_column,
+            consistency_pairs=consistency_pairs,
+            columns_to_exclude=columns_to_exclude
+        )
 
         self._log_block("Quality Checks to Perform", [f"Checks to be performed: {', '.join(checks_to_perform)}"])
 
         try:
             # Handling multiple files
-            if key_columns:
-                df = self._handle_multiple_files(spark, df, key_columns, order_by=order_by, use_sql=use_sql)
+            if 'Handling Multiple Files' in checks_to_perform:
+                df = self._handle_multiple_files(spark, df, key_columns, order_by=order_by, use_sql=not use_python)
 
             # Check for duplicates
-            self._check_for_duplicates(spark, df, key_columns, use_sql=use_sql)
+            if 'Duplicate Check' in checks_to_perform:
+                self._check_for_duplicates(spark, df, key_columns, use_sql=not use_python)
 
             # Check for null values
-            if critical_columns:
-                self._check_for_nulls(df, critical_columns)
+            if 'Null Values Check' in checks_to_perform:
+                self._check_for_nulls(spark, df, critical_columns, use_python=use_python)
 
             # Check value ranges
-            if column_ranges:
-                self._check_value_ranges(df, column_ranges)
+            if 'Value Range Check' in checks_to_perform:
+                self._check_value_ranges(spark, df, column_ranges, use_python=use_python)
 
             # Check referential integrity
-            if reference_df and join_column:
-                self._check_referential_integrity(df, reference_df, join_column)
+            if 'Referential Integrity Check' in checks_to_perform:
+                self._check_referential_integrity(spark, df, reference_df, join_column, use_python=use_python)
 
             # Check field consistency
-            if consistency_pairs:
-                self._check_consistency_between_fields(df, consistency_pairs)
+            if 'Field Consistency Check' in checks_to_perform:
+                self._check_consistency_between_fields(spark, df, consistency_pairs, use_python=use_python)
 
             # Exclude columns
-            if columns_to_exclude:
+            if 'Exclude Columns' in checks_to_perform:
                 df = df.drop(*columns_to_exclude)
                 self._log_block("Excluding Columns", [f"Excluded columns: {columns_to_exclude}"])
 
