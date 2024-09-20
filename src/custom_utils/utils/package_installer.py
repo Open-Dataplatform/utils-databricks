@@ -1,4 +1,5 @@
 import logging
+import subprocess
 import sys
 from contextlib import contextmanager
 from io import StringIO
@@ -36,6 +37,18 @@ def get_installed_version(package_name):
     except pkg_resources.DistributionNotFound:
         return None
 
+def run_pip_command(command):
+    """
+    Run a pip command using subprocess.
+    Args:
+        command (str): The pip command to run.
+    """
+    try:
+        subprocess.run(command, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error running pip command: {e}")
+        raise SystemExit("Pip command failed.")
+
 def install_package(git_project, package_name, desired_version, uninstall_existing=False):
     """
     Install a specific version of a package from a GitHub repository in a Databricks notebook environment.
@@ -65,9 +78,8 @@ def install_package(git_project, package_name, desired_version, uninstall_existi
             logger.info(f"{package_name} is not currently installed.")
 
         try:
-            # Uninstall using the %pip magic command directly in the Databricks notebook.
-            with suppress_output():
-                %pip uninstall {package_name} -y
+            # Use subprocess to run the pip uninstall command
+            run_pip_command(f"pip uninstall {package_name} -y")
             if installed_version:
                 logger.info(f"Uninstallation of {package_name} version {installed_version} completed successfully.")
             else:
@@ -79,22 +91,20 @@ def install_package(git_project, package_name, desired_version, uninstall_existi
     # Step 2: Attempt to install the specified version from GitHub.
     try:
         logger.info(f"Attempting to install {package_name} version {version} from {git_project}...")
-        # Install the specified version from GitHub using %pip magic command.
-        with suppress_output():
-            %pip install git+https://github.com/{git_project}.git@{version}
-        logger.info(f"Installation of {package_name} version {version} was successful.")
+        # Use subprocess to run the pip install command for the specific version
+        run_pip_command(f"pip install git+https://github.com/{git_project}.git@{version}")
+        logger.info(f"\nInstallation of {package_name} version {version} was successful.")
     except Exception as e:
         logger.warning(f"Failed to install version {version}. Error: {e}")
         logger.info(f"Falling back to installing from the 'main' branch...")
 
         # Step 3: Fallback to the main branch if the version installation fails.
         try:
-            with suppress_output():
-                %pip install git+https://github.com/{git_project}.git@main
-            logger.info(f"Fallback installation of {package_name} from the 'main' branch was successful.")
+            run_pip_command(f"pip install git+https://github.com/{git_project}.git@main")
+            logger.info(f"\nFallback installation of {package_name} from the 'main' branch was successful.")
         except Exception as fallback_error:
             logger.error(f"Failed to install from the 'main' branch. Error: {fallback_error}")
             raise SystemExit("Installation aborted due to errors.")
     
     # Final log to indicate process completion.
-    logger.info("Process completed. Please restart the environment to verify the installation.")
+    logger.info("\nProcess completed. Please restart the environment to verify the installation.")
