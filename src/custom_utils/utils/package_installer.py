@@ -1,63 +1,100 @@
-import subprocess
+import logging
+import sys
+from contextlib import contextmanager
+from io import StringIO
 import pkg_resources
+
+# Set up logging to capture only necessary information with INFO level
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+# Suppress logs from py4j (which generates excess messages).
+logging.getLogger("py4j.java_gateway").setLevel(logging.ERROR)
+
+# Context manager to suppress stdout and stderr
+@contextmanager
+def suppress_output():
+    new_stdout, new_stderr = StringIO(), StringIO()
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    try:
+        sys.stdout, sys.stderr = new_stdout, new_stderr
+        yield
+    finally:
+        sys.stdout, sys.stderr = old_stdout, old_stderr
+
+def get_installed_version(package_name):
+    """
+    Get the installed version of a package.
+    Args:
+        package_name (str): The name of the package.
+    Returns:
+        str: The installed version or None if the package is not installed.
+    """
+    try:
+        package_info = pkg_resources.get_distribution(package_name)
+        return package_info.version
+    except pkg_resources.DistributionNotFound:
+        return None
 
 def install_package(git_project, package_name, desired_version, uninstall_existing=False):
     """
-    Install a specific version of a package from a GitHub repository.
+    Install a specific version of a package from a GitHub repository in a Databricks notebook environment.
     
     Args:
         git_project (str): The GitHub project path (e.g., 'xazms/utils-databricks').
         package_name (str): The name of the package to install (e.g., 'databricks-custom-utils').
         desired_version (str): The version of the package to install (e.g., 'v0.6.4').
         uninstall_existing (bool): Whether to uninstall the existing package before installation.
+
+    The function will:
+    1. Uninstall the existing package (if `uninstall_existing=True`).
+    2. Attempt to install the specified version from GitHub.
+    3. If the specified version is not found, it will fallback to the 'main' branch.
+    4. Log successful installation.
     """
-    # Ensure the version is normalized with a "v" prefix
+
+    # Ensure the version is normalized with a "v" prefix for GitHub version tags.
     version = f"v{desired_version.lstrip('v')}"
-    
-    # Uninstall the existing version if requested
+
+    # Step 1: Uninstall the existing package if requested.
     if uninstall_existing:
-        print(f"Uninstalling the existing version of {package_name}...")
+        installed_version = get_installed_version(package_name)
+        if installed_version:
+            logger.info(f"Uninstalling the existing version {installed_version} of {package_name}...")
+        else:
+            logger.info(f"{package_name} is not currently installed.")
+
         try:
-            subprocess.check_call(f"pip uninstall {package_name} -y", shell=True)
-            print("Uninstallation completed successfully.")
-        except subprocess.CalledProcessError as uninstall_error:
-            print(f"Error during uninstallation: {uninstall_error}")
+            # Uninstall using the %pip magic command directly in the Databricks notebook.
+            with suppress_output():
+                %pip uninstall {package_name} -y
+            if installed_version:
+                logger.info(f"Uninstallation of {package_name} version {installed_version} completed successfully.")
+            else:
+                logger.info(f"Uninstallation completed successfully.")
+        except Exception as uninstall_error:
+            logger.error(f"Error during uninstallation: {uninstall_error}")
             raise SystemExit("Uninstallation failed. Aborting process.")
 
+    # Step 2: Attempt to install the specified version from GitHub.
     try:
-        # Attempt to install the specified version from GitHub
-        print(f"Attempting to install {package_name} version {version} from {git_project}...")
-        subprocess.check_call(f"pip install git+https://github.com/{git_project}.git@{version}", shell=True)
-        installed_version = version
-    except subprocess.CalledProcessError as e:
-        # Handle installation errors
-        print(f"\nFailed to install version {version}. Error: {e}")
-        print("Falling back to installing from the 'main' branch instead...")
+        logger.info(f"Attempting to install {package_name} version {version} from {git_project}...")
+        # Install the specified version from GitHub using %pip magic command.
+        with suppress_output():
+            %pip install git+https://github.com/{git_project}.git@{version}
+        logger.info(f"Installation of {package_name} version {version} was successful.")
+    except Exception as e:
+        logger.warning(f"Failed to install version {version}. Error: {e}")
+        logger.info(f"Falling back to installing from the 'main' branch...")
 
+        # Step 3: Fallback to the main branch if the version installation fails.
         try:
-            # Fallback to the main branch if the version-specific installation fails
-            subprocess.check_call(f"pip install git+https://github.com/{git_project}.git@main", shell=True)
-            installed_version = "main"
-        except subprocess.CalledProcessError as fallback_error:
-            print(f"\nInstallation from the 'main' branch also failed. Error: {fallback_error}")
-            raise SystemExit("Installation aborted due to repeated errors.")
-
-    # Retrieve and print detailed version information of the installed package
-    try:
-        package_info = pkg_resources.get_distribution(package_name)
-        actual_installed_version = f"v{package_info.version}"  # Ensure "v" prefix is present
-        
-        # Print success message with installed version
-        print("\nInstallation successful.")
-        print(f"Latest installed version: {actual_installed_version}")
-        print(f"Installed package location: {package_info.location}")
-        
-        # Check if the installed version matches the desired version
-        if installed_version != "main" and actual_installed_version != version:
-            print(f"\nWarning: The desired version was {version}, but the installed version is {actual_installed_version}.")
-    except pkg_resources.DistributionNotFound:
-        print(f"\nInstallation completed, but the package '{package_name}' could not be found. Please check the installation.")
-        raise SystemExit("Package not found after installation. Please verify the package name and installation steps.")
-
-    finally:
-        print("\nProcess completed. Ensure everything works as expected.")
+            with suppress_output():
+                %pip install git+https://github.com/{git_project}.git@main
+            logger.info(f"Fallback installation of {package_name} from the 'main' branch was successful.")
+        except Exception as fallback_error:
+            logger.error(f"Failed to install from the 'main' branch. Error: {fallback_error}")
+            raise SystemExit("Installation aborted due to errors.")
+    
+    # Final log to indicate process completion.
+    logger.info("Process completed. Please restart the environment to verify the installation.")
