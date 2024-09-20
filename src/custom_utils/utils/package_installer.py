@@ -93,7 +93,7 @@ def install_package(git_project, package_name, desired_version, uninstall_existi
         logger.info(f"Attempting to install {package_name} version {version} from {git_project}...")
         # Use subprocess to run the pip install command for the specific version
         run_pip_command(f"pip install git+https://github.com/{git_project}.git@{version}")
-        logger.info(f"\nInstallation of {package_name} version {version} was successful.")
+        logger.info(f"Installation of {package_name} version {version} was successful.")
     except Exception as e:
         logger.warning(f"Failed to install version {version}. Error: {e}")
         logger.info(f"Falling back to installing from the 'main' branch...")
@@ -101,10 +101,10 @@ def install_package(git_project, package_name, desired_version, uninstall_existi
         # Step 3: Fallback to the main branch if the version installation fails.
         try:
             run_pip_command(f"pip install git+https://github.com/{git_project}.git@main")
-            logger.info(f"\nFallback installation of {package_name} from the 'main' branch was successful.")
+            logger.info(f"Fallback installation of {package_name} from the 'main' branch was successful.")
         except Exception as fallback_error:
             logger.error(f"Failed to install from the 'main' branch. Error: {fallback_error}")
             raise SystemExit("Installation aborted due to errors.")
     
     # Final log to indicate process completion.
-    logger.info("\nProcess completed. Please restart the environment to verify the installation.")
+    logger.info("Process completed. Please restart the environment to verify the installation.")
