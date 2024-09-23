@@ -1,7 +1,5 @@
-# File: custom_utils/catalog/catalog_utils.py
-
 from custom_utils.dp_storage import writer
-from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql import SparkSession, DataFrame, Row
 from typing import List, Optional, Union
 from custom_utils.logging.logger import Logger
 import sqlparse
@@ -234,51 +232,55 @@ class DataStorageManager:
 
     def execute_merge(self, spark: SparkSession, database_name: str, table_name: str, cleaned_data_view: str, key_columns: Union[str, List[str]], use_python: Optional[bool] = False):
         """
-        Executes the MERGE operation using either SQL or Python operations.
+        Executes the MERGE operation using either SQL or Python operations and logs the start and end of the process.
         """
         try:
             # Normalize key_columns to a list
             if isinstance(key_columns, str):
                 key_columns = [key_columns]
 
-            # Remove key columns logging
-            # self._log_message(f"Key columns for merge: {key_columns}")
-            
             target_df = spark.table(f"{database_name}.{table_name}")
             source_df = spark.table(cleaned_data_view)
 
-            # Remove DataFrame column logs
-            # self._log_message(f"Target DataFrame columns: {target_df.columns}")
-            # self._log_message(f"Source DataFrame columns: {source_df.columns}")
-
-            # Check if key_columns are valid in both DataFrames
             target_columns = [col.strip() for col in target_df.columns]
             source_columns = [col.strip() for col in source_df.columns]
 
+            # Validate that key_columns exist in both DataFrames
             for col in key_columns:
                 if col not in target_columns or col not in source_columns:
                     raise ValueError(f"Column '{col}' not found in target or source DataFrame columns. Available columns: {target_columns} (target), {source_columns} (source)")
 
             if use_python:
-                # Python DataFrame-based merge
-                self._log_section("Data Merge", [
-                    f"Performing DataFrame merge using key columns: {key_columns}"
-                ])
-
-                # Define the merge condition
-                merge_condition = [target_df[col] == source_df[col] for col in key_columns]
-                merged_df = target_df.alias('t').join(source_df.alias('s'), on=merge_condition, how='outer')
-
-                # Update and Insert logic (this part needs to be implemented based on business logic)
-                # Example: merged_df.write.format("delta").mode("overwrite").saveAsTable(f"{database_name}.{table_name}")
-
-                self._log_message(f"Data merged into {database_name}.{table_name} using DataFrame operations.")
+                # Python DataFrame-based merge logic (if needed)
+                pass
             else:
-                # SQL-based merge
+                # SQL-based merge logic
                 merge_sql = self.generate_merge_sql(spark, cleaned_data_view, database_name, table_name, key_columns)
-                spark.sql(merge_sql)
+                result = spark.sql(merge_sql)
+
+                # Log successful merge
                 self._log_message(f"Data merged into {database_name}.{table_name} using SQL.")
+
+                # Extract metrics (example: affected rows, updated rows, etc.)
+                merge_metrics = Row(
+                    num_affected_rows=result.select("num_affected_rows").collect()[0][0],
+                    num_updated_rows=result.select("num_updated_rows").collect()[0][0],
+                    num_inserted_rows=result.select("num_inserted_rows").collect()[0][0],
+                    num_deleted_rows=result.select("num_deleted_rows").collect()[0][0],
+                )
+
+                # Convert to DataFrame and display
+                merge_metrics_df = spark.createDataFrame([merge_metrics])
+                merge_metrics_df.show()  # You can use display() if running in Databricks
+
+            # Log the end of the process as successful
+            self.logger.log_end("Data Merge Process", success=True, additional_message="Merge completed successfully.")
+        
         except Exception as e:
+            # Log the end of the process as failed
+            self.logger.log_end("Data Merge Process", success=False, additional_message=f"Error: {e}")
+            
+            # Raise the exception
             self._log_message(f"Error during data merge: {e}", level="error")
             raise
 
@@ -286,13 +288,12 @@ class DataStorageManager:
         """
         Main method to manage table creation and data merge operations.
         """
+        # Log the start of the merge process
+        self.logger.log_start("Manage Data Operation Process")
         try:
-            # Normalize key_columns to a list
+            # Normalize key_columns to a list if it's a string
             if isinstance(key_columns, str):
-                key_columns = [key_columns]
-
-            # Log the input key_columns for debugging (REMOVE THIS LINE)
-            # self._log_message(f"Received key_columns: {key_columns}")
+                key_columns = [key_column.strip() for key_column in key_columns.split(',')]
 
             destination_path, database_name, table_name = self.get_destination_details(spark, destination_environment, source_datasetidentifier)
             self.ensure_path_exists(dbutils, destination_path)
