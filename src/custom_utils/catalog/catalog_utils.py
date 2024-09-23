@@ -1,3 +1,5 @@
+# File: custom_utils/catalog/catalog_utils.py
+
 from custom_utils.dp_storage import writer
 from pyspark.sql import SparkSession, DataFrame, Row
 from typing import List, Optional, Union
@@ -285,7 +287,9 @@ class DataStorageManager:
             self._log_message(f"Error during data merge: {e}", level="error")
             raise
 
-    def manage_data_operation(self, spark: SparkSession, dbutils, destination_environment: str, source_datasetidentifier: str, cleaned_data_view: str, key_columns: Union[str, List[str]], use_python: Optional[bool] = False):
+    def manage_data_operation(self, spark: SparkSession, dbutils, destination_environment: str, 
+                            source_datasetidentifier: str, cleaned_data_view: str, 
+                            key_columns: Union[str, List[str]], use_python: Optional[bool] = False):
         """
         Main method to manage table creation and data merge operations.
         """
@@ -296,10 +300,14 @@ class DataStorageManager:
             if isinstance(key_columns, str):
                 key_columns = [key_column.strip() for key_column in key_columns.split(',')]
 
+            # Log for debugging purposes
+            self._log_message(f"Normalized key_columns: {key_columns}", level="info")
+
             destination_path, database_name, table_name = self.get_destination_details(spark, destination_environment, source_datasetidentifier)
             self.ensure_path_exists(dbutils, destination_path)
             self.create_or_replace_table(spark, database_name, table_name, destination_path, cleaned_data_view, use_python=use_python)
             self.execute_merge(spark, database_name, table_name, cleaned_data_view, key_columns, use_python=use_python)
+        
         except Exception as e:
             self._log_message(f"Error managing data operation: {e}", level="error")
             raise
