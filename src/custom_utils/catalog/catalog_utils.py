@@ -126,6 +126,15 @@ class DataStorageManager:
             self._log_message(f"Error while ensuring path exists: {e}", level="error")
             raise
 
+    def normalize_key_columns(key_columns: Union[str, List[str]]) -> List[str]:
+        """
+        Normalize key_columns to a list if it's provided as a comma-separated string.
+        """
+        if isinstance(key_columns, str):
+            # Split the string into a list and strip spaces from each column name
+            key_columns = [col.strip() for col in key_columns.split(',')]
+        return key_columns
+
     def create_or_replace_table(self, spark: SparkSession, database_name: str, table_name: str, destination_path: str, cleaned_data_view: str, use_python: Optional[bool] = False):
         """
         Creates or replaces a Databricks Delta table.
@@ -295,11 +304,11 @@ class DataStorageManager:
         """
         # Log the start of the merge process
         self.logger.log_start("Manage Data Operation Process")
-        try:
-            # Normalize key_columns to a list if it's a string
-            if isinstance(key_columns, str):
-                key_columns = [key_column.strip() for key_column in key_columns.split(',')]
 
+        try:
+            # Normalize key_columns to ensure it's a list
+            key_columns = normalize_key_columns(key_columns)
+            
             # Log for debugging purposes
             self._log_message(f"Normalized key_columns: {key_columns}", level="info")
 
