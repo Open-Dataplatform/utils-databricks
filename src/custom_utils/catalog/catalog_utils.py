@@ -126,12 +126,12 @@ class DataStorageManager:
             self._log_message(f"Error while ensuring path exists: {e}", level="error")
             raise
 
-    def normalize_key_columns(key_columns: Union[str, List[str]]) -> List[str]:
+    def normalize_key_columns(self, key_columns: Union[str, List[str]]) -> List[str]:
         """
         Normalize key_columns to a list if it's provided as a comma-separated string.
         """
         if isinstance(key_columns, str):
-            # Split the string into a list and strip spaces from each column name
+            # Split the string by commas and strip whitespace around the column names
             key_columns = [col.strip() for col in key_columns.split(',')]
         return key_columns
 
@@ -241,14 +241,14 @@ class DataStorageManager:
             self._log_message(f"Error generating merge SQL: {e}", level="error")
             raise
 
-    def execute_merge(self, spark: SparkSession, database_name: str, table_name: str, cleaned_data_view: str, key_columns: Union[str, List[str]], use_python: Optional[bool] = False):
+    def execute_merge(self, spark: SparkSession, database_name: str, table_name: str, cleaned_data_view: str, 
+                    key_columns: Union[str, List[str]], use_python: Optional[bool] = False):
         """
         Executes the MERGE operation using either SQL or Python operations and logs the start and end of the process.
         """
         try:
             # Normalize key_columns to a list
-            if isinstance(key_columns, str):
-                key_columns = [key_columns]
+            key_columns = self.normalize_key_columns(key_columns)
 
             target_df = spark.table(f"{database_name}.{table_name}")
             source_df = spark.table(cleaned_data_view)
@@ -283,7 +283,7 @@ class DataStorageManager:
 
                 # Convert to DataFrame and display
                 merge_metrics_df = spark.createDataFrame([merge_metrics])
-                merge_metrics_df.show()  # You can use display() if running in Databricks
+                merge_metrics_df.show()
 
             # Log the end of the process as successful
             self.logger.log_end("Data Merge Process", success=True, additional_message="Merge completed successfully.")
@@ -307,10 +307,10 @@ class DataStorageManager:
 
         try:
             # Normalize key_columns to ensure it's a list
-            key_columns = normalize_key_columns(key_columns)
+            key_columns = self.normalize_key_columns(key_columns)
             
             # Log for debugging purposes
-            self._log_message(f"Normalized key_columns: {key_columns}", level="info")
+            #self._log_message(f"Normalized key_columns: {key_columns}", level="info")
 
             destination_path, database_name, table_name = self.get_destination_details(spark, destination_environment, source_datasetidentifier)
             self.ensure_path_exists(dbutils, destination_path)
