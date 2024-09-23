@@ -262,6 +262,7 @@ class DataStorageManager:
                 self._log_message(f"Data merged into {database_name}.{table_name} using SQL.")
 
                 # Extract metrics (example: affected rows, updated rows, etc.)
+                print()
                 merge_metrics = Row(
                     num_affected_rows=result.select("num_affected_rows").collect()[0][0],
                     num_updated_rows=result.select("num_updated_rows").collect()[0][0],
