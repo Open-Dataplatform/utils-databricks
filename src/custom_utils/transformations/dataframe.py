@@ -21,6 +21,7 @@ from pyspark.sql.types import (
 from pyspark.sql import SparkSession, DataFrame
 from custom_utils.logging.logger import Logger
 from custom_utils.config.config import Config  # Assuming there is a config module with a Config class
+from pyspark.sql.types import DataType
 
 class DataFrameTransformer:
     def __init__(self, config: Config = None, logger: Logger = None, debug: bool = None):
@@ -51,7 +52,8 @@ class DataFrameTransformer:
 
     def _get_json_depth(self, json_schema, current_depth=0, definitions=None, logger=None, depth_level=None) -> int:
         """
-        Recursively determines the maximum depth of a JSON schema, including handling references and mixed structures.
+        Recursively determines the maximum depth of a JSON schema, counting only arrays for depth, not structs,
+        and correctly handling $ref references.
 
         Args:
             json_schema (dict): A JSON schema represented as a dictionary.
@@ -61,7 +63,7 @@ class DataFrameTransformer:
             depth_level (int, optional): The specified flattening depth level for comparison in the log message.
 
         Returns:
-            int: The maximum depth level of the JSON schema.
+            int: The maximum depth level of the JSON schema, excluding structs.
         """
         def calculate_depth(schema, current_depth, definitions):
             # Handle $ref references
@@ -77,65 +79,180 @@ class DataFrameTransformer:
             max_depth = current_depth
 
             if isinstance(schema, dict):
-                # Handle properties (objects)
+                # Handle properties (objects) without counting them as depth
                 if 'properties' in schema:
-                    properties_depth = max(
-                        calculate_depth(v, current_depth + 1, definitions)
-                        for v in schema['properties'].values()
-                    )
-                    max_depth = max(max_depth, properties_depth)
+                    for prop_name, prop_schema in schema['properties'].items():
+                        max_depth = max(max_depth, calculate_depth(prop_schema, current_depth, definitions))
 
-                # Handle items (arrays)
-                if 'items' in schema and isinstance(schema['items'], dict):
-                    items_depth = calculate_depth(schema['items'], current_depth + 1, definitions)
-                    max_depth = max(max_depth, items_depth)
+                # Traverse array "items" and increase depth for arrays
+                if 'items' in schema:
+                    max_depth = max(max_depth, calculate_depth(schema['items'], current_depth + 1, definitions))
 
-            if isinstance(schema, list):
-                # Handle cases where items is a list of objects
-                list_depths = [
-                    calculate_depth(item, current_depth + 1, definitions)
-                    for item in schema
-                ]
-                max_depth = max(max_depth, *list_depths)
+            elif isinstance(schema, list):
+                # Handle cases where items is a list of objects or arrays
+                max_depth = max(calculate_depth(item, current_depth + 1, definitions) for item in schema)
 
+            # Base case: for primitive types, return the current depth
             return max_depth
 
-        # Calculate the depth
+        # Calculate the depth, passing definitions if they exist
         max_depth = calculate_depth(json_schema, current_depth, definitions or json_schema.get('definitions', {}))
 
         # Log the depth using the logger, if provided
         if logger:
-            logger.log_message(f"Maximum depth level of the JSON schema: {max_depth}; Flattened depth level of the JSON file: {depth_level}")
+            logger.log_message(f"Maximum depth level of the JSON schema: {max_depth}; Flattened depth level: {depth_level}")
 
         return max_depth
 
     def _get_type_mapping(self) -> dict:
-            """
-            Returns a dictionary that maps JSON data types to corresponding PySpark SQL types.
+        """
+        Returns a dictionary that maps JSON data types to corresponding PySpark SQL types.
 
-            The mappings are useful when converting JSON schemas into Spark DataFrame schemas,
-            ensuring correct data types are assigned during parsing.
+        The mappings are useful when converting JSON schemas into Spark DataFrame schemas,
+        ensuring correct data types are assigned during parsing.
 
-            Returns:
-                dict: A dictionary where:
-                    - Keys are JSON data types as strings (e.g., "string", "integer").
-                    - Values are corresponding PySpark SQL data types (e.g., StringType(), IntegerType()).
+        Returns:
+            dict: A dictionary where:
+                - Keys are JSON data types as strings (e.g., "string", "integer").
+                - Values are corresponding PySpark SQL data types (e.g., StringType(), IntegerType()).
+        """
+        return {
+            "string": StringType(),       # Maps JSON "string" to PySpark's StringType
+            "boolean": BooleanType(),     # Maps JSON "boolean" to PySpark's BooleanType
+            "number": FloatType(),        # Maps JSON "number" to PySpark's FloatType (default for numbers)
+            "integer": IntegerType(),     # Maps JSON "integer" to PySpark's IntegerType
+            "long": LongType(),           # Maps JSON "long" (if specified) to PySpark's LongType
+            "double": FloatType(),        # Maps JSON "double" to PySpark's FloatType
+            "array": StringType(),        # Treats arrays as strings (flattening scenarios)
+            "object": StringType(),       # Treats objects as strings (flattening scenarios)
+            "datetime": TimestampType(),  # Maps JSON "datetime" to PySpark's TimestampType
+            "decimal": FloatType(),       # Maps JSON "decimal" to PySpark's FloatType
+            "date": DateType(),           # Maps JSON "date" to PySpark's DateType
+            "time": StringType(),         # Treats time as a string (time-only types)
+            "binary": BinaryType(),       # Maps binary data to PySpark's BinaryType
+        }
+
+    def _apply_nested_type_mapping(self, column_name, data_type, type_mapping):
+        """
+        Recursively applies the type mapping to nested structures (arrays or structs).
+        
+        Args:
+            column_name (str): The name of the column to apply the type mapping.
+            data_type (DataType): The data type of the column.
+            type_mapping (dict): A dictionary that maps original data types to target types.
+        
+        Returns:
+            Column: The transformed column with applied type mapping.
+        """
+        if isinstance(data_type, ArrayType):
+            element_type = data_type.elementType
+            # Recursively apply the type mapping to the elements of the array
+            transformed_element_type = self._apply_nested_type_mapping(column_name, element_type, type_mapping)
+            return ArrayType(transformed_element_type)  # Apply to the ArrayType itself
+        
+        elif isinstance(data_type, StructType):
+            # Apply the type mapping to each field in the struct
+            fields = []
+            for field in data_type.fields:
+                transformed_field_type = self._apply_nested_type_mapping(f"{column_name}.{field.name}", field.dataType, type_mapping)
+                fields.append(StructField(field.name, transformed_field_type, field.nullable))
+            return StructType(fields)
+        
+        # For basic types, apply the conversion from the type_mapping
+        original_type_str = data_type.simpleString()
+        target_type = type_mapping.get(original_type_str, data_type)
+        
+        if isinstance(target_type, DataType):
+            return target_type  # If it's a DataType, return the correct type directly
+        else:
+            return data_type  # Fallback to the original type if no mapping exists
+        
+    def _format_converted_columns(self, converted_columns: List[Tuple[str, str, str]], df_flattened: DataFrame) -> List[str]:
+        """
+        Format the converted columns for display. This method unfolds arrays and structs and shows individual field changes,
+        ensuring that the columns exist in the flattened DataFrame before logging.
+        
+        Args:
+            converted_columns (List[Tuple[str, str, str]]): List of converted columns with (column name, original type, target type).
+            df_flattened (DataFrame): The flattened DataFrame to check if columns exist before logging.
+
+        Returns:
+            List[str]: Formatted list of changes to be logged.
+        """
+        formatted_conversions = []
+        flattened_columns = df_flattened.columns  # Get the list of columns in the flattened DataFrame
+
+        def unfold_struct_type(column_name, original_type_str, target_type_str):
             """
-            return {
-                "string": StringType(),       # Maps JSON "string" to PySpark's StringType
-                "boolean": BooleanType(),     # Maps JSON "boolean" to PySpark's BooleanType
-                "number": FloatType(),        # Maps JSON "number" to PySpark's FloatType (default for numbers)
-                "integer": IntegerType(),     # Maps JSON "integer" to PySpark's IntegerType
-                "long": LongType(),           # Maps JSON "long" (if specified) to PySpark's LongType
-                "double": FloatType(),        # Maps JSON "double" to PySpark's FloatType
-                "array": StringType(),        # Treats arrays as strings (flattening scenarios)
-                "object": StringType(),       # Treats objects as strings (flattening scenarios)
-                "datetime": TimestampType(),  # Maps JSON "datetime" to PySpark's TimestampType
-                "decimal": FloatType(),       # Maps JSON "decimal" to PySpark's FloatType
-                "date": DateType(),           # Maps JSON "date" to PySpark's DateType
-                "time": StringType(),         # Treats time as a string (time-only types)
-                "binary": BinaryType(),       # Maps binary data to PySpark's BinaryType
-            }
+            Unfold a struct type and display individual fields one by one, ensuring the fields actually differ.
+            """
+            unfolded = []
+
+            if original_type_str.startswith("array<struct<") and target_type_str.startswith("array<struct<"):
+                # Extract fields in the struct within the array
+                original_fields = original_type_str[13:-2].split(",")
+                target_fields = target_type_str[13:-2].split(",")
+
+                for orig, targ in zip(original_fields, target_fields):
+                    try:
+                        # Handle cases where there may be more than one ":" in the string
+                        orig_parts = orig.split(":")
+                        targ_parts = targ.split(":")
+
+                        if len(orig_parts) == 2 and len(targ_parts) == 2:
+                            orig_field_name, orig_type = orig_parts
+                            targ_field_name, targ_type = targ_parts
+                            # Log each field conversion separately if there's a difference in types
+                            if orig_type != targ_type:
+                                unfolded.append(f"  - {column_name}.{orig_field_name}: {orig_type} -> {targ_type}")
+                        else:
+                            unfolded.append(f"  - {column_name}: {orig} -> {targ}")  # If format isn't as expected, log the whole string
+                    except ValueError:
+                        unfolded.append(f"  - {column_name}: {orig} -> {targ}")  # Catch any unexpected errors in splitting
+
+            return unfolded if unfolded else [f"  - {column_name}: {original_type_str} -> {target_type_str}"]
+
+        for col_name, original_type_str, target_type_str in converted_columns:
+            # Check if the column or its flattened equivalent exists in the flattened DataFrame
+            if col_name in flattened_columns or any(flattened_column.startswith(f"{col_name}_") for flattened_column in flattened_columns):
+                # Skip the columns that did not change
+                if original_type_str != target_type_str:
+                    # Handle complex types (arrays and structs) by unfolding them if necessary
+                    if "struct" in original_type_str or "array" in original_type_str:
+                        unfolded_columns = unfold_struct_type(col_name, original_type_str, target_type_str)
+                        if unfolded_columns:
+                            formatted_conversions.extend(unfolded_columns)
+                    else:
+                        # For simple types, display directly
+                        formatted_conversions.append(f"  - {col_name}: {original_type_str} -> {target_type_str}")
+
+        return formatted_conversions
+
+    def _filter_converted_columns(self, converted_columns: List[Tuple[str, str, str]], df_flattened: DataFrame) -> List[Tuple[str, str, str]]:
+        """
+        Filters the converted columns to include only those present in the flattened DataFrame.
+        
+        Args:
+            converted_columns (List[Tuple[str, str, str]]): A list of converted columns in the format (column_name, original_type, new_type).
+            df_flattened (DataFrame): The flattened DataFrame.
+
+        Returns:
+            List[Tuple[str, str, str]]: Filtered list of converted columns that exist in df_flattened.
+        """
+        flattened_columns = df_flattened.columns
+
+        filtered_conversions = []
+
+        for column_name, original_type, new_type in converted_columns:
+            # Check if the column is in the flattened DataFrame directly or has been flattened into subfields
+            if column_name in flattened_columns:
+                filtered_conversions.append((column_name, original_type, new_type))
+            else:
+                # Check if any of the flattened columns match the prefix of this column (e.g., "data" -> "data_reference_incident")
+                if any(flattened_column.startswith(f"{column_name}_") for flattened_column in flattened_columns):
+                    filtered_conversions.append((column_name, original_type, new_type))
+
+        return filtered_conversions
 
     def _get_array_and_struct_columns(self, df: DataFrame) -> List[Tuple[str, type]]:
         """Returns a list of columns in the DataFrame that are of type ArrayType or StructType."""
@@ -250,7 +367,7 @@ class DataFrameTransformer:
 
         Args:
             df (DataFrame): The DataFrame to flatten.
-            depth_level (int): The depth level to flatten.
+            depth_level (int): The depth level to flatten (if None, use max depth).
             current_level (int): The current depth level (used internally).
             max_depth (int): The maximum depth level of the JSON schema.
             type_mapping (Dict[str, str], optional): Mapping of data types for conversion.
@@ -258,23 +375,26 @@ class DataFrameTransformer:
         Returns:
             Tuple[DataFrame, List[Tuple[str, str, str]]]: The flattened DataFrame and a list of converted columns.
         """
-        # Use the internal _get_type_mapping method if no external type_mapping is provided
-        type_mapping = type_mapping if type_mapping is not None else self._get_type_mapping()
+        # If depth_level is None, flatten all levels (use max depth)
+        if depth_level is None:
+            depth_level = max_depth
 
-        # Track columns that were converted
+        type_mapping = type_mapping if type_mapping is not None else self._get_type_mapping()
         converted_columns = []
 
+        # Apply type conversions if type_mapping is provided
         if type_mapping:
-            # Apply type conversion to the DataFrame columns
             new_columns = []
             for c in df.columns:
-                target_type = type_mapping.get(df.schema[c].dataType.simpleString(), df.schema[c].dataType)
-                if target_type != df.schema[c].dataType:
-                    converted_columns.append((c, df.schema[c].dataType.simpleString(), target_type.simpleString()))
-                new_columns.append(F.col(c).cast(target_type))
+                original_type = df.schema[c].dataType
+                new_column = self._apply_nested_type_mapping(c, original_type, type_mapping)
+                new_columns.append(F.col(c).cast(new_column))  # Cast column to the new type
+                if original_type.simpleString() != new_column.simpleString():
+                    converted_columns.append((c, original_type.simpleString(), new_column.simpleString()))
+
             df = df.select(new_columns)
 
-        # Flatten the DataFrame as usual (rest of the flattening logic)
+        # Perform the flattening process
         while current_level < depth_level:
             complex_fields = {
                 field.name: field.dataType
@@ -290,21 +410,11 @@ class DataFrameTransformer:
                     df = df.withColumn(col_name, F.to_json(F.col(col_name)))
                 else:
                     if isinstance(data_type, ArrayType):
-                        df = self._flatten_array_column(df, col_name, layer_separator="_")
+                        df = self._flatten_array_column(df, col_name)
                     elif isinstance(data_type, StructType):
-                        df = self._flatten_struct_column(df, col_name, layer_separator="_")
+                        df = self._flatten_struct_column(df, col_name)
 
             current_level += 1
-
-        if current_level >= depth_level:
-            df = df.select([
-                F.col(c).cast(StringType()) if isinstance(df.schema[c].dataType, (ArrayType, StructType)) else F.col(c)
-                for c in df.columns
-            ])
-
-        for column_name in df.columns:
-            new_name = column_name.replace("__", "_").replace(".", "_")
-            df = df.withColumnRenamed(column_name, new_name)
 
         return df, converted_columns
 
@@ -361,11 +471,11 @@ class DataFrameTransformer:
             # Reading schema and parsing JSON to Spark StructType
             schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
 
-            # Determine the depth level to use
-            depth_level_to_use = depth_level if depth_level is not None else 1
-
             # Get the max depth of the JSON schema
             max_depth = self._get_json_depth(schema_json)
+
+            # If depth_level is None, flatten all levels (up to max depth)
+            depth_level_to_use = depth_level if depth_level is not None else max_depth
 
             # Block 1: Schema and file paths
             self.logger.log_block("Schema and File Paths", [
@@ -386,13 +496,14 @@ class DataFrameTransformer:
             self.logger.log_block("Initial DataFrame Info", [
                 f"Initial DataFrame row count: {initial_row_count}"
             ])
-            
-            # Log the schema if debug is enabled
-            if self.debug:
-                self.logger.log_message("Initial DataFrame schema:", level="info")
-                df.printSchema()  # This will print the schema to the console
 
-            # Flatten the DataFrame
+            # Log the schema of the initial DataFrame without "input_file_name"
+            if self.debug:
+                df_to_log = df.drop("input_file_name")  # Drop "input_file_name" for logging
+                self.logger.log_message("Initial DataFrame schema:", level="info")
+                df_to_log.printSchema()  # This will print the schema without "input_file_name"
+
+            # Flatten the DataFrame using the determined depth level
             df_flattened, converted_columns = self.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth, type_mapping=self._get_type_mapping())
 
             # Block 3: Flattened DataFrame info
@@ -401,10 +512,15 @@ class DataFrameTransformer:
                 f"Flattened DataFrame row count: {flattened_row_count}"
             ])
 
-            # Block 4: Columns converted by _get_type_mapping
-            if converted_columns:
-                converted_column_lines = [f"  - {col_name}: {original_type} -> {converted_type}" for col_name, original_type, converted_type in converted_columns]
-                self.logger.log_block("Columns converted by _get_type_mapping", converted_column_lines)
+            # **Filter converted columns based on the columns in the flattened DataFrame**
+            final_converted_columns = self._filter_converted_columns(converted_columns, df_flattened)
+
+            # Block 4: Columns converted by _get_type_mapping (filtered based on flattened_df)
+            if final_converted_columns:
+                formatted_conversions = self._format_converted_columns(final_converted_columns, df_flattened)
+                # Log only if there are columns to be displayed
+                if formatted_conversions:
+                    self.logger.log_block("Columns converted by _get_type_mapping", formatted_conversions)
             
             # Log the flattened schema if debug is enabled
             if self.debug:
