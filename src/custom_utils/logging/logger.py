@@ -1,73 +1,71 @@
+import logging
 import datetime
 import functools
 
 class Logger:
     def __init__(self, debug=False, log_to_file=None):
         """
-        Initialize the Logger.
+        Initialize the Logger using Python's built-in logging.
         """
         self.debug = debug
-        self.log_to_file = log_to_file
+        self.logger = logging.getLogger("custom_logger")
+        self.logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
-    def _write_log(self, message):
-        """Helper method to write log messages to a file if log_to_file is set."""
-        if self.log_to_file:
-            with open(self.log_to_file, 'a') as log_file:
-                log_file.write(f"{message}\n")
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.DEBUG if self.debug else logging.INFO)
+        
+        # Formatter for logs
+        formatter = logging.Formatter('%(asctime)s - [%(levelname)s] - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        console_handler.setFormatter(formatter)
 
-    def log_message(self, message, level="info", single_info_prefix=False, include_timestamp=False):
+        # Add handlers to logger
+        self.logger.addHandler(console_handler)
+
+        # File handler (if provided)
+        if log_to_file:
+            file_handler = logging.FileHandler(log_to_file)
+            file_handler.setFormatter(formatter)
+            self.logger.addHandler(file_handler)
+
+    def log_message(self, message, level="info"):
         """
-        Log a message.
+        Log a message using Python's logging module.
         """
-        # Skip logging info and debug messages if debug mode is off
-        if level in ["info", "debug"] and not self.debug:
-            return
-
-        # Avoid logging empty messages
-        if not message.strip():
-            return
-
-        # Construct the log prefix
-        prefix = f"[{level.upper()}] " if not (single_info_prefix and level == "info") else "[INFO] "
-        timestamp = f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - " if include_timestamp else ""
-        full_message = f"{prefix}{timestamp}{message}".strip()
-        print(full_message)
-        self._write_log(full_message)
+        if level == "debug":
+            self.logger.debug(message)
+        elif level == "info":
+            self.logger.info(message)
+        elif level == "warning":
+            self.logger.warning(message)
+        elif level == "error":
+            self.logger.error(message)
+        elif level == "critical":
+            self.logger.critical(message)
 
     def log_block(self, header, content_lines, level="info"):
         """
         Utility method to log blocks of messages with a header and separators.
         """
-        # Skip logging blocks if debug mode is off and level is "info" or "debug"
-        if level in ["info", "debug"] and not self.debug:
-            return
-
-        # Directly print the block header without using log_message to avoid the prefix
-        print(f"\n=== {header} ===")
-        self._write_log(f"=== {header} ===")
-
-        # Print separator
-        print("------------------------------")
-
-        # Log each content line
+        separator = "=" * 30
+        self.log_message(f"\n{separator}\n=== {header} ===\n{separator}", level=level)
+        
         for line in content_lines:
-            if line.strip():
-                self.log_message(f"{line}", level=level, single_info_prefix=False)
-
-        # End with a separator
-        print("------------------------------")
+            self.log_message(line, level=level)
+        
+        self.log_message(separator, level=level)
 
     def log_start(self, method_name):
-        """Log the start of a method, including a timestamp."""
-        self.log_message(f"Starting {method_name}...", include_timestamp=True)
+        """Log the start of a method."""
+        self.log_message(f"Starting {method_name}...", level="info")
 
     def log_end(self, method_name, success=True, additional_message=""):
         """
-        Log the end of a method, including a timestamp.
+        Log the end of a method.
         """
         status = "successfully" if success else "with errors"
         end_message = f"Finished {method_name} {status}. {additional_message}"
-        self.log_message(end_message, include_timestamp=True)
+        self.log_message(end_message, level="info")
 
     def log_error(self, message):
         """Log an error message."""
