@@ -75,21 +75,15 @@ class Config:
     def _initialize_paths(self):
         """Construct and initialize paths for source, destination, and schema."""
         try:
-            # Initialize source and destination paths
-            self.source_folder_path = generate_source_path(
-                self.source_environment, self.source_datasetidentifier
-            )
+            # Initialize source and destination paths and ensure they start with '/dbfs'
+            self.source_folder_path = f"/dbfs{generate_source_path(self.source_environment, self.source_datasetidentifier)}"
             self.full_source_file_path = generate_source_file_path(self.source_folder_path, self.source_filename)
 
-            self.destination_folder_path = generate_source_path(
-                self.destination_environment, self.source_datasetidentifier
-            )
+            self.destination_folder_path = f"/dbfs{generate_source_path(self.destination_environment, self.source_datasetidentifier)}"
 
             # Initialize schema paths only if schema_folder_name is provided
             if self.schema_folder_name:
-                self.source_schema_folder_path = generate_schema_path(
-                    self.source_environment, self.schema_folder_name, self.source_datasetidentifier
-                )
+                self.source_schema_folder_path = f"/dbfs{generate_schema_path(self.source_environment, self.schema_folder_name, self.source_datasetidentifier)}"
                 self.full_schema_file_path = generate_schema_file_path(
                     self.source_schema_folder_path, self.source_datasetidentifier + "_schema"
                 )
