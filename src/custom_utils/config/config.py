@@ -50,7 +50,7 @@ class Config:
         self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", required=True)
         self.source_container = get_param_value(self.dbutils, "SourceContainer", required=True)
         self.source_datasetidentifier = get_param_value(self.dbutils, "SourceDatasetidentifier", required=True)
-        self.source_filename = get_param_value(self.dbutils, "SourceFileName", "*")
+        self.source_filename = get_param_value(self.dbutils, "SourceFileName", default_value="*")
         self.key_columns = get_param_value(self.dbutils, "KeyColumns", required=True).replace(" ", "")
         
         # Feedback column is optional
@@ -58,10 +58,11 @@ class Config:
         if not self.feedback_column:
             self.logger.log_warning("FeedbackColumn is not provided. Setting it to None.")
         
-        self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", default="schemachecks")
+        # Use default_value instead of default
+        self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", default_value="schemachecks")
         
         # Depth level is optional
-        depth_level_str = get_param_value(self.dbutils, "DepthLevel", "")
+        depth_level_str = get_param_value(self.dbutils, "DepthLevel", default_value="")
         self.depth_level = int(depth_level_str) if depth_level_str else None
         if self.depth_level is None:
             self.logger.log_warning("DepthLevel is not provided or empty. Setting it to None.")

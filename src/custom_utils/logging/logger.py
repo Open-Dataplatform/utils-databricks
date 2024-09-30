@@ -9,24 +9,27 @@ class Logger:
         """
         self.debug = debug
         self.logger = logging.getLogger("custom_logger")
-        self.logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
-        # Console handler
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.DEBUG if self.debug else logging.INFO)
-        
-        # Formatter for logs
-        formatter = logging.Formatter('%(asctime)s - [%(levelname)s] - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-        console_handler.setFormatter(formatter)
+        # Check if handlers are already added to avoid duplicate logs
+        if not self.logger.hasHandlers():
+            self.logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
-        # Add handlers to logger
-        self.logger.addHandler(console_handler)
+            # Console handler
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
-        # File handler (if provided)
-        if log_to_file:
-            file_handler = logging.FileHandler(log_to_file)
-            file_handler.setFormatter(formatter)
-            self.logger.addHandler(file_handler)
+            # Formatter for logs
+            formatter = logging.Formatter('%(asctime)s - [%(levelname)s] - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            console_handler.setFormatter(formatter)
+
+            # Add handlers to logger
+            self.logger.addHandler(console_handler)
+
+            # File handler (if provided)
+            if log_to_file:
+                file_handler = logging.FileHandler(log_to_file)
+                file_handler.setFormatter(formatter)
+                self.logger.addHandler(file_handler)
 
     def log_message(self, message, level="info"):
         """
