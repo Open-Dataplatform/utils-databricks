@@ -81,7 +81,7 @@ class Validator:
 
     def _verify_schema_folder(self, mount_point: str) -> tuple:
         """
-        Verify the schema folder and the expected schema file.
+        Verify the schema folder and expected schema file.
 
         Args:
             mount_point (str): The mount point path.
@@ -172,11 +172,14 @@ class Validator:
             source_directory_path (str): The path to the source directory.
             number_of_files (int): The number of files found in the source directory.
         """
-        schema_directory_path = schema_directory_path if schema_directory_path else "Not provided"
-        content_lines = [
-            f"Source directory path: {source_directory_path}",
-            f"Number of files found: {number_of_files}"
-        ]
+        content_lines = []
+
+        if schema_directory_path:
+            content_lines.append(f"Schema directory path: {schema_directory_path}")
+
+        content_lines.append(f"Source directory path: {source_directory_path}")
+        content_lines.append(f"Number of files found: {number_of_files}")
+
         self.logger.log_block("Path Validation Results", content_lines)
 
     def _log_file_validation(self, schema_file_name, matched_files, file_type, source_filename):
