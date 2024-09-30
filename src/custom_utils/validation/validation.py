@@ -56,10 +56,14 @@ class Validator:
             # Verify source folder and files
             source_directory_path, full_source_file_path, matched_files = self._verify_source_folder(mount_point)
 
-            # Log path validation results (start the first block with an extra line)
+            # If no schema file was found, infer the file_type from the source files
+            if not file_type:
+                file_type = self._infer_file_type_from_files(matched_files)
+
+            # Log path validation results
             self._log_path_validation(schema_directory_path, source_directory_path, len(matched_files))
 
-            # Log file validation results (ensure no extra line before this block)
+            # Log file validation results
             self._log_file_validation(schema_file_name, matched_files, file_type, self.config.source_filename)
 
             # Log the end of the process with the additional message
@@ -163,6 +167,23 @@ class Validator:
             self.logger.log_error(error_message)
             raise Exception(error_message)
 
+    def _infer_file_type_from_files(self, matched_files) -> str:
+        """
+        Infer file type from the extension of the matched files.
+
+        Args:
+            matched_files (list): List of matched files in the source folder.
+
+        Returns:
+            str: The inferred file type (e.g., 'json', 'csv', etc.).
+        """
+        if not matched_files:
+            raise Exception("No files found to infer file type.")
+        
+        sample_file = matched_files[0].name if hasattr(matched_files[0], 'name') else matched_files[0]
+        _, ext = os.path.splitext(sample_file)
+        return ext.replace('.', '')  # Remove the leading period from the extension
+
     def _log_path_validation(self, schema_directory_path, source_directory_path, number_of_files):
         """
         Log the results of the path validation.
@@ -197,8 +218,8 @@ class Validator:
         more_files_text = f"...and {num_files - 10} more files." if num_files > 10 else ""
 
         content_lines = [
+            f"File Type: {file_type}",
             f"Files found matching the pattern '{source_filename}':"
         ] + [f"- {file.name if hasattr(file, 'name') else file}" for file in files_to_display] + ([more_files_text] if more_files_text else [])
 
-        # Log the file validation block (no extra line before this block)
         self.logger.log_block("File Validation Results", content_lines)
