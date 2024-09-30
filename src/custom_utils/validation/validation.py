@@ -70,7 +70,7 @@ class Validator:
         except Exception as e:
             # Log error message
             error_message = f"Failed to validate paths or files: {str(e)}"
-            self.logger.log_message(error_message, level="error")
+            self.logger.log_error(error_message)
 
             # Log the end of the process with failure
             self.logger.log_end("verify_paths_and_files", success=False, additional_message="Check error logs for details.")
@@ -227,4 +227,4 @@ class Validator:
         except Exception as e:
             error_message = f"Error while retrieving mount points: {str(e)}"
             self.logger.log_error(error_message)
-            self.logger.exit_notebook(error_message, self.dbutils)
+            raise Exception(error_message)
