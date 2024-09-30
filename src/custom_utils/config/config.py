@@ -38,7 +38,7 @@ class Config:
         except Exception as e:
             self._handle_initialization_error(e)
 
-     @staticmethod
+    @staticmethod
     def initialize(dbutils=None, logger=None, debug: bool = False) -> 'Config':
         """
         Static method to create and return a Config instance.
