@@ -24,18 +24,20 @@ from custom_utils.config.config import Config  # Assuming there is a config modu
 from pyspark.sql.types import DataType
 
 class DataFrameTransformer:
-    def __init__(self, config: Config = None, logger: Logger = None, debug: bool = None):
+    def __init__(self, config: Config = None, logger: Logger = None, dbutils=None, debug: bool = None):
         """
-        Initializes the DataFrameTransformer with logging capabilities.
+        Initializes the DataFrameTransformer with logging capabilities and optional dbutils.
 
         Args:
             config (Config, optional): An instance of the Config class containing configuration parameters.
             logger (Logger, optional): An instance of the Logger class for logging. Defaults to None.
             debug (bool, optional): If set, it overrides the config's debug setting.
+            dbutils (optional): dbutils object for accessing DBFS and other utilities.
         """
         self.config = config
         self.debug = debug if debug is not None else (config.debug if config else False)
         self.logger = logger if logger else (config.logger if config else Logger(debug=self.debug))
+        self.dbutils = dbutils if dbutils else config.dbutils  # Use dbutils from config if available
         
         # Update the logger's debug flag to match the one passed to DataFrameTransformer
         self.logger.debug = self.debug
@@ -131,6 +133,20 @@ class DataFrameTransformer:
             "time": StringType(),         # Treats time as a string (time-only types)
             "binary": BinaryType(),       # Maps binary data to PySpark's BinaryType
         }
+
+    def _strip_dbfs_prefix(self, path: str) -> str:
+        """
+        Remove the '/dbfs' prefix from a path to make it compatible with dbutils.fs functions.
+
+        Args:
+            path (str): The path to strip.
+
+        Returns:
+            str: The path without the '/dbfs' prefix.
+        """
+        if path and path.startswith('/dbfs'):
+            return path[5:]  # Strip '/dbfs' from the path
+        return path
 
     def _apply_nested_type_mapping(self, column_name, data_type, type_mapping):
         """
@@ -264,10 +280,14 @@ class DataFrameTransformer:
         return complex_columns
 
     def _json_schema_to_spark_struct(self, schema_file_path: str, definitions: Dict = None) -> Tuple[dict, StructType]:
-        """Converts a JSON schema file to a PySpark StructType."""
+        """
+        Converts a JSON schema file to a PySpark StructType.
+        This method reads the file from DBFS using dbutils.
+        """
         try:
-            with open(schema_file_path, "r") as f:
-                json_schema = json.load(f)
+            # Use dbutils to read the file as a string
+            schema_content = self.dbutils.fs.head(schema_file_path)
+            json_schema = json.loads(schema_content)  # Parse the JSON schema
         except Exception as e:
             raise ValueError(f"Failed to load or parse schema file '{schema_file_path}': {e}")
 
@@ -446,111 +466,128 @@ class DataFrameTransformer:
             raise RuntimeError(f"Error processing binary JSON files")
 
     def process_and_flatten_json(self, schema_file_path: str, data_file_path: str, depth_level: int = None, include_schema: bool = False) -> Tuple[DataFrame, DataFrame]:
-        """
-        Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
+            """
+            Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
 
-        Args:
-            schema_file_path (str): Path to the schema file. If None, schema validation will be skipped.
-            data_file_path (str): Path to the JSON data file.
-            depth_level (int, optional): The depth level to flatten the JSON. Defaults to None.
-            include_schema (bool, optional): If True, includes the schema in the logs. Defaults to False.
+            Args:
+                schema_file_path (str): Path to the schema file. If None, schema validation will be skipped.
+                data_file_path (str): Path to the JSON data file.
+                depth_level (int, optional): The depth level to flatten the JSON. Defaults to None.
+                include_schema (bool, optional): If True, includes the schema in the logs. Defaults to False.
 
-        Returns:
-            Tuple[DataFrame, DataFrame]: A tuple containing the original DataFrame and the flattened DataFrame.
+            Returns:
+                Tuple[DataFrame, DataFrame]: A tuple containing the original DataFrame and the flattened DataFrame.
 
-        Raises:
-            RuntimeError: If the process fails.
-        """
-        # Log the start of the process
-        self.logger.log_start("process_and_flatten_json")
-        
-        try:
-            # Get the active Spark session
-            spark = SparkSession.builder.getOrCreate()
+            Raises:
+                RuntimeError: If the process fails.
+            """
+            # Log the start of the process
+            self.logger.log_start("process_and_flatten_json")
+            
+            try:
+                # Get the active Spark session
+                spark = SparkSession.builder.getOrCreate()
 
-            schema = None  # Initialize schema to None
-            max_depth = 1  # Default max depth if schema is not provided
+                # Correct the file paths by stripping any leading '/dbfs' if it exists
+                schema_file_path = self._strip_dbfs_prefix(schema_file_path)
+                data_file_path = self._strip_dbfs_prefix(data_file_path)
 
-            # Only read the schema if schema_file_path is provided
-            if schema_file_path:
-                schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
-                max_depth = self._get_json_depth(schema_json)  # Get max depth from the schema
+                schema = None  # Initialize schema to None
+                max_depth = 1  # Default max depth if schema is not provided
 
-                # Log schema-related info
-                self.logger.log_block("Schema and File Paths", [
-                    f"Schema file path: {schema_file_path}",
-                    f"Data file path: {data_file_path}",
-                    f"Maximum depth level of the JSON schema: {max_depth}"
+                # Check if schema is being used
+                if self.config.use_schema:
+                    # Load schema from schema file
+                    schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
+                    max_depth = self._get_json_depth(schema_json)  # Get max depth from the schema
+
+                    # Log schema-related info
+                    self.logger.log_block("Schema and File Paths", [
+                        f"Schema file path: {schema_file_path}",
+                        f"Data file path: {data_file_path}",
+                        f"Maximum depth level of the JSON schema: {max_depth}"
+                    ])
+                    
+                    if include_schema:
+                        self.logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
+
+                else:
+                    # Log that schema validation is skipped
+                    self.logger.log_message(f"No schema provided. Skipping schema validation.", level="warning")
+                    self.logger.log_block("File Paths", [
+                        f"Data file path: {data_file_path}"
+                    ])
+
+                # If depth_level is None, flatten all levels (use max depth)
+                if depth_level is None:
+                    depth_level_to_use = max_depth
+                    self.logger.log_message(f"DepthLevel is not provided. Using max_depth: {max_depth} as DepthLevel.", level="info")
+                else:
+                    depth_level_to_use = depth_level
+
+                # Read the JSON data. If schema is provided, use it; otherwise, infer the schema dynamically
+                if self.config.use_schema:
+                    df = self._read_json_from_binary(spark, schema, data_file_path)
+                else:
+                    # Infer schema dynamically and keep input_file_name
+                    df = spark.read.option("multiline", "true").json(data_file_path)
+                    df = df.withColumn("input_file_name", F.input_file_name())  # Add the file name to the DataFrame
+
+                    # Log the inferred schema as the initial DataFrame schema
+                    self.logger.log_message(f"Using dynamically inferred schema for initial DataFrame.", level="info")
+
+                # Block 2: Initial DataFrame info
+                initial_row_count = df.count()
+                self.logger.log_block("Initial DataFrame Info", [
+                    f"Initial DataFrame row count: {initial_row_count}"
                 ])
+
+                # Log the schema of the initial DataFrame without "input_file_name"
+                if self.debug:
+                    self.logger.log_message("Initial DataFrame schema (without input_file_name):", level="info")
+                    df.drop("input_file_name").printSchema()  # This will print the schema without "input_file_name"
+
+                # Flatten the DataFrame using the determined depth level
+                df_flattened, converted_columns = self.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth, type_mapping=self._get_type_mapping())
+
+                # Block 3: Flattened DataFrame info
+                flattened_row_count = df_flattened.count()
+                self.logger.log_block("Flattened DataFrame Info", [
+                    f"Flattened DataFrame row count: {flattened_row_count}"
+                ])
+
+                # **Filter converted columns based on the columns in the flattened DataFrame**
+                final_converted_columns = self._filter_converted_columns(converted_columns, df_flattened)
+
+                # Block 4: Columns converted by _get_type_mapping (filtered based on flattened_df)
+                if final_converted_columns:
+                    formatted_conversions = self._format_converted_columns(final_converted_columns, df_flattened)
+                    # Log only if there are columns to be displayed
+                    if formatted_conversions:
+                        self.logger.log_block("Columns converted by _get_type_mapping", formatted_conversions)
                 
-                if include_schema:
-                    self.logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
-            else:
-                # Log that schema validation is skipped
-                self.logger.log_message(f"No schema provided. Skipping schema validation.", level="warning")
-                self.logger.log_block("File Paths", [
-                    f"Data file path: {data_file_path}"
-                ])
+                # Log the flattened schema if debug is enabled
+                if self.debug:
+                    self.logger.log_message("Flattened DataFrame schema:", level="info")
+                    df_flattened.printSchema()  # This will print the schema to the console
 
-            # If depth_level is None, flatten all levels (use max depth)
-            depth_level_to_use = depth_level if depth_level is not None else max_depth
+                # Ensure `input_file_name` is the first column in both DataFrames
+                columns_with_input_file = ["input_file_name"] + [col for col in df.columns if col != "input_file_name"]
+                df = df.select(columns_with_input_file)
 
-            # Read the JSON data. If no schema is provided, infer schema dynamically
-            if schema:
-                df = self._read_json_from_binary(spark, schema, data_file_path)
-            else:
-                df = spark.read.option("multiline", "true").json(data_file_path)  # Infer schema dynamically
+                columns_with_input_file_flattened = ["input_file_name"] + [col for col in df_flattened.columns if col != "input_file_name"]
+                df_flattened = df_flattened.select(columns_with_input_file_flattened)
 
-            # Block 2: Initial DataFrame info
-            initial_row_count = df.count()
-            self.logger.log_block("Initial DataFrame Info", [
-                f"Initial DataFrame row count: {initial_row_count}"
-            ])
+                # Log the end of the process with the additional message
+                self.logger.log_end("process_and_flatten_json", success=True, additional_message="Proceeding with notebook execution.")
+                
+                return df, df_flattened
 
-            # Log the schema of the initial DataFrame without "input_file_name"
-            if self.debug:
-                df_to_log = df.drop("input_file_name") if "input_file_name" in df.columns else df
-                self.logger.log_message("Initial DataFrame schema:", level="info")
-                df_to_log.printSchema()  # This will print the schema without "input_file_name"
-
-            # Flatten the DataFrame using the determined depth level
-            df_flattened, converted_columns = self.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth, type_mapping=self._get_type_mapping())
-
-            # Block 3: Flattened DataFrame info
-            flattened_row_count = df_flattened.count()
-            self.logger.log_block("Flattened DataFrame Info", [
-                f"Flattened DataFrame row count: {flattened_row_count}"
-            ])
-
-            # **Filter converted columns based on the columns in the flattened DataFrame**
-            final_converted_columns = self._filter_converted_columns(converted_columns, df_flattened)
-
-            # Block 4: Columns converted by _get_type_mapping (filtered based on flattened_df)
-            if final_converted_columns:
-                formatted_conversions = self._format_converted_columns(final_converted_columns, df_flattened)
-                # Log only if there are columns to be displayed
-                if formatted_conversions:
-                    self.logger.log_block("Columns converted by _get_type_mapping", formatted_conversions)
-            
-            # Log the flattened schema if debug is enabled
-            if self.debug:
-                self.logger.log_message("Flattened DataFrame schema:", level="info")
-                df_flattened.printSchema()  # This will print the schema to the console
-
-            # Drop the "input_file_name" column from the original DataFrame if it exists
-            if "input_file_name" in df.columns:
-                df = df.drop("input_file_name")
-
-            # Log the end of the process with the additional message
-            self.logger.log_end("process_and_flatten_json", success=True, additional_message="Proceeding with notebook execution.")
-            
-            return df, df_flattened
-
-        except Exception as e:
-            # Log the error message
-            self.logger.log_message(f"Error during processing and flattening: {str(e)}", level="error")
-            
-            # Log the end of the process with failure
-            self.logger.log_end("process_and_flatten_json", success=False, additional_message="Check error logs for details.")
-            
-            raise RuntimeError(f"Error during processing and flattening: {e}")
+            except Exception as e:
+                # Log the error message
+                self.logger.log_message(f"Error during processing and flattening: {str(e)}", level="error")
+                
+                # Log the end of the process with failure
+                self.logger.log_end("process_and_flatten_json", success=False, additional_message="Check error logs for details.")
+                
+                raise RuntimeError(f"Error during processing and flattening: {e}")
