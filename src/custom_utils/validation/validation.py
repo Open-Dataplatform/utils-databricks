@@ -1,10 +1,9 @@
-# File: custom_utils/validation/validation.py
-
 import os
 from pyspark.sql.utils import AnalysisException
 from custom_utils.config.config import Config
 from custom_utils.file_handler.file_handler import FileHandler
 from custom_utils.logging.logger import Logger
+from custom_utils.dp_storage.connector import get_mount_point  # Import the new function
 
 class Validator:
     def __init__(self, config: Config, logger: Logger = None, debug=None):
@@ -46,19 +45,21 @@ class Validator:
         self.logger.log_start("verify_paths_and_files")
 
         try:
-            # Retrieve the mount point for the source environment
-            mount_point = self._get_mount_point()
+            # Retrieve the mount point for the source environment using the external function
+            mount_point = get_mount_point(self.dbutils, self.config.source_environment, self.logger)
 
-            # Verify schema folder and file
-            schema_file_path, schema_directory_path, schema_file_name, file_type = self._verify_schema_folder(mount_point)
+            # Only verify the schema folder if it's provided
+            schema_file_path = schema_directory_path = schema_file_name = file_type = None
+            if self.config.schema_folder_name:
+                schema_file_path, schema_directory_path, schema_file_name, file_type = self._verify_schema_folder(mount_point)
 
             # Verify source folder and files
             source_directory_path, full_source_file_path, matched_files = self._verify_source_folder(mount_point)
 
-            # Log path validation results
+            # Log path validation results (start the first block with an extra line)
             self._log_path_validation(schema_directory_path, source_directory_path, len(matched_files))
 
-            # Log file validation results
+            # Log file validation results (ensure no extra line before this block)
             self._log_file_validation(schema_file_name, matched_files, file_type, self.config.source_filename)
 
             # Log the end of the process with the additional message
@@ -171,9 +172,8 @@ class Validator:
             source_directory_path (str): The path to the source directory.
             number_of_files (int): The number of files found in the source directory.
         """
-        schema_directory_path = schema_directory_path if not schema_directory_path.startswith('/dbfs/') else schema_directory_path[5:]
+        schema_directory_path = schema_directory_path if schema_directory_path else "Not provided"
         content_lines = [
-            f"Schema directory path: {schema_directory_path}",
             f"Source directory path: {source_directory_path}",
             f"Number of files found: {number_of_files}"
         ]
@@ -194,37 +194,8 @@ class Validator:
         more_files_text = f"...and {num_files - 10} more files." if num_files > 10 else ""
 
         content_lines = [
-            f"File Type: {file_type}",
-            f"Schema file name: {schema_file_name}",
             f"Files found matching the pattern '{source_filename}':"
         ] + [f"- {file.name if hasattr(file, 'name') else file}" for file in files_to_display] + ([more_files_text] if more_files_text else [])
 
+        # Log the file validation block (no extra line before this block)
         self.logger.log_block("File Validation Results", content_lines)
-
-    def _get_mount_point(self) -> str:
-        """
-        Retrieve the mount point for the specified source environment.
-
-        Returns:
-            str: The mount point path.
-
-        Raises:
-            Exception: If the mount point is not found or if an error occurs.
-        """
-        try:
-            target_mount = [
-                m.mountPoint
-                for m in self.dbutils.fs.mounts()
-                if self.config.source_environment in m.source
-            ]
-            if not target_mount:
-                error_message = f"No mount point found for environment: {self.config.source_environment}"
-                self.logger.log_error(error_message)
-                raise Exception(error_message)
-
-            return target_mount[0]
-
-        except Exception as e:
-            error_message = f"Error while retrieving mount points: {str(e)}"
-            self.logger.log_error(error_message)
-            raise Exception(error_message)
