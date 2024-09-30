@@ -1,6 +1,7 @@
+
 import os
 from pyspark.sql import SparkSession
-from custom_utils.logging.logger import Logger  # Can also be Python's standard logging
+from custom_utils.logging.logger import Logger
 from custom_utils.helper import get_param_value
 from custom_utils.path_utils import (
     generate_source_path,
@@ -37,7 +38,7 @@ class Config:
         except Exception as e:
             self._handle_initialization_error(e)
 
-    @staticmethod
+     @staticmethod
     def initialize(dbutils=None, logger=None, debug: bool = False) -> 'Config':
         """
         Static method to create and return a Config instance.
@@ -46,42 +47,52 @@ class Config:
 
     def _initialize_parameters(self):
         """Initialize all the configuration parameters required."""
-        self.source_environment = get_param_value(self.dbutils, "SourceStorageAccount", required=True)
-        self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", required=True)
-        self.source_container = get_param_value(self.dbutils, "SourceContainer", required=True)
-        self.source_datasetidentifier = get_param_value(self.dbutils, "SourceDatasetidentifier", required=True)
-        self.source_filename = get_param_value(self.dbutils, "SourceFileName", default_value="*")
-        self.key_columns = get_param_value(self.dbutils, "KeyColumns", required=True).replace(" ", "")
-        
-        # Feedback column is optional
-        self.feedback_column = get_param_value(self.dbutils, "FeedbackColumn", required=False)
-        if not self.feedback_column:
-            self.logger.log_warning("FeedbackColumn is not provided. Setting it to None.")
-        
-        # Use default_value instead of default
-        self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", default_value="schemachecks")
-        
-        # Depth level is optional
-        depth_level_str = get_param_value(self.dbutils, "DepthLevel", default_value="")
-        self.depth_level = int(depth_level_str) if depth_level_str else None
-        if self.depth_level is None:
-            self.logger.log_warning("DepthLevel is not provided or empty. Setting it to None.")
+        try:
+            self.source_environment = get_param_value(self.dbutils, "SourceStorageAccount", required=True)
+            self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", required=True)
+            self.source_container = get_param_value(self.dbutils, "SourceContainer", required=True)
+            self.source_datasetidentifier = get_param_value(self.dbutils, "SourceDatasetidentifier", required=True)
+            self.source_filename = get_param_value(self.dbutils, "SourceFileName", default_value="*")
+            self.key_columns = get_param_value(self.dbutils, "KeyColumns", required=True).replace(" ", "")
+            
+            # Feedback column is optional
+            self.feedback_column = get_param_value(self.dbutils, "FeedbackColumn", required=False)
+            if not self.feedback_column:
+                self.logger.log_warning("FeedbackColumn is not provided. Setting it to None.")
+            
+            # Use default_value instead of default
+            self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", default_value="schemachecks")
+            
+            # Depth level is optional
+            depth_level_str = get_param_value(self.dbutils, "DepthLevel", default_value="")
+            self.depth_level = int(depth_level_str) if depth_level_str else None
+            if self.depth_level is None:
+                self.logger.log_warning("DepthLevel is not provided or empty. Setting it to None.")
+        except Exception as e:
+            self.logger.log_error(f"Error initializing parameters: {e}")
+            raise
 
     def _initialize_paths(self):
         """Construct and initialize paths for source, destination, and schema."""
-        self.full_source_folder_path = generate_source_path(
-            self.source_environment, self.source_container, self.source_datasetidentifier
-        )
-        self.full_source_file_path = generate_source_file_path(self.full_source_folder_path, self.source_filename)
-        
-        self.full_source_schema_folder_path = generate_schema_path(
-            self.source_environment, self.source_container, self.schema_folder_name, self.source_datasetidentifier
-        )
-        self.full_schema_file_path = generate_schema_file_path(self.full_source_schema_folder_path, self.source_datasetidentifier + "_schema")
+        try:
+            self.full_source_folder_path = generate_source_path(
+                self.source_environment, self.source_container, self.source_datasetidentifier
+            )
+            self.full_source_file_path = generate_source_file_path(self.full_source_folder_path, self.source_filename)
+            
+            self.full_source_schema_folder_path = generate_schema_path(
+                self.source_environment, self.source_container, self.schema_folder_name, self.source_datasetidentifier
+            )
+            self.full_schema_file_path = generate_schema_file_path(
+                self.full_source_schema_folder_path, self.source_datasetidentifier + "_schema"
+            )
 
-        self.full_destination_folder_path = generate_source_path(
-            self.destination_environment, self.source_container, self.source_datasetidentifier
-        )
+            self.full_destination_folder_path = generate_source_path(
+                self.destination_environment, self.source_container, self.source_datasetidentifier
+            )
+        except Exception as e:
+            self.logger.log_error(f"Error initializing paths: {e}")
+            raise
 
     def _initialize_spark(self) -> SparkSession:
         """Initializes and returns the Spark session."""

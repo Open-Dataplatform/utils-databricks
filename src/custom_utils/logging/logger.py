@@ -1,5 +1,4 @@
 import logging
-import datetime
 import functools
 
 class Logger:
@@ -10,35 +9,44 @@ class Logger:
         self.debug = debug
         self.logger = logging.getLogger("custom_logger")
 
-        # Check if handlers are already added to avoid duplicate logs
-        if not self.logger.hasHandlers():
-            self.logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
+        # Clear existing handlers to prevent duplicate logging
+        if self.logger.hasHandlers():
+            self.logger.handlers.clear()
 
-            # Console handler
-            console_handler = logging.StreamHandler()
-            console_handler.setLevel(logging.DEBUG if self.debug else logging.INFO)
+        self.logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
-            # Formatter for logs
-            formatter = logging.Formatter('%(asctime)s - [%(levelname)s] - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-            console_handler.setFormatter(formatter)
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
-            # Add handlers to logger
-            self.logger.addHandler(console_handler)
+        # Formatter for logs
+        formatter = logging.Formatter('%(asctime)s - [%(levelname)s] - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        console_handler.setFormatter(formatter)
 
-            # File handler (if provided)
-            if log_to_file:
-                file_handler = logging.FileHandler(log_to_file)
-                file_handler.setFormatter(formatter)
-                self.logger.addHandler(file_handler)
+        # Add handlers to logger
+        self.logger.addHandler(console_handler)
 
-    def log_message(self, message, level="info"):
+        # File handler (if provided)
+        if log_to_file:
+            file_handler = logging.FileHandler(log_to_file)
+            file_handler.setFormatter(formatter)
+            self.logger.addHandler(file_handler)
+
+    def log_info(self, message):
+        """Convenience method for logging informational messages."""
+        self._log_message(message, level="info")
+
+    def _log_message(self, message, level="info", include_timestamp=True):
         """
-        Log a message using Python's logging module.
+        Log a message using Python's logging module, with optional timestamp control.
         """
         if level == "debug":
             self.logger.debug(message)
         elif level == "info":
-            self.logger.info(message)
+            if include_timestamp:
+                self.logger.info(message)
+            else:
+                print(message)  # Output without timestamp for cleaner look
         elif level == "warning":
             self.logger.warning(message)
         elif level == "error":
@@ -50,17 +58,24 @@ class Logger:
         """
         Utility method to log blocks of messages with a header and separators.
         """
-        separator = "=" * 30
-        self.log_message(f"\n{separator}\n=== {header} ===\n{separator}", level=level)
-        
+        separator_length = 50
+        separator = "=" * separator_length
+        formatted_header = f" {header} ".center(separator_length, "=")  # Center the header within the separator
+
+        self._log_message(f"\n{separator}", level=level, include_timestamp=False)  # No timestamp for separators
+        self._log_message(formatted_header, level=level, include_timestamp=False)
+        self._log_message(separator, level=level, include_timestamp=False)
+
+        # Log each content line with bullet points, avoiding empty lines or double bullets
         for line in content_lines:
-            self.log_message(line, level=level)
-        
-        self.log_message(separator, level=level)
+            if line.strip():  # Only log non-empty lines
+                self._log_message(f"  - {line}", level=level, include_timestamp=False)
+
+        self._log_message(separator, level=level, include_timestamp=False)
 
     def log_start(self, method_name):
         """Log the start of a method."""
-        self.log_message(f"Starting {method_name}...", level="info")
+        self._log_message(f"Starting {method_name}...", level="info")
 
     def log_end(self, method_name, success=True, additional_message=""):
         """
@@ -68,23 +83,23 @@ class Logger:
         """
         status = "successfully" if success else "with errors"
         end_message = f"Finished {method_name} {status}. {additional_message}"
-        self.log_message(end_message, level="info")
+        self._log_message(end_message, level="info")
 
     def log_error(self, message):
         """Log an error message."""
-        self.log_message(message, level="error")
+        self._log_message(message, level="error")
 
     def log_warning(self, message):
         """Log a warning message."""
-        self.log_message(message, level="warning")
+        self._log_message(message, level="warning")
 
     def log_critical(self, message):
         """Log a critical message."""
-        self.log_message(message, level="critical")
+        self._log_message(message, level="critical")
 
     def log_debug(self, message):
         """Log a debug message."""
-        self.log_message(message, level="debug")
+        self._log_message(message, level="debug")
 
     def exit_notebook(self, message, dbutils=None):
         """
