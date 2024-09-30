@@ -47,30 +47,25 @@ class Config:
     def _initialize_parameters(self):
         """Initialize all the configuration parameters required."""
         try:
+            # Required parameters
             self.source_environment = get_param_value(self.dbutils, "SourceStorageAccount", required=True)
             self.destination_environment = get_param_value(self.dbutils, "DestinationStorageAccount", required=True)
             self.source_container = get_param_value(self.dbutils, "SourceContainer", required=True)
             self.source_datasetidentifier = get_param_value(self.dbutils, "SourceDatasetidentifier", required=True)
             self.source_filename = get_param_value(self.dbutils, "SourceFileName", default_value="*")
             self.key_columns = get_param_value(self.dbutils, "KeyColumns", required=True).replace(" ", "")
-            
-            # Feedback column is optional
+
+            # Optional parameters
+            # If FeedbackColumn or SchemaFolderName is not provided, silently set them to None
             self.feedback_column = get_param_value(self.dbutils, "FeedbackColumn", required=False)
-            if not self.feedback_column:
-                self.feedback_column = None  # Explicitly set to None if not provided
-                self.logger.log_warning("FeedbackColumn is not provided. Setting it to None.")
-            
-            # Schema folder is optional
-            self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", default_value=None)
-            if not self.schema_folder_name:
-                self.schema_folder_name = None  # Explicitly set to None if not provided
-                self.logger.log_warning("SchemaFolderName is not provided. Setting it to None.")
-            
-            # Depth level is optional
+            self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", required=False)
+
+            # Depth level is optional, but we log a warning if not provided
             depth_level_str = get_param_value(self.dbutils, "DepthLevel", default_value="")
             self.depth_level = int(depth_level_str) if depth_level_str else None
             if self.depth_level is None:
                 self.logger.log_warning("DepthLevel is not provided or empty. Setting it to None.")
+                
         except Exception as e:
             self.logger.log_error(f"Error initializing parameters: {e}")
             raise
@@ -78,12 +73,17 @@ class Config:
     def _initialize_paths(self):
         """Construct and initialize paths for source, destination, and schema."""
         try:
+            # Initialize source and destination paths
             self.full_source_folder_path = generate_source_path(
                 self.source_environment, self.source_container, self.source_datasetidentifier
             )
             self.full_source_file_path = generate_source_file_path(self.full_source_folder_path, self.source_filename)
-            
-            # Schema paths are only initialized if schema_folder_name is provided
+
+            self.full_destination_folder_path = generate_source_path(
+                self.destination_environment, self.source_container, self.source_datasetidentifier
+            )
+
+            # Initialize schema paths only if schema_folder_name is provided
             if self.schema_folder_name:
                 self.full_source_schema_folder_path = generate_schema_path(
                     self.source_environment, self.source_container, self.schema_folder_name, self.source_datasetidentifier
@@ -95,9 +95,6 @@ class Config:
                 self.full_source_schema_folder_path = None
                 self.full_schema_file_path = None
 
-            self.full_destination_folder_path = generate_source_path(
-                self.destination_environment, self.source_container, self.source_datasetidentifier
-            )
         except Exception as e:
             self.logger.log_error(f"Error initializing paths: {e}")
             raise
@@ -125,24 +122,24 @@ class Config:
             f"Source Filename: {self.source_filename}",
             f"Key Columns: {self.key_columns}",
         ]
-        
+
         # Only add the feedback column if it is provided
         if self.feedback_column:
             params.append(f"Feedback Column: {self.feedback_column}")
-        
-        # Only add the depth level if it is provided
-        if self.depth_level is not None:
-            params.append(f"Depth Level: {self.depth_level}")
 
         # Only add schema folder path if it was initialized
         if self.full_source_schema_folder_path:
             params.append(f"Schema Folder Path: {self.full_source_schema_folder_path}")
-        
+
+        # Add DepthLevel if not None
+        if self.depth_level is not None:
+            params.append(f"Depth Level: {self.depth_level}")
+
         params.extend([
             f"Source Folder Path: {self.full_source_folder_path}",
             f"Destination Folder Path: {self.full_destination_folder_path}",
         ])
-        
+
         self.logger.log_block("Configuration Parameters", params)
 
     def _handle_initialization_error(self, e: Exception):

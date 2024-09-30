@@ -45,20 +45,32 @@ def get_adf_parameter(dbutils, param_name, default_value=""):
 def get_param_value(dbutils, param_name, default_value=None, required=False):
     """
     Fetches a parameter value from Databricks widgets, environment variables, or defaults.
+    Args:
+        dbutils (object): Databricks dbutils for accessing widgets.
+        param_name (str): The name of the parameter.
+        default_value (str): The default value if the parameter is not set.
+        required (bool): If True, raises an exception if the parameter is not found.
+    Returns:
+        str: The value of the parameter.
+    Raises:
+        ValueError: If the parameter is required and not found.
     """
     value = None
     try:
         if dbutils:
             value = dbutils.widgets.get(param_name)
     except Exception as e:
-        logger.log_message(f"Could not retrieve widget '{param_name}': {e}", level="warning")
+        if required:
+            logger.log_message(f"Could not retrieve required widget '{param_name}': {e}", level="error")
+        else:
+            # Silently handle optional parameters
+            pass
 
-    if not value:  # If widget value is not set, fallback to default or environment variables
+    if not value:
         value = os.getenv(param_name.upper(), default_value)
 
     if required and not value:
-        logger.log_message(f"Required parameter '{param_name}' is missing.", level="error")
-        raise ValueError(f"Required parameter '{param_name}' is missing.")
+        logger.exit_notebook(f"Required parameter '{param_name}' is missing.", dbutils)
 
     return value
 

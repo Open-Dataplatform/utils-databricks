@@ -19,8 +19,8 @@ class Logger:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.DEBUG if self.debug else logging.INFO)
 
-        # Formatter for logs
-        formatter = logging.Formatter('%(asctime)s - [%(levelname)s] - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        # Formatter for logs without timestamps
+        formatter = logging.Formatter('[%(levelname)s] - %(message)s')
         console_handler.setFormatter(formatter)
 
         # Add handlers to logger
@@ -34,19 +34,16 @@ class Logger:
 
     def log_info(self, message):
         """Convenience method for logging informational messages."""
-        self._log_message(message, level="info")
+        self.log_message(message, level="info")
 
-    def _log_message(self, message, level="info", include_timestamp=True):
+    def log_message(self, message, level="info"):
         """
-        Log a message using Python's logging module, with optional timestamp control.
+        Log a message using Python's logging module.
         """
         if level == "debug":
             self.logger.debug(message)
         elif level == "info":
-            if include_timestamp:
-                self.logger.info(message)
-            else:
-                print(message)  # Output without timestamp for cleaner look
+            self.logger.info(message)
         elif level == "warning":
             self.logger.warning(message)
         elif level == "error":
@@ -57,25 +54,28 @@ class Logger:
     def log_block(self, header, content_lines, level="info"):
         """
         Utility method to log blocks of messages with a header and separators.
+        Block headers and separators don't have [INFO] - prefix.
         """
         separator_length = 50
         separator = "=" * separator_length
-        formatted_header = f" {header} ".center(separator_length, "=")  # Center the header within the separator
+        formatted_header = f" {header} ".center(separator_length, "=")
 
-        self._log_message(f"\n{separator}", level=level, include_timestamp=False)  # No timestamp for separators
-        self._log_message(formatted_header, level=level, include_timestamp=False)
-        self._log_message(separator, level=level, include_timestamp=False)
+        # Print header and separator without [INFO] -
+        print("\n" + separator)  # Add newline before the block for readability
+        print(formatted_header)
+        print(separator)
 
-        # Log each content line with bullet points, avoiding empty lines or double bullets
+        # Log each content line, avoiding empty lines or duplicate bullet points, with [INFO] -
         for line in content_lines:
             if line.strip():  # Only log non-empty lines
-                self._log_message(f"  - {line}", level=level, include_timestamp=False)
+                self.log_message(f"  {line}", level=level)  # Indent each line with normal [INFO] -
 
-        self._log_message(separator, level=level, include_timestamp=False)
+        # End with a separator and a newline, without [INFO] -
+        print(separator + "\n")  # Add newline after the block for readability
 
     def log_start(self, method_name):
         """Log the start of a method."""
-        self._log_message(f"Starting {method_name}...", level="info")
+        self.log_message(f"Starting {method_name}...", level="info")  # Combine [INFO] - and the start message in one line
 
     def log_end(self, method_name, success=True, additional_message=""):
         """
@@ -83,23 +83,23 @@ class Logger:
         """
         status = "successfully" if success else "with errors"
         end_message = f"Finished {method_name} {status}. {additional_message}"
-        self._log_message(end_message, level="info")
+        self.log_message(end_message, level="info")
 
     def log_error(self, message):
         """Log an error message."""
-        self._log_message(message, level="error")
+        self.log_message(message, level="error")
 
     def log_warning(self, message):
         """Log a warning message."""
-        self._log_message(message, level="warning")
+        self.log_message(message, level="warning")
 
     def log_critical(self, message):
         """Log a critical message."""
-        self._log_message(message, level="critical")
+        self.log_message(message, level="critical")
 
     def log_debug(self, message):
         """Log a debug message."""
-        self._log_message(message, level="debug")
+        self.log_message(message, level="debug")
 
     def exit_notebook(self, message, dbutils=None):
         """
