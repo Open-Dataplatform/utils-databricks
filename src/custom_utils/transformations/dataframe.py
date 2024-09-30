@@ -450,7 +450,7 @@ class DataFrameTransformer:
         Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
 
         Args:
-            schema_file_path (str): Path to the schema file.
+            schema_file_path (str): Path to the schema file. If None, schema validation will be skipped.
             data_file_path (str): Path to the JSON data file.
             depth_level (int, optional): The depth level to flatten the JSON. Defaults to None.
             include_schema (bool, optional): If True, includes the schema in the logs. Defaults to False.
@@ -468,28 +468,38 @@ class DataFrameTransformer:
             # Get the active Spark session
             spark = SparkSession.builder.getOrCreate()
 
-            # Reading schema and parsing JSON to Spark StructType
-            schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
+            schema = None  # Initialize schema to None
+            max_depth = 1  # Default max depth if schema is not provided
 
-            # Get the max depth of the JSON schema
-            max_depth = self._get_json_depth(schema_json)
+            # Only read the schema if schema_file_path is provided
+            if schema_file_path:
+                schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
+                max_depth = self._get_json_depth(schema_json)  # Get max depth from the schema
 
-            # If depth_level is None, flatten all levels (up to max depth)
+                # Log schema-related info
+                self.logger.log_block("Schema and File Paths", [
+                    f"Schema file path: {schema_file_path}",
+                    f"Data file path: {data_file_path}",
+                    f"Maximum depth level of the JSON schema: {max_depth}"
+                ])
+                
+                if include_schema:
+                    self.logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
+            else:
+                # Log that schema validation is skipped
+                self.logger.log_message(f"No schema provided. Skipping schema validation.", level="warning")
+                self.logger.log_block("File Paths", [
+                    f"Data file path: {data_file_path}"
+                ])
+
+            # If depth_level is None, flatten all levels (use max depth)
             depth_level_to_use = depth_level if depth_level is not None else max_depth
 
-            # Block 1: Schema and file paths
-            self.logger.log_block("Schema and File Paths", [
-                f"Schema file path: {schema_file_path}",
-                f"Data file path: {data_file_path}",
-                f"Maximum depth level of the JSON schema: {max_depth}; Flattened depth level: {depth_level_to_use}"
-            ])
-            
-            # Optionally log the schema JSON
-            if include_schema:
-                self.logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
-
-            # Read the JSON data
-            df = self._read_json_from_binary(spark, schema, data_file_path)
+            # Read the JSON data. If no schema is provided, infer schema dynamically
+            if schema:
+                df = self._read_json_from_binary(spark, schema, data_file_path)
+            else:
+                df = spark.read.option("multiline", "true").json(data_file_path)  # Infer schema dynamically
 
             # Block 2: Initial DataFrame info
             initial_row_count = df.count()
@@ -499,7 +509,7 @@ class DataFrameTransformer:
 
             # Log the schema of the initial DataFrame without "input_file_name"
             if self.debug:
-                df_to_log = df.drop("input_file_name")  # Drop "input_file_name" for logging
+                df_to_log = df.drop("input_file_name") if "input_file_name" in df.columns else df
                 self.logger.log_message("Initial DataFrame schema:", level="info")
                 df_to_log.printSchema()  # This will print the schema without "input_file_name"
 
@@ -527,8 +537,9 @@ class DataFrameTransformer:
                 self.logger.log_message("Flattened DataFrame schema:", level="info")
                 df_flattened.printSchema()  # This will print the schema to the console
 
-            # Drop the "input_file_name" column from the original DataFrame
-            df = df.drop("input_file_name")
+            # Drop the "input_file_name" column from the original DataFrame if it exists
+            if "input_file_name" in df.columns:
+                df = df.drop("input_file_name")
 
             # Log the end of the process with the additional message
             self.logger.log_end("process_and_flatten_json", success=True, additional_message="Proceeding with notebook execution.")
