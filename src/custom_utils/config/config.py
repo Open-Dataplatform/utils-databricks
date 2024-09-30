@@ -31,6 +31,9 @@ class Config:
             # Initialize Spark session
             self.spark = self._initialize_spark()
 
+            # Determine if schema will be used based on whether schema_folder_name is provided
+            self.use_schema = bool(self.schema_folder_name)
+
             # Log success and the initialized parameters
             self._log_successful_initialization()
 
@@ -56,7 +59,6 @@ class Config:
             self.key_columns = get_param_value(self.dbutils, "KeyColumns", required=True).replace(" ", "")
 
             # Optional parameters
-            # If FeedbackColumn or SchemaFolderName is not provided, silently set them to None
             self.feedback_column = get_param_value(self.dbutils, "FeedbackColumn", required=False)
             self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", required=False)
 
@@ -75,18 +77,18 @@ class Config:
         try:
             # Initialize source and destination paths
             self.full_source_folder_path = generate_source_path(
-                self.source_environment, self.source_container, self.source_datasetidentifier
+                self.source_environment, self.source_datasetidentifier
             )
             self.full_source_file_path = generate_source_file_path(self.full_source_folder_path, self.source_filename)
 
             self.full_destination_folder_path = generate_source_path(
-                self.destination_environment, self.source_container, self.source_datasetidentifier
+                self.destination_environment, self.source_datasetidentifier
             )
 
             # Initialize schema paths only if schema_folder_name is provided
             if self.schema_folder_name:
                 self.full_source_schema_folder_path = generate_schema_path(
-                    self.source_environment, self.source_container, self.schema_folder_name, self.source_datasetidentifier
+                    self.source_environment, self.schema_folder_name, self.source_datasetidentifier
                 )
                 self.full_schema_file_path = generate_schema_file_path(
                     self.full_source_schema_folder_path, self.source_datasetidentifier + "_schema"
@@ -113,31 +115,32 @@ class Config:
         self.logger.log_end("Config Initialization", success=True, additional_message="Proceeding with notebook execution.")
 
     def _log_params(self):
-        """Logs all the configuration parameters, omitting optional parameters if they are not provided."""
+        """Logs all the configuration parameters, including both friendly name and variable name."""
         params = [
-            f"Source Environment: {self.source_environment}",
-            f"Destination Environment: {self.destination_environment}",
-            f"Source Container: {self.source_container}",
-            f"Source Dataset Identifier: {self.source_datasetidentifier}",
-            f"Source Filename: {self.source_filename}",
-            f"Key Columns: {self.key_columns}",
+            f"Source Environment (source_environment): {self.source_environment}",
+            f"Destination Environment (destination_environment): {self.destination_environment}",
+            f"Source Container (source_container): {self.source_container}",
+            f"Source Dataset Identifier (source_datasetidentifier): {self.source_datasetidentifier}",
+            f"Source Filename (source_filename): {self.source_filename}",
+            f"Key Columns (key_columns): {self.key_columns}",
         ]
 
         # Only add the feedback column if it is provided
         if self.feedback_column:
-            params.append(f"Feedback Column: {self.feedback_column}")
+            params.append(f"Feedback Column (feedback_column): {self.feedback_column}")
 
         # Only add schema folder path if it was initialized
         if self.full_source_schema_folder_path:
-            params.append(f"Schema Folder Path: {self.full_source_schema_folder_path}")
+            params.append(f"Schema Folder Path (full_source_schema_folder_path): {self.full_source_schema_folder_path}")
 
         # Add DepthLevel if not None
         if self.depth_level is not None:
-            params.append(f"Depth Level: {self.depth_level}")
+            params.append(f"Depth Level (depth_level): {self.depth_level}")
 
         params.extend([
-            f"Source Folder Path: {self.full_source_folder_path}",
-            f"Destination Folder Path: {self.full_destination_folder_path}",
+            f"Source Folder Path (full_source_folder_path): {self.full_source_folder_path}",
+            f"Destination Folder Path (full_destination_folder_path): {self.full_destination_folder_path}",
+            f"Use Schema (use_schema): {self.use_schema}",
         ])
 
         self.logger.log_block("Configuration Parameters", params)
