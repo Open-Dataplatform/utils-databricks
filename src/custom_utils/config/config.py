@@ -76,25 +76,25 @@ class Config:
         """Construct and initialize paths for source, destination, and schema."""
         try:
             # Initialize source and destination paths
-            self.full_source_folder_path = generate_source_path(
+            self.source_folder_path = generate_source_path(
                 self.source_environment, self.source_datasetidentifier
             )
-            self.full_source_file_path = generate_source_file_path(self.full_source_folder_path, self.source_filename)
+            self.full_source_file_path = generate_source_file_path(self.source_folder_path, self.source_filename)
 
-            self.full_destination_folder_path = generate_source_path(
+            self.destination_folder_path = generate_source_path(
                 self.destination_environment, self.source_datasetidentifier
             )
 
             # Initialize schema paths only if schema_folder_name is provided
             if self.schema_folder_name:
-                self.full_source_schema_folder_path = generate_schema_path(
+                self.source_schema_folder_path = generate_schema_path(
                     self.source_environment, self.schema_folder_name, self.source_datasetidentifier
                 )
                 self.full_schema_file_path = generate_schema_file_path(
-                    self.full_source_schema_folder_path, self.source_datasetidentifier + "_schema"
+                    self.source_schema_folder_path, self.source_datasetidentifier + "_schema"
                 )
             else:
-                self.full_source_schema_folder_path = None
+                self.source_schema_folder_path = None
                 self.full_schema_file_path = None
 
         except Exception as e:
@@ -130,16 +130,16 @@ class Config:
             params.append(f"Feedback Column (feedback_column): {self.feedback_column}")
 
         # Only add schema folder path if it was initialized
-        if self.full_source_schema_folder_path:
-            params.append(f"Schema Folder Path (full_source_schema_folder_path): {self.full_source_schema_folder_path}")
+        if self.source_schema_folder_path:
+            params.append(f"Schema Folder Path (source_schema_folder_path): {self.source_schema_folder_path}")
 
         # Add DepthLevel if not None
         if self.depth_level is not None:
             params.append(f"Depth Level (depth_level): {self.depth_level}")
 
         params.extend([
-            f"Source Folder Path (full_source_folder_path): {self.full_source_folder_path}",
-            f"Destination Folder Path (full_destination_folder_path): {self.full_destination_folder_path}",
+            f"Source Folder Path (source_folder_path): {self.source_folder_path}",
+            f"Destination Folder Path (destination_folder_path): {self.destination_folder_path}",
             f"Use Schema (use_schema): {self.use_schema}",
         ])
 
