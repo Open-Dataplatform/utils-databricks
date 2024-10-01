@@ -1,6 +1,6 @@
 # File: custom_utils/path_utils/path_utils.py
 
-def generate_source_path(source_environment, source_container, source_datasetidentifier):
+def generate_source_path(source_environment, source_datasetidentifier):
     """
     Generate the folder path for source files.
 
@@ -12,7 +12,7 @@ def generate_source_path(source_environment, source_container, source_datasetide
     Returns:
         str: The source folder path.
     """
-    return f"/mnt/{source_environment}/{source_container}/{source_datasetidentifier}"
+    return f"/mnt/{source_environment}/{source_datasetidentifier}"
 
 def generate_source_file_path(source_folder_path, source_filename):
     """
@@ -27,7 +27,7 @@ def generate_source_file_path(source_folder_path, source_filename):
     """
     return f"{source_folder_path}/{source_filename}"
 
-def generate_schema_path(source_environment, source_container, schema_folder_name, source_datasetidentifier):
+def generate_schema_path(source_environment, schema_folder_name, source_datasetidentifier):
     """
     Generate the folder path for schema files.
 
@@ -40,7 +40,7 @@ def generate_schema_path(source_environment, source_container, schema_folder_nam
     Returns:
         str: The schema folder path.
     """
-    return f"/mnt/{source_environment}/{source_container}/{schema_folder_name}/{source_datasetidentifier}"
+    return f"/mnt/{source_environment}/{schema_folder_name}/{source_datasetidentifier}"
 
 def generate_schema_file_path(schema_folder_path, source_schema_filename):
     """
