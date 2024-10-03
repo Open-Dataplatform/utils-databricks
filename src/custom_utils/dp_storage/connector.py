@@ -21,6 +21,41 @@ def _get_environment(dbutils) -> str:
     return env
 
 
+def get_mount_point(dbutils, source_environment, logger):
+    """
+    Retrieve the mount point for the specified source environment.
+
+    Args:
+        dbutils: The dbutils object used to access Databricks utilities.
+        source_environment: The storage environment for which we need the mount point.
+        logger: Logger instance to log information and errors.
+
+    Returns:
+        str: The mount point path.
+
+    Raises:
+        Exception: If the mount point is not found or if an error occurs.
+    """
+    try:
+        target_mount = [
+            m.mountPoint
+            for m in dbutils.fs.mounts()
+            if source_environment in m.source
+        ]
+        if not target_mount:
+            error_message = f"No mount point found for environment: {source_environment}"
+            logger.log_error(error_message)
+            raise Exception(error_message)
+
+        return target_mount[0]
+
+    except Exception as e:
+        error_message = f"Error while retrieving mount points: {str(e)}"
+        logger.log_error(error_message)
+        raise Exception(error_message)
+
+
+
 def get_mount_point_name(storage_account: str) -> str:
     """Returns the mount point name for a given storage account."""
     return f"/mnt/{storage_account}"

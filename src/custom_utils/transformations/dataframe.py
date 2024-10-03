@@ -24,18 +24,20 @@ from custom_utils.config.config import Config  # Assuming there is a config modu
 from pyspark.sql.types import DataType
 
 class DataFrameTransformer:
-    def __init__(self, config: Config = None, logger: Logger = None, debug: bool = None):
+    def __init__(self, config: Config = None, logger: Logger = None, dbutils=None, debug: bool = None):
         """
-        Initializes the DataFrameTransformer with logging capabilities.
+        Initializes the DataFrameTransformer with logging capabilities and optional dbutils.
 
         Args:
             config (Config, optional): An instance of the Config class containing configuration parameters.
             logger (Logger, optional): An instance of the Logger class for logging. Defaults to None.
             debug (bool, optional): If set, it overrides the config's debug setting.
+            dbutils (optional): dbutils object for accessing DBFS and other utilities.
         """
         self.config = config
         self.debug = debug if debug is not None else (config.debug if config else False)
         self.logger = logger if logger else (config.logger if config else Logger(debug=self.debug))
+        self.dbutils = dbutils if dbutils else config.dbutils  # Use dbutils from config if available
         
         # Update the logger's debug flag to match the one passed to DataFrameTransformer
         self.logger.debug = self.debug
@@ -104,6 +106,32 @@ class DataFrameTransformer:
 
         return max_depth
 
+    def _infer_max_depth_from_df(self, df: DataFrame) -> int:
+        """
+        Infers the maximum depth of a DataFrame's schema by traversing nested structs and arrays.
+        Only arrays contribute to depth, and structs do not increase depth unless they contain arrays.
+
+        Args:
+            df (DataFrame): The DataFrame for which to infer the max depth.
+
+        Returns:
+            int: The maximum depth of the DataFrame's schema, excluding structs.
+        """
+        def calculate_depth(data_type, current_depth):
+            # If it's an array, increase the depth level and recurse into the element type
+            if isinstance(data_type, ArrayType):
+                return calculate_depth(data_type.elementType, current_depth + 1)
+            # If it's a struct, recurse into the struct's fields but don't increase depth
+            elif isinstance(data_type, StructType):
+                return max([calculate_depth(f.dataType, current_depth) for f in data_type.fields], default=current_depth)
+            # For primitive types, return the current depth
+            else:
+                return current_depth
+
+        # Start calculating depth for each field in the schema
+        max_depth = max([calculate_depth(f.dataType, 1) for f in df.schema.fields], default=1)
+        return max_depth
+
     def _get_type_mapping(self) -> dict:
         """
         Returns a dictionary that maps JSON data types to corresponding PySpark SQL types.
@@ -131,6 +159,20 @@ class DataFrameTransformer:
             "time": StringType(),         # Treats time as a string (time-only types)
             "binary": BinaryType(),       # Maps binary data to PySpark's BinaryType
         }
+
+    def _strip_dbfs_prefix(self, path: str) -> str:
+        """
+        Remove the '/dbfs' prefix from a path to make it compatible with dbutils.fs functions.
+
+        Args:
+            path (str): The path to strip.
+
+        Returns:
+            str: The path without the '/dbfs' prefix.
+        """
+        if path and path.startswith('/dbfs'):
+            return path[5:]  # Strip '/dbfs' from the path
+        return path
 
     def _apply_nested_type_mapping(self, column_name, data_type, type_mapping):
         """
@@ -264,10 +306,14 @@ class DataFrameTransformer:
         return complex_columns
 
     def _json_schema_to_spark_struct(self, schema_file_path: str, definitions: Dict = None) -> Tuple[dict, StructType]:
-        """Converts a JSON schema file to a PySpark StructType."""
+        """
+        Converts a JSON schema file to a PySpark StructType.
+        This method reads the file from DBFS using dbutils.
+        """
         try:
-            with open(schema_file_path, "r") as f:
-                json_schema = json.load(f)
+            # Use dbutils to read the file as a string
+            schema_content = self.dbutils.fs.head(schema_file_path)
+            json_schema = json.loads(schema_content)  # Parse the JSON schema
         except Exception as e:
             raise ValueError(f"Failed to load or parse schema file '{schema_file_path}': {e}")
 
@@ -450,7 +496,7 @@ class DataFrameTransformer:
         Orchestrates the JSON processing pipeline from schema reading to DataFrame flattening.
 
         Args:
-            schema_file_path (str): Path to the schema file.
+            schema_file_path (str): Path to the schema file. If None, schema validation will be skipped.
             data_file_path (str): Path to the JSON data file.
             depth_level (int, optional): The depth level to flatten the JSON. Defaults to None.
             include_schema (bool, optional): If True, includes the schema in the logs. Defaults to False.
@@ -468,28 +514,61 @@ class DataFrameTransformer:
             # Get the active Spark session
             spark = SparkSession.builder.getOrCreate()
 
-            # Reading schema and parsing JSON to Spark StructType
-            schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
+            # Correct the file paths by stripping any leading '/dbfs' if it exists
+            schema_file_path = self._strip_dbfs_prefix(schema_file_path)
+            data_file_path = self._strip_dbfs_prefix(data_file_path)
 
-            # Get the max depth of the JSON schema
-            max_depth = self._get_json_depth(schema_json)
+            schema = None  # Initialize schema to None
+            max_depth = None  # Default max depth is None, it will be inferred later if needed
 
-            # If depth_level is None, flatten all levels (up to max depth)
-            depth_level_to_use = depth_level if depth_level is not None else max_depth
+            # Check if schema is being used
+            if self.config.use_schema:
+                # Load schema from schema file
+                schema_json, schema = self._json_schema_to_spark_struct(schema_file_path)
+                max_depth = self._get_json_depth(schema_json)  # Get max depth from the schema
 
-            # Block 1: Schema and file paths
-            self.logger.log_block("Schema and File Paths", [
-                f"Schema file path: {schema_file_path}",
-                f"Data file path: {data_file_path}",
-                f"Maximum depth level of the JSON schema: {max_depth}; Flattened depth level: {depth_level_to_use}"
-            ])
-            
-            # Optionally log the schema JSON
-            if include_schema:
-                self.logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
+                # Log schema-related info
+                self.logger.log_block("Schema and File Paths", [
+                    f"Schema file path: {schema_file_path}",
+                    f"Data file path: {data_file_path}",
+                    f"Maximum depth level of the JSON schema: {max_depth}"
+                ])
+                
+                if include_schema:
+                    self.logger.log_message(f"Schema JSON:\n{json.dumps(schema_json, indent=4)}", level="info")
 
-            # Read the JSON data
-            df = self._read_json_from_binary(spark, schema, data_file_path)
+            else:
+                # Log that schema validation is skipped
+                self.logger.log_message(f"No schema provided. Skipping schema validation.", level="warning")
+                self.logger.log_block("File Paths", [
+                    f"Data file path: {data_file_path}"
+                ])
+
+                # Infer schema dynamically and keep input_file_name
+                df = spark.read.option("multiline", "true").json(data_file_path)
+                df = df.withColumn("input_file_name", F.input_file_name())  # Add the file name to the DataFrame
+
+                # Log the inferred schema as the initial DataFrame schema
+                self.logger.log_message(f"Using dynamically inferred schema for initial DataFrame.", level="info")
+
+                # Infer the max depth from the DataFrame if no schema is provided
+                max_depth = self._infer_max_depth_from_df(df.drop("input_file_name"))
+                self.logger.log_message(f"Max depth inferred from initial DataFrame: {max_depth}", level="info")
+
+            # If depth_level is None, use the inferred max_depth
+            if depth_level is None:
+                depth_level_to_use = max_depth
+                self.logger.log_message(f"DepthLevel is not provided. Using max_depth: {max_depth} as DepthLevel.", level="info")
+            else:
+                depth_level_to_use = depth_level
+                self.logger.log_message(f"Using provided DepthLevel: {depth_level_to_use}", level="info")
+
+            # Read the JSON data. If schema is provided, use it; otherwise, infer the schema dynamically
+            if self.config.use_schema:
+                df = self._read_json_from_binary(spark, schema, data_file_path)
+            else:
+                # Schema was already dynamically inferred above when max_depth was determined
+                pass
 
             # Block 2: Initial DataFrame info
             initial_row_count = df.count()
@@ -499,9 +578,8 @@ class DataFrameTransformer:
 
             # Log the schema of the initial DataFrame without "input_file_name"
             if self.debug:
-                df_to_log = df.drop("input_file_name")  # Drop "input_file_name" for logging
-                self.logger.log_message("Initial DataFrame schema:", level="info")
-                df_to_log.printSchema()  # This will print the schema without "input_file_name"
+                self.logger.log_message("Initial DataFrame schema (without input_file_name):", level="info")
+                df.drop("input_file_name").printSchema()  # This will print the schema without "input_file_name"
 
             # Flatten the DataFrame using the determined depth level
             df_flattened, converted_columns = self.flatten_df(df, depth_level=depth_level_to_use, max_depth=max_depth, type_mapping=self._get_type_mapping())
@@ -509,7 +587,8 @@ class DataFrameTransformer:
             # Block 3: Flattened DataFrame info
             flattened_row_count = df_flattened.count()
             self.logger.log_block("Flattened DataFrame Info", [
-                f"Flattened DataFrame row count: {flattened_row_count}"
+                f"Flattened DataFrame row count: {flattened_row_count}",
+                f"Depth level used: {depth_level_to_use}"  # Log the depth level used, whether it was provided or inferred
             ])
 
             # **Filter converted columns based on the columns in the flattened DataFrame**
@@ -527,8 +606,12 @@ class DataFrameTransformer:
                 self.logger.log_message("Flattened DataFrame schema:", level="info")
                 df_flattened.printSchema()  # This will print the schema to the console
 
-            # Drop the "input_file_name" column from the original DataFrame
-            df = df.drop("input_file_name")
+            # Ensure `input_file_name` is the first column in both DataFrames
+            columns_with_input_file = ["input_file_name"] + [col for col in df.columns if col != "input_file_name"]
+            df = df.select(columns_with_input_file)
+
+            columns_with_input_file_flattened = ["input_file_name"] + [col for col in df_flattened.columns if col != "input_file_name"]
+            df_flattened = df_flattened.select(columns_with_input_file_flattened)
 
             # Log the end of the process with the additional message
             self.logger.log_end("process_and_flatten_json", success=True, additional_message="Proceeding with notebook execution.")

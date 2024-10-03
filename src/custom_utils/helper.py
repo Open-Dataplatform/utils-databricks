@@ -60,13 +60,17 @@ def get_param_value(dbutils, param_name, default_value=None, required=False):
         if dbutils:
             value = dbutils.widgets.get(param_name)
     except Exception as e:
-        logger.log_message(f"Could not retrieve widget '{param_name}': {e}", level="warning")
+        if required:
+            logger.log_message(f"Could not retrieve required widget '{param_name}': {e}", level="error")
+        else:
+            # Silently handle optional parameters
+            pass
 
     if not value:
         value = os.getenv(param_name.upper(), default_value)
 
     if required and not value:
-        exit_notebook(f"Required parameter '{param_name}' is missing.", dbutils)
+        logger.exit_notebook(f"Required parameter '{param_name}' is missing.", dbutils)
 
     return value
 
