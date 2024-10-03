@@ -1,5 +1,6 @@
 import logging
 import functools
+import sqlparse
 
 class Logger:
     def __init__(self, debug=False, log_to_file=None):
@@ -51,9 +52,9 @@ class Logger:
         elif level == "critical":
             self.logger.critical(message)
 
-    def log_block(self, header, content_lines, level="info"):
+    def log_block(self, header, content_lines=None, sql_query=None, level="info"):
         """
-        Utility method to log blocks of messages with a header and separators.
+        Utility method to log blocks of messages with a header, separators, and optional SQL queries.
         Block headers and separators don't have [INFO] - prefix.
         """
         separator_length = 50
@@ -65,13 +66,35 @@ class Logger:
         print(formatted_header)
         print(separator)
 
-        # Log each content line, avoiding empty lines or duplicate bullet points, with [INFO] -
-        for line in content_lines:
-            if line.strip():  # Only log non-empty lines
-                self.log_message(f"  {line}", level=level)  # Indent each line with normal [INFO] -
+        # Log each content line
+        if content_lines:
+            for line in content_lines:
+                if line.strip():  # Only log non-empty lines
+                    self.log_message(f"  {line}", level=level)
 
-        # End with a separator and a newline, without [INFO] -
+        # Log the SQL query if provided, ensure only one label
+        if sql_query:
+            self.log_sql_query(sql_query)
+
+        # End with a separator only
         print(separator + "\n")  # Add newline after the block for readability
+
+    def log_sql_query(self, query: str, level: str = "info"):
+        """
+        Logs a formatted SQL query for better readability.
+        
+        Args:
+            query (str): The SQL query to be formatted and logged.
+            level (str): The log level (default is 'info').
+        """
+        # Format the query using sqlparse
+        formatted_query = sqlparse.format(query, reindent=True, keyword_case='upper')
+
+        # Ensure there is an empty line before and after the query for clarity
+        indented_query = f"\n{formatted_query.strip()}\n"
+
+        # Log the formatted SQL query with no extra [INFO] indentation
+        self.log_message(f"SQL Query:\n{indented_query}", level=level)
 
     def log_start(self, method_name):
         """Log the start of a method."""

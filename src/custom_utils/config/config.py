@@ -1,4 +1,5 @@
 import os
+import inspect
 from pyspark.sql import SparkSession
 from custom_utils.logging.logger import Logger
 from custom_utils.helper import get_param_value
@@ -12,31 +13,30 @@ from custom_utils.path_utils import (
 class Config:
     def __init__(self, dbutils=None, logger=None, debug: bool = False):
         """
-        Initialize the Config class with basic parameters and set up logger and Spark session.
+        Initialize the Config class with basic parameters, set up logger, and Spark session.
         """
         # Logger initialization
         self.dbutils = dbutils or globals().get("dbutils", None)
         self.logger = logger or Logger(debug=debug)  # Use passed logger or fallback to custom Logger
         self.debug = debug
 
-        self.logger.log_start("Config Initialization")
+        # Log initialization start
+        self._log("Starting Config Initialization", level='info')
 
+        # Log the successful logger initialization
+        self._log("Logger initialized successfully.", level='info')
+        
         try:
-            # Initialize parameters
+            # Initialize required parameters, paths, and Spark session
             self._initialize_parameters()
-
-            # Initialize paths
             self._initialize_paths()
-
-            # Initialize Spark session
             self.spark = self._initialize_spark()
 
-            # Determine if schema will be used based on whether schema_folder_name is provided
+            # Set if schema will be used
             self.use_schema = bool(self.schema_folder_name)
 
-            # Log success and the initialized parameters
+            # Log successful initialization
             self._log_successful_initialization()
-
         except Exception as e:
             self._handle_initialization_error(e)
 
@@ -47,7 +47,17 @@ class Config:
         """
         return Config(dbutils=dbutils, logger=logger, debug=debug)
 
-    def _initialize_parameters(self):
+    def _log(self, message: str, level: str = 'info'):
+        """Logs messages at the desired log level."""
+        if self.logger:
+            if level == 'info':
+                self.logger.log_info(message)
+            elif level == 'warning':
+                self.logger.log_warning(message)
+            elif level == 'error':
+                self.logger.log_error(message)
+
+    def _initialize_parameters(self) -> None:
         """Initialize all the configuration parameters required."""
         try:
             # Required parameters
@@ -61,32 +71,35 @@ class Config:
             # Optional parameters
             self.feedback_column = get_param_value(self.dbutils, "FeedbackColumn", required=False)
             self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", required=False)
-
-            # Depth level is optional, but we log a warning if not provided
+            self.sheet_name = get_param_value(self.dbutils, "SheetName", required=False)  # Optional sheet_name
             depth_level_str = get_param_value(self.dbutils, "DepthLevel", default_value="")
             self.depth_level = int(depth_level_str) if depth_level_str else None
             if self.depth_level is None:
-                self.logger.log_warning("DepthLevel is not provided or empty. Setting it to None.")
-                
+                self._log("DepthLevel is not provided or empty. Setting it to None.", level='warning')
         except Exception as e:
-            self.logger.log_error(f"Error initializing parameters: {e}")
+            self._log(f"Error initializing parameters: {e}", level='error')
             raise
+
+    def _generate_dbfs_path(self, base_path: str, dataset: str) -> str:
+        """Helper method to generate DBFS path."""
+        return f"/dbfs{base_path}/{dataset}"
 
     def _initialize_paths(self):
         """Construct and initialize paths for source, destination, and schema."""
         try:
-            # Initialize source and destination paths and ensure they start with '/dbfs'
+            # Initialize source folder path (without '*')
             self.source_folder_path = f"/dbfs{generate_source_path(self.source_environment, self.source_datasetidentifier)}"
+            
+            # Initialize full source file path using the source filename, without double '*' appending
             self.full_source_file_path = generate_source_file_path(self.source_folder_path, self.source_filename)
 
+            # Initialize destination folder path
             self.destination_folder_path = f"/dbfs{generate_source_path(self.destination_environment, self.source_datasetidentifier)}"
 
             # Initialize schema paths only if schema_folder_name is provided
             if self.schema_folder_name:
-                self.source_schema_folder_path = f"/dbfs{generate_schema_path(self.source_environment, self.schema_folder_name, self.source_datasetidentifier)}"
-                self.full_schema_file_path = generate_schema_file_path(
-                    self.source_schema_folder_path, self.source_datasetidentifier + "_schema"
-                )
+                self.source_schema_folder_path = f"/dbfs{generate_schema_path(self.source_environment, self.schema_folder_name, self.source_datasetidentifier)}".rstrip('/')  # Remove extra slash
+                self.full_schema_file_path = f"{self.source_schema_folder_path}/{self.source_datasetidentifier}_schema.json"  # Add the schema file explicitly
             else:
                 self.source_schema_folder_path = None
                 self.full_schema_file_path = None
@@ -102,15 +115,16 @@ class Config:
         except Exception as e:
             self._handle_spark_error(e)
 
-    def _log_successful_initialization(self):
+    def _log_successful_initialization(self) -> None:
         """Logs the success of configuration initialization and details."""
-        self.logger.log_info("Spark session initialized successfully.")
-        self._log_params()
-        self.logger.log_end("Config Initialization", success=True, additional_message="Proceeding with notebook execution.")
+        self._log("Spark session initialized successfully.", level='info')
+        self._log_params()  # Use the updated _log_params method
+        self._log("Finished Config Initialization successfully. Proceeding with notebook execution.", level='info')
 
     def _log_params(self):
-        """Logs all the configuration parameters, including both friendly name and variable name."""
-        params = [
+        """Logs all the configuration parameters, dividing them into required, optional, and extended sections."""
+        # Required parameters block
+        required_params = [
             f"Source Environment (source_environment): {self.source_environment}",
             f"Destination Environment (destination_environment): {self.destination_environment}",
             f"Source Container (source_container): {self.source_container}",
@@ -118,41 +132,63 @@ class Config:
             f"Source Filename (source_filename): {self.source_filename}",
             f"Key Columns (key_columns): {self.key_columns}",
         ]
-
-        # Only add the feedback column if it is provided
+        
+        # Optional parameters block
+        optional_params = []
         if self.feedback_column:
-            params.append(f"Feedback Column (feedback_column): {self.feedback_column}")
-
-        # Only add schema folder path if it was initialized
-        if self.source_schema_folder_path:
-            params.append(f"Schema Folder Path (source_schema_folder_path): {self.source_schema_folder_path}")
-
-        # Add DepthLevel if not None
+            optional_params.append(f"Feedback Column (feedback_column): {self.feedback_column}")
+        
+        if self.schema_folder_name:
+            optional_params.append(f"Schema Folder Name (schema_folder_name): {self.schema_folder_name}")
+        
         if self.depth_level is not None:
-            params.append(f"Depth Level (depth_level): {self.depth_level}")
+            optional_params.append(f"Depth Level (depth_level): {self.depth_level}")
+        
+        # Add optional sheet_name if exists
+        if hasattr(self, 'sheet_name'):
+            optional_params.append(f"Sheet Name (sheet_name): {self.sheet_name}")
 
-        params.extend([
+        # Extended parameters block (dynamically constructed paths, etc.)
+        extended_params = [
             f"Source Folder Path (source_folder_path): {self.source_folder_path}",
+            f"Full Source File Path (full_source_file_path): {self.full_source_file_path}",
             f"Destination Folder Path (destination_folder_path): {self.destination_folder_path}",
-            f"Use Schema (use_schema): {self.use_schema}",
-        ])
+        ]
+        
+        if self.source_schema_folder_path:
+            extended_params.append(f"Source Schema Folder Path (source_schema_folder_path): {self.source_schema_folder_path}")
+        
+        if self.full_schema_file_path:
+            extended_params.append(f"Full Schema File Path (full_schema_file_path): {self.full_schema_file_path}")
+        
+        extended_params.append(f"Use Schema (use_schema): {self.use_schema}")
 
-        self.logger.log_block("Configuration Parameters", params)
+        # Log the blocks
+        self.logger.log_block("Configuration Parameters", required_params)
 
-    def _handle_initialization_error(self, e: Exception):
+        if optional_params:
+            self.logger.log_block("Optional Parameters", optional_params)
+
+        self.logger.log_block("Extended Parameters", extended_params)
+
+    def _log_block(self, header: str, params: list) -> None:
+        """Logs a block of messages with a header and parameter list."""
+        self.logger.log_block(header, params)
+
+    def _handle_initialization_error(self, e: Exception) -> None:
         """Handles initialization errors."""
         error_message = f"Failed to initialize configuration: {str(e)}"
-        self.logger.log_error(error_message)
+        self._log(error_message, level='error')
         self.logger.log_end("Config Initialization", success=False, additional_message="Check error logs for details.")
         raise
 
-    def _handle_spark_error(self, e: Exception):
+    def _handle_spark_error(self, e: Exception) -> None:
         """Handles errors related to Spark initialization."""
         error_message = f"Failed to initialize Spark session: {str(e)}"
-        self.logger.log_error(error_message)
+        self._log(error_message, level='error')
         self.logger.exit_notebook(error_message, self.dbutils)
         raise
 
-    def unpack(self, namespace: dict):
+    def unpack(self, namespace: dict) -> None:
         """Unpacks all configuration attributes into the provided namespace (e.g., globals())."""
         namespace.update(vars(self))

@@ -1,75 +1,204 @@
-# File: custom_utils/catalog/catalog_utils.py
-
 from custom_utils.dp_storage import writer
-from pyspark.sql import SparkSession, DataFrame, Row
+from pyspark.sql import SparkSession, DataFrame
 from typing import List, Optional, Union
 from custom_utils.logging.logger import Logger
 import sqlparse
 
 class DataStorageManager:
-    def __init__(self, logger: Optional[Logger] = None, debug: bool = False):
+    def __init__(self, 
+                 logger: Optional[Logger] = None, 
+                 debug: bool = False, 
+                 destination_environment: Optional[str] = None, 
+                 source_datasetidentifier: Optional[str] = None, 
+                 destination_folder_path: Optional[str] = None):
         """
-        Initialize the DataStorageManager.
+        Initialize the DataStorageManager with logger, debug mode, and optional config attributes.
         """
         self.logger = logger if logger else Logger(debug=debug)
         self.debug = debug
-        self.sections_logged = set()  # Track logged sections to avoid duplicates
+        
+        # Set default/fallback values from config (these will be your config values)
+        self.destination_environment = destination_environment
+        self.source_datasetidentifier = source_datasetidentifier
+        self.destination_folder_path = destination_folder_path
+        
+        # Initialize sections_logged as an empty set to keep track of logged sections
+        self.sections_logged = set()
 
     def _log_message(self, message: str, level: str = "info"):
-        """
-        Logs a message using the logger if debug mode is on or the log level is not 'info'.
-        """
         if self.debug or level != "info":
             self.logger.log_message(message, level=level)
 
     def _log_section(self, section_title: str, content_lines: Optional[List[str]] = None):
-        """
-        Logs a section with the provided title and optional content lines using `log_block`
-        if debug mode is on and the section hasn't been logged before.
-        """
         if self.debug and section_title not in self.sections_logged:
             content_lines = content_lines if content_lines else []
             self.logger.log_block(section_title, content_lines)
             self.sections_logged.add(section_title)
 
-    def _format_sql_query(self, query: str) -> str:
-        """Formats SQL queries using sqlparse and adds custom indentation."""
-        sql_indent = " " * 7  # Indentation to match "[INFO] "
-        formatted_query = sqlparse.format(query, reindent=True, keyword_case='upper')
-        indented_query = "\n".join([sql_indent + line if line.strip() else line for line in formatted_query.splitlines()])
-        return f"{indented_query}\n"
+    def ensure_path_exists(self, dbutils, destination_path: str):
+        try:
+            dbutils.fs.ls(destination_path)
+            self._log_section("Path Validation", [f"Path already exists: {destination_path}"])
+        except Exception as e:
+            if "java.io.FileNotFoundException" in str(e):
+                dbutils.fs.mkdirs(destination_path)
+                self._log_section("Path Validation", [f"Path did not exist. Created path: {destination_path}"])
+            else:
+                self._log_message(f"Error while ensuring path exists: {e}", level="error")
+                raise
 
-    def get_destination_details(self, spark: SparkSession, destination_environment: str, source_datasetidentifier: str):
+    def normalize_key_columns(self, key_columns: Union[str, List[str]]) -> List[str]:
+        if isinstance(key_columns, str):
+            key_columns = [col.strip() for col in key_columns.split(',')]
+        return key_columns
+    
+    def check_if_table_exists(self, spark: SparkSession, database_name: str, table_name: str) -> bool:
         """
-        Retrieves the destination path, database name, and table name.
+        Checks if a Databricks Delta table exists in the specified database.
         """
         try:
-            destination_path = writer.get_destination_path_extended(destination_environment, source_datasetidentifier)
-            database_name, table_name = writer.get_databricks_table_info_extended(destination_environment, source_datasetidentifier)
-            
-            content_lines = [
-                f"Destination Path: {destination_path}",
-                f"Database: {database_name}",
-                f"Table: {table_name}"
-            ]
-            self._log_section("Destination Details", content_lines)
-            return destination_path, database_name, table_name
+            tables_df = spark.sql(f"SHOW TABLES IN {database_name}").filter(f"tableName = '{table_name}'")
+            table_exists = tables_df.count() > 0
+            return table_exists
         except Exception as e:
-            self._log_message(f"Error retrieving destination details: {e}", level="error")
+            self._log_message(f"Error checking table existence: {e}", level="error")
+            raise
+
+    def create_or_replace_table(self, spark: SparkSession, database_name: str, table_name: str, destination_path: str, cleaned_data_view: str, use_python: Optional[bool] = False):
+        try:
+            # Get the DataFrame from the cleaned data view
+            df = spark.table(cleaned_data_view)
+
+            # Create the schema string with indentation for better readability
+            schema_str = ",\n    ".join([f"`{field.name}` {field.dataType.simpleString()}" for field in df.schema.fields])
+
+            # Create the SQL query for table creation, ensuring proper formatting
+            create_table_sql = f"""
+            CREATE TABLE IF NOT EXISTS {database_name}.{table_name} (
+                {schema_str}
+            )
+            USING DELTA
+            LOCATION '{destination_path}/'
+            """
+
+            # Log block with the SQL query using the logger
+            self.logger.log_block("Table Creation Process", sql_query=create_table_sql)
+
+            if use_python:
+                # Log the section for Python DataFrame operations
+                self._log_section("Table Creation Process", [f"Writing DataFrame to Delta at path '{destination_path}' and registering table '{database_name}.{table_name}'."])
+                
+                # Write the DataFrame to Delta format and register the table
+                df.write.format("delta").mode("overwrite").option("path", destination_path).saveAsTable(f"{database_name}.{table_name}")
+                
+                # Log the completion message
+                self._log_message(f"Table {database_name}.{table_name} created using DataFrame operations.")
+            else:
+                # Check if the table already exists
+                if not self.check_if_table_exists(spark, database_name, table_name):
+                    # Execute the SQL query to create the table
+                    spark.sql(create_table_sql)
+
+                    # Log messages for table creation and data writing
+                    self._log_message(f"Table {database_name}.{table_name} created.")
+                    
+                    # Write the data to the Delta table
+                    df.write.format("delta").mode("overwrite").save(destination_path)
+                    self._log_message(f"Data written to {destination_path}.")
+                else:
+                    # Log a message indicating the table already exists
+                    self._log_message(f"Table {database_name}.{table_name} already exists.")
+        except Exception as e:
+            # Log any errors during the process
+            self._log_message(f"Error creating or replacing table: {e}", level="error")
+            raise
+
+    def generate_merge_sql(self, spark: SparkSession, cleaned_data_view: str, database_name: str, table_name: str, key_columns: Union[str, List[str]]) -> str:
+        """
+        Constructs the SQL query for the MERGE operation.
+        """
+        try:
+            key_columns = self.normalize_key_columns(key_columns)
+
+            target_table_columns = [field.name for field in spark.table(f"{database_name}.{table_name}").schema]
+            all_columns = [col for col in spark.table(cleaned_data_view).columns if col in target_table_columns and col not in key_columns]
+
+            match_sql = ' AND '.join([f"s.`{col}` = t.`{col}`" for col in key_columns])
+            update_sql = ', '.join([f"t.`{col}` = s.`{col}`" for col in all_columns])
+            insert_columns = key_columns + all_columns
+            insert_values = [f"s.`{col}`" for col in insert_columns]
+
+            merge_sql = f"""
+            MERGE INTO {database_name}.{table_name} AS t
+            USING {cleaned_data_view} AS s
+            ON {match_sql}
+            WHEN MATCHED THEN
+                UPDATE SET {update_sql}
+            WHEN NOT MATCHED THEN
+                INSERT ({', '.join([f'`{col}`' for col in insert_columns])})
+                VALUES ({', '.join(insert_values)})
+            """
+
+            return merge_sql
+        except Exception as e:
+            self._log_message(f"Error generating merge SQL: {e}", level="error")
+            raise
+
+    def execute_merge(self, spark: SparkSession, database_name: str, table_name: str, cleaned_data_view: str, key_columns: Union[str, List[str]], use_python: Optional[bool] = False) -> int:
+        """
+        Executes the MERGE operation and logs the SQL query and results using logger methods.
+        """
+        try:
+            key_columns = self.normalize_key_columns(key_columns)
+
+            if use_python:
+                pass
+            else:
+                # Generate the MERGE SQL query
+                merge_sql = self.generate_merge_sql(spark, cleaned_data_view, database_name, table_name, key_columns)
+
+                # Log the block for data merge with the SQL query inside
+                self.logger.log_block("Data Merge", sql_query=merge_sql)
+
+                # Execute the merge and calculate affected rows
+                initial_row_count = spark.sql(f"SELECT * FROM {database_name}.{table_name}").count()
+                spark.sql(merge_sql)
+                final_row_count = spark.sql(f"SELECT * FROM {database_name}.{table_name}").count()
+                affected_rows = final_row_count - initial_row_count
+
+                # Log the outcome
+                self._log_message(f"Data merged into {database_name}.{table_name} using SQL.")
+                self._log_message(f"Number of affected rows: {affected_rows}")
+
+            return affected_rows
+        except Exception as e:
+            self.logger.log_end("Data Merge Process", success=False, additional_message=f"Error: {e}")
+            self._log_message(f"Error during data merge: {e}", level="error")
             raise
 
     def generate_feedback_timestamps(self, spark: SparkSession, view_name: str, feedback_column: str) -> str:
         """
         Orchestrates the entire process of calculating and returning feedback timestamps.
         """
-        # Generate the feedback SQL query
-        feedback_sql = self.construct_feedback_sql(view_name, feedback_column)
+        # Add a block title to make the output more readable
+        self._log_section("Feedback Timestamps Generation", [
+            f"View Name: {view_name}",
+            f"Feedback Column: {feedback_column}"
+        ])
 
-        # Execute the feedback SQL query
-        df_min_max = self.execute_feedback_sql(spark, feedback_sql)
+        try:
+            # Generate the feedback SQL query
+            feedback_sql = self.construct_feedback_sql(view_name, feedback_column)
+            
+            # Execute the feedback SQL query
+            df_min_max = self.execute_feedback_sql(spark, feedback_sql)
+            
+            # Handle the result and return the feedback output as JSON
+            return self.handle_feedback_result(df_min_max, view_name)
 
-        # Handle the result and return the feedback output as JSON
-        return self.handle_feedback_result(df_min_max, view_name)
+        except Exception as e:
+            self._log_message(f"Error in feedback timestamps generation: {e}", level="error")
+            raise
 
     def execute_feedback_sql(self, spark: SparkSession, feedback_sql: str) -> DataFrame:
         """
@@ -104,8 +233,7 @@ class DataStorageManager:
             MAX({feedback_column}) AS to_datetime
         FROM {view_name}
         """
-        formatted_sql = self._format_sql_query(feedback_sql)  # Use the imported formatting method
-        self._log_message(f"Executing SQL query:\n{formatted_sql}")
+        self.logger.log_sql_query(feedback_sql)
         return feedback_sql
 
     def ensure_path_exists(self, dbutils, destination_path: str):
@@ -126,197 +254,63 @@ class DataStorageManager:
             self._log_message(f"Error while ensuring path exists: {e}", level="error")
             raise
 
-    def normalize_key_columns(self, key_columns: Union[str, List[str]]) -> List[str]:
+    def manage_data_operation(self, 
+                              spark: SparkSession, 
+                              dbutils, 
+                              cleaned_data_view: str, 
+                              key_columns: Union[str, List[str]], 
+                              use_python: Optional[bool] = False, 
+                              destination_folder_path: Optional[str] = None,  
+                              destination_environment: Optional[str] = None, 
+                              source_datasetidentifier: Optional[str] = None):
         """
-        Normalize key_columns to a list if it's provided as a comma-separated string.
-        """
-        if isinstance(key_columns, str):
-            # Split the string by commas and strip whitespace around the column names
-            key_columns = [col.strip() for col in key_columns.split(',')]
-        return key_columns
-
-    def create_or_replace_table(self, spark: SparkSession, database_name: str, table_name: str, destination_path: str, cleaned_data_view: str, use_python: Optional[bool] = False):
-        """
-        Creates or replaces a Databricks Delta table.
-        """
-        try:
-            df = spark.table(cleaned_data_view)
-            schema_str = ",\n".join([f"`{field.name}` {field.dataType.simpleString()}" for field in df.schema.fields])
-
-            if use_python:
-                # Python DataFrame-based table creation
-                self._log_section("Table Creation Process", [
-                    f"Writing DataFrame to Delta at path '{destination_path}' and registering table '{database_name}.{table_name}'."
-                ])
-                df.write.format("delta").mode("overwrite").option("path", destination_path).saveAsTable(f"{database_name}.{table_name}")
-                self._log_message(f"Table {database_name}.{table_name} created using DataFrame operations.")
-            else:
-                # SQL-based table creation
-                create_table_sql = f"""
-                CREATE TABLE IF NOT EXISTS {database_name}.{table_name} (
-                    {schema_str}
-                )
-                USING DELTA
-                LOCATION 'dbfs:{destination_path}/'
-                """
-                formatted_query = self._format_sql_query(create_table_sql.strip())  # Apply SQL formatting here
-                self._log_section("Table Creation Process", [f"Creating table with query:\n{formatted_query}"])
-
-                if not self.check_if_table_exists(spark, database_name, table_name):
-                    spark.sql(create_table_sql)
-                    self._log_message(f"Table {database_name}.{table_name} created.")
-
-                    # Write data to the newly created table
-                    df.write.format("delta").mode("overwrite").save(destination_path)
-                    self._log_message(f"Data written to {destination_path}.")
-                else:
-                    self._log_message(f"Table {database_name}.{table_name} already exists.")
-        except Exception as e:
-            self._log_message(f"Error creating or replacing table: {e}", level="error")
-            raise
-
-    def check_if_table_exists(self, spark: SparkSession, database_name: str, table_name: str) -> bool:
-        """
-        Checks if a Databricks Delta table exists in the specified database.
-
-        Args:
-            spark (SparkSession): The Spark session.
-            database_name (str): The name of the database.
-            table_name (str): The name of the table to check for existence.
-
-        Returns:
-            bool: True if the table exists, False otherwise.
-        """
-        try:
-            # Fetch the list of tables in the specified database
-            table_check = spark.sql(f"SHOW TABLES IN {database_name}").collect()
-            # Check if the specified table exists
-            table_exists = any(row["tableName"] == table_name for row in table_check)
-
-            # Remove table existence logs
-            # if table_exists:
-            #     self._log_message(f"Table {database_name}.{table_name} exists.")
-            # else:
-            #     self._log_message(f"Table {database_name}.{table_name} does not exist.")
-            
-            return table_exists
-        except Exception as e:
-            self._log_message(f"Error checking table existence: {e}", level="error")
-            raise
-
-    def generate_merge_sql(self, spark: SparkSession, cleaned_data_view: str, database_name: str, table_name: str, key_columns: Union[str, List[str]]) -> str:
-        """
-        Constructs the SQL query for the MERGE operation.
-        """
-        try:
-            # Normalize key_columns to a list
-            if isinstance(key_columns, str):
-                key_columns = [key_columns]
-
-            target_table_columns = [field.name for field in spark.table(f"{database_name}.{table_name}").schema]
-            all_columns = [col for col in spark.table(cleaned_data_view).columns if col in target_table_columns and col not in key_columns]
-
-            match_sql = ' AND '.join([f"s.`{col}` = t.`{col}`" for col in key_columns])
-            update_sql = ',\n           '.join([f"t.`{col}` = s.`{col}`" for col in all_columns])  # Indent for readability
-            insert_columns = key_columns + all_columns
-            insert_values = [f"s.`{col}`" for col in insert_columns]
-
-            merge_sql = f"""
-            MERGE INTO {database_name}.{table_name} AS t
-            USING {cleaned_data_view} AS s
-            ON {match_sql}
-            WHEN MATCHED THEN
-                UPDATE SET
-                    {update_sql}
-            WHEN NOT MATCHED THEN
-                INSERT ({', '.join([f'`{col}`' for col in insert_columns])})
-                VALUES ({', '.join(insert_values)})
-            """
-
-            # Apply formatting using _format_sql_query
-            formatted_query = self._format_sql_query(merge_sql.strip())
-            self._log_section("Data Merge", [f"MERGE SQL:\n{formatted_query}"])
-            return merge_sql
-        except Exception as e:
-            self._log_message(f"Error generating merge SQL: {e}", level="error")
-            raise
-
-    def execute_merge(self, spark: SparkSession, database_name: str, table_name: str, cleaned_data_view: str, 
-                    key_columns: Union[str, List[str]], use_python: Optional[bool] = False):
-        """
-        Executes the MERGE operation using either SQL or Python operations and logs the start and end of the process.
-        """
-        try:
-            # Normalize key_columns to a list
-            key_columns = self.normalize_key_columns(key_columns)
-
-            target_df = spark.table(f"{database_name}.{table_name}")
-            source_df = spark.table(cleaned_data_view)
-
-            target_columns = [col.strip() for col in target_df.columns]
-            source_columns = [col.strip() for col in source_df.columns]
-
-            # Validate that key_columns exist in both DataFrames
-            for col in key_columns:
-                if col not in target_columns or col not in source_columns:
-                    raise ValueError(f"Column '{col}' not found in target or source DataFrame columns. Available columns: {target_columns} (target), {source_columns} (source)")
-
-            if use_python:
-                # Python DataFrame-based merge logic (if needed)
-                pass
-            else:
-                # SQL-based merge logic
-                merge_sql = self.generate_merge_sql(spark, cleaned_data_view, database_name, table_name, key_columns)
-                result = spark.sql(merge_sql)
-
-                # Log successful merge
-                self._log_message(f"Data merged into {database_name}.{table_name} using SQL.")
-
-                # Extract metrics (example: affected rows, updated rows, etc.)
-                print()
-                merge_metrics = Row(
-                    num_affected_rows=result.select("num_affected_rows").collect()[0][0],
-                    num_updated_rows=result.select("num_updated_rows").collect()[0][0],
-                    num_inserted_rows=result.select("num_inserted_rows").collect()[0][0],
-                    num_deleted_rows=result.select("num_deleted_rows").collect()[0][0],
-                )
-
-                # Convert to DataFrame and display
-                merge_metrics_df = spark.createDataFrame([merge_metrics])
-                merge_metrics_df.show()
-
-            # Log the end of the process as successful
-            self.logger.log_end("Data Merge Process", success=True, additional_message="Merge completed successfully.")
+        Manage the data operation, allowing optional overriding of default config parameters.
         
-        except Exception as e:
-            # Log the end of the process as failed
-            self.logger.log_end("Data Merge Process", success=False, additional_message=f"Error: {e}")
-            
-            # Raise the exception
-            self._log_message(f"Error during data merge: {e}", level="error")
-            raise
-
-    def manage_data_operation(self, spark: SparkSession, dbutils, destination_environment: str, 
-                            source_datasetidentifier: str, cleaned_data_view: str, 
-                            key_columns: Union[str, List[str]], use_python: Optional[bool] = False):
+        Args:
+            spark (SparkSession): The active Spark session.
+            dbutils: Databricks utilities object.
+            cleaned_data_view (str): The name of the cleaned data view.
+            key_columns (Union[str, List[str]]): Columns used for merging data.
+            use_python (Optional[bool]): Flag to use Python DataFrame operations or SQL (default is SQL).
+            destination_folder_path (Optional[str]): Optional override for destination folder path.
+            destination_environment (Optional[str]): Optional override for the destination database/environment.
+            source_datasetidentifier (Optional[str]): Optional override for the source dataset/table identifier.
         """
-        Main method to manage table creation and data merge operations.
-        """
-        # Log the start of the merge process
         self.logger.log_start("Manage Data Operation Process")
 
         try:
-            # Normalize key_columns to ensure it's a list
+            # Normalize the key columns
             key_columns = self.normalize_key_columns(key_columns)
-            
-            # Log for debugging purposes
-            #self._log_message(f"Normalized key_columns: {key_columns}", level="info")
 
-            destination_path, database_name, table_name = self.get_destination_details(spark, destination_environment, source_datasetidentifier)
-            self.ensure_path_exists(dbutils, destination_path)
-            self.create_or_replace_table(spark, database_name, table_name, destination_path, cleaned_data_view, use_python=use_python)
-            self.execute_merge(spark, database_name, table_name, cleaned_data_view, key_columns, use_python=use_python)
-        
+            # Use the provided parameters or fallback to the config values
+            destination_folder_path = destination_folder_path or self.destination_folder_path
+            destination_environment = destination_environment or self.destination_environment
+            source_datasetidentifier = source_datasetidentifier or self.source_datasetidentifier
+
+            # Ensure that required parameters are available
+            if not destination_folder_path or not destination_environment or not source_datasetidentifier:
+                raise ValueError("The 'destination_folder_path', 'destination_environment', and 'source_datasetidentifier' must be provided either via arguments or configuration.")
+
+            # Log destination details
+            self._log_section("Destination Details", [
+                f"Destination Path: {destination_folder_path}",
+                f"Database: {destination_environment}",
+                f"Table: {source_datasetidentifier}"
+            ])
+
+            # Path validation and table creation
+            self.ensure_path_exists(dbutils, destination_folder_path)
+            self.create_or_replace_table(spark, destination_environment, source_datasetidentifier, destination_folder_path, cleaned_data_view, use_python=use_python)
+
+            # Perform the merge operation
+            merge_result = self.execute_merge(spark, destination_environment, source_datasetidentifier, cleaned_data_view, key_columns, use_python=use_python)
+
+            # Log merge result
+            if merge_result == 0:
+                self._log_message("Merge completed, but no new rows were affected.", level="info")
+            else:
+                self._log_message(f"Merge completed successfully. {merge_result} rows were affected.", level="info")
+
         except Exception as e:
             self._log_message(f"Error managing data operation: {e}", level="error")
             raise

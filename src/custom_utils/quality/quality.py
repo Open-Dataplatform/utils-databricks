@@ -1,5 +1,3 @@
-# File: custom_utils/quality/quality.py
-
 import pyspark.sql.functions as F
 import sqlparse
 from typing import List, Dict, Tuple, Optional, Union
@@ -75,7 +73,7 @@ class DataQualityManager:
         available_checks = self._list_available_checks()
         self._log_block("Available Quality Checks", [f"{check}: {description}" for check, description in available_checks.items()])
 
-    def _handle_multiple_files(self, spark: SparkSession, df: DataFrame, key_columns: [str, List[str]], order_by: Optional[Union[str, List[str]]] = None, use_sql: bool = False) -> DataFrame:
+    def _handle_multiple_files(self, spark: SparkSession, df: DataFrame, key_columns: Union[str, List[str]], order_by: Optional[Union[str, List[str]]] = None, use_sql: bool = False) -> DataFrame:
         """
         Handles multiple files by keeping the latest record per key based on 'input_file_name' and the specified 'order_by' columns.
 
@@ -131,7 +129,7 @@ class DataQualityManager:
         except AnalysisException as e:
             self._raise_error(f"Failed to handle multiple files: {e}")
 
-    def _check_for_duplicates(self, spark: SparkSession, df: DataFrame, key_columns: [str, List[str]], use_sql: bool = False):
+    def _check_for_duplicates(self, spark: SparkSession, df: DataFrame, key_columns: Union[str, List[str]], use_sql: bool = False):
         # Ensure key_columns is a list
         if isinstance(key_columns, str):
             key_columns = [key_columns]
@@ -298,57 +296,6 @@ class DataQualityManager:
                 self._log_message("Consistency check passed for all specified pairs.")
         except Exception as e:
             self._raise_error(f"Failed to check field consistency: {e}")
-
-    def run_all_checks(
-        self,
-        spark: SparkSession,
-        df: DataFrame,
-        key_columns: List[str],
-        critical_columns: Optional[List[str]] = None,
-        column_ranges: Optional[Dict[str, Tuple[float, float]]] = None,
-        reference_df: Optional[DataFrame] = None,
-        join_column: Optional[str] = None,
-        consistency_pairs: Optional[List[Tuple[str, str]]] = None,
-        columns_to_exclude: Optional[List[str]] = None,
-        use_sql: bool = False
-    ) -> str:
-        """Executes all data quality checks based on the provided parameters."""
-        try:
-            # Handling multiple files
-            df = self._handle_multiple_files(df, key_columns, use_sql=use_sql)
-
-            # Check for duplicates
-            self._check_for_duplicates(spark, df, key_columns, use_sql=use_sql)
-
-            # Check for null values
-            if critical_columns:
-                self._check_for_nulls(df, critical_columns)
-
-            # Check value ranges
-            if column_ranges:
-                self._check_value_ranges(df, column_ranges)
-
-            # Check referential integrity
-            if reference_df and join_column:
-                self._check_referential_integrity(df, reference_df, join_column)
-
-            # Check field consistency
-            if consistency_pairs:
-                self._check_consistency_between_fields(df, consistency_pairs)
-
-            # Exclude columns
-            if columns_to_exclude:
-                df = df.drop(*columns_to_exclude)
-                self._log_block("Excluding Columns", [f"Excluded columns: {columns_to_exclude}"])
-
-            # Create the final view
-            temp_view_name = "cleaned_data_view"
-            df.createOrReplaceTempView(temp_view_name)
-            self._log_block("Finishing Results", [f"New temporary view '{temp_view_name}' created.", "All quality checks completed successfully."])
-            return temp_view_name
-
-        except Exception as e:
-            self._raise_error(f"Data quality checks failed: {e}")
 
     def perform_data_quality_checks(
         self,
