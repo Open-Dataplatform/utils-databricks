@@ -363,5 +363,7 @@ class DataFrameTransformer:
             return df_initial, df_flattened
 
         except Exception as e:
+            error_message = f"Error during processing: {str(e)}"
+            self.logger.log_error(error_message)
             self.logger.log_end("process_and_flatten_data", success=False)
-            raise RuntimeError(f"Error during processing: {e}")
+            raise RuntimeError(error_message)
