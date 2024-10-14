@@ -54,7 +54,7 @@ class DataStorageManager:
                 self._log_section("Path Validation", [f"Path did not exist. Created path: {destination_path}"])
             else:
                 self._log_message(f"Error while ensuring path exists: {e}", level="error")
-                raise
+                raise RuntimeError(f"Error while ensuring path exists: {e}")
 
     def normalize_key_columns(self, key_columns: Union[str, List[str]]) -> List[str]:
         """
@@ -74,7 +74,7 @@ class DataStorageManager:
             return table_exists
         except Exception as e:
             self._log_message(f"Error checking table existence: {e}", level="error")
-            raise
+            raise RuntimeError(f"Error checking table existence: {e}")
 
     def create_or_replace_table(self, spark: SparkSession, database_name: str, table_name: str, destination_path: str, cleaned_data_view: str, use_python: Optional[bool] = False):
         """
@@ -120,7 +120,7 @@ class DataStorageManager:
                     self._log_message(f"Table {database_name}.{table_name} already exists.")
         except Exception as e:
             self._log_message(f"Error creating or replacing table: {e}", level="error")
-            raise
+            raise RuntimeError(f"Error creating or replacing table: {e}")
 
     def generate_merge_sql(self, spark: SparkSession, cleaned_data_view: str, database_name: str, table_name: str, key_columns: Union[str, List[str]]) -> str:
         """
@@ -150,7 +150,7 @@ class DataStorageManager:
             return merge_sql
         except Exception as e:
             self._log_message(f"Error generating merge SQL: {e}", level="error")
-            raise
+            raise RuntimeError(f"Error generating merge SQL: {e}")
 
     def execute_merge(self, spark: SparkSession, database_name: str, table_name: str, cleaned_data_view: str, key_columns: Union[str, List[str]], use_python: Optional[bool] = False) -> int:
         """
@@ -177,7 +177,7 @@ class DataStorageManager:
         except Exception as e:
             self.logger.log_end("Data Merge Process", success=False, additional_message=f"Error: {e}")
             self._log_message(f"Error during data merge: {e}", level="error")
-            raise
+            raise RuntimeError(f"Error during data merge: {e}")
 
     def generate_feedback_timestamps(self, spark: SparkSession, view_name: str, feedback_column: Optional[str] = None, key_columns: Optional[Union[str, List[str]]] = None) -> str:
         """
@@ -212,8 +212,9 @@ class DataStorageManager:
             return self.handle_feedback_result(df_min_max, view_name)
 
         except Exception as e:
-            self._log_message(f"Error in feedback timestamps generation: {e}", level="error")
-            raise
+            error_message = f"Error in feedback timestamps generation: {e}"
+            self._log_message(error_message, level="error")
+            raise RuntimeError(error_message)
 
     def execute_feedback_sql(self, spark: SparkSession, feedback_sql: str) -> DataFrame:
         """
@@ -222,8 +223,9 @@ class DataStorageManager:
         try:
             return spark.sql(feedback_sql)
         except Exception as e:
-            self._log_message(f"Error executing SQL query: {e}", level="error")
-            raise
+            error_message = f"Error executing SQL query: {e}"
+            self._log_message(error_message, level="error")
+            raise RuntimeError(error_message)
 
     def handle_feedback_result(self, df_min_max: DataFrame, view_name: str) -> str:
         """
@@ -310,4 +312,4 @@ class DataStorageManager:
 
         except Exception as e:
             self._log_message(f"Error managing data operation: {e}", level="error")
-            raise
+            raise RuntimeError(f"Error managing data operation: {e}")
