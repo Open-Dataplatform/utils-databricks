@@ -12,30 +12,39 @@ class DataStorageManager:
                  source_datasetidentifier: Optional[str] = None, 
                  destination_folder_path: Optional[str] = None):
         """
-        Initialize the DataStorageManager with logger, debug mode, and optional config attributes.
+        Initialize the DataStorageManager with optional logger, debug mode, and configuration attributes.
         """
         self.logger = logger if logger else Logger(debug=debug)
         self.debug = debug
         
-        # Set default/fallback values from config (these will be your config values)
+        # Default/fallback config values
         self.destination_environment = destination_environment
         self.source_datasetidentifier = source_datasetidentifier
         self.destination_folder_path = destination_folder_path
         
-        # Initialize sections_logged as an empty set to keep track of logged sections
+        # Track logged sections to avoid redundant log entries
         self.sections_logged = set()
 
     def _log_message(self, message: str, level: str = "info"):
+        """
+        Logs a message if in debug mode or if the log level is not 'info'.
+        """
         if self.debug or level != "info":
             self.logger.log_message(message, level=level)
 
     def _log_section(self, section_title: str, content_lines: Optional[List[str]] = None):
+        """
+        Logs a structured section with a title and optional content lines.
+        """
         if self.debug and section_title not in self.sections_logged:
             content_lines = content_lines if content_lines else []
             self.logger.log_block(section_title, content_lines)
             self.sections_logged.add(section_title)
 
     def ensure_path_exists(self, dbutils, destination_path: str):
+        """
+        Ensures that a path exists in DBFS. If it does not, the path is created.
+        """
         try:
             dbutils.fs.ls(destination_path)
             self._log_section("Path Validation", [f"Path already exists: {destination_path}"])
@@ -48,13 +57,16 @@ class DataStorageManager:
                 raise
 
     def normalize_key_columns(self, key_columns: Union[str, List[str]]) -> List[str]:
+        """
+        Normalizes the key columns by converting a comma-separated string into a list of column names.
+        """
         if isinstance(key_columns, str):
             key_columns = [col.strip() for col in key_columns.split(',')]
         return key_columns
     
     def check_if_table_exists(self, spark: SparkSession, database_name: str, table_name: str) -> bool:
         """
-        Checks if a Databricks Delta table exists in the specified database.
+        Checks if a Delta table exists in the specified database.
         """
         try:
             tables_df = spark.sql(f"SHOW TABLES IN {database_name}").filter(f"tableName = '{table_name}'")
@@ -65,14 +77,17 @@ class DataStorageManager:
             raise
 
     def create_or_replace_table(self, spark: SparkSession, database_name: str, table_name: str, destination_path: str, cleaned_data_view: str, use_python: Optional[bool] = False):
+        """
+        Creates or replaces a Delta table at the specified path, optionally using Python DataFrame operations.
+        """
         try:
-            # Get the DataFrame from the cleaned data view
+            # Access DataFrame from the specified view
             df = spark.table(cleaned_data_view)
 
-            # Create the schema string with indentation for better readability
+            # Construct schema string for readability in SQL
             schema_str = ",\n    ".join([f"`{field.name}` {field.dataType.simpleString()}" for field in df.schema.fields])
 
-            # Create the SQL query for table creation, ensuring proper formatting
+            # Create SQL query for table creation
             create_table_sql = f"""
             CREATE TABLE IF NOT EXISTS {database_name}.{table_name} (
                 {schema_str}
@@ -81,41 +96,35 @@ class DataStorageManager:
             LOCATION '{destination_path}/'
             """
 
-            # Log block with the SQL query using the logger
+            # Log the SQL query used for table creation
             self.logger.log_block("Table Creation Process", sql_query=create_table_sql)
 
             if use_python:
-                # Log the section for Python DataFrame operations
+                # Log DataFrame operation for table creation
                 self._log_section("Table Creation Process", [f"Writing DataFrame to Delta at path '{destination_path}' and registering table '{database_name}.{table_name}'."])
                 
-                # Write the DataFrame to Delta format and register the table
+                # Write DataFrame to Delta format and register the table
                 df.write.format("delta").mode("overwrite").option("path", destination_path).saveAsTable(f"{database_name}.{table_name}")
                 
-                # Log the completion message
                 self._log_message(f"Table {database_name}.{table_name} created using DataFrame operations.")
             else:
-                # Check if the table already exists
+                # Check if table already exists before creation
                 if not self.check_if_table_exists(spark, database_name, table_name):
-                    # Execute the SQL query to create the table
                     spark.sql(create_table_sql)
-
-                    # Log messages for table creation and data writing
                     self._log_message(f"Table {database_name}.{table_name} created.")
                     
-                    # Write the data to the Delta table
+                    # Write data to the Delta table
                     df.write.format("delta").mode("overwrite").save(destination_path)
                     self._log_message(f"Data written to {destination_path}.")
                 else:
-                    # Log a message indicating the table already exists
                     self._log_message(f"Table {database_name}.{table_name} already exists.")
         except Exception as e:
-            # Log any errors during the process
             self._log_message(f"Error creating or replacing table: {e}", level="error")
             raise
 
     def generate_merge_sql(self, spark: SparkSession, cleaned_data_view: str, database_name: str, table_name: str, key_columns: Union[str, List[str]]) -> str:
         """
-        Constructs the SQL query for the MERGE operation.
+        Constructs the SQL query for a Delta MERGE operation, using specified key columns.
         """
         try:
             key_columns = self.normalize_key_columns(key_columns)
@@ -138,7 +147,6 @@ class DataStorageManager:
                 INSERT ({', '.join([f'`{col}`' for col in insert_columns])})
                 VALUES ({', '.join(insert_values)})
             """
-
             return merge_sql
         except Exception as e:
             self._log_message(f"Error generating merge SQL: {e}", level="error")
@@ -146,7 +154,7 @@ class DataStorageManager:
 
     def execute_merge(self, spark: SparkSession, database_name: str, table_name: str, cleaned_data_view: str, key_columns: Union[str, List[str]], use_python: Optional[bool] = False) -> int:
         """
-        Executes the MERGE operation and logs the SQL query and results using logger methods.
+        Executes the MERGE SQL operation and logs the SQL query and results.
         """
         try:
             key_columns = self.normalize_key_columns(key_columns)
@@ -154,19 +162,14 @@ class DataStorageManager:
             if use_python:
                 pass
             else:
-                # Generate the MERGE SQL query
                 merge_sql = self.generate_merge_sql(spark, cleaned_data_view, database_name, table_name, key_columns)
-
-                # Log the block for data merge with the SQL query inside
                 self.logger.log_block("Data Merge", sql_query=merge_sql)
 
-                # Execute the merge and calculate affected rows
                 initial_row_count = spark.sql(f"SELECT * FROM {database_name}.{table_name}").count()
                 spark.sql(merge_sql)
                 final_row_count = spark.sql(f"SELECT * FROM {database_name}.{table_name}").count()
                 affected_rows = final_row_count - initial_row_count
 
-                # Log the outcome
                 self._log_message(f"Data merged into {database_name}.{table_name} using SQL.")
                 self._log_message(f"Number of affected rows: {affected_rows}")
 
@@ -176,24 +179,36 @@ class DataStorageManager:
             self._log_message(f"Error during data merge: {e}", level="error")
             raise
 
-    def generate_feedback_timestamps(self, spark: SparkSession, view_name: str, feedback_column: str) -> str:
+    def generate_feedback_timestamps(self, spark: SparkSession, view_name: str, feedback_column: Optional[str] = None, key_columns: Optional[Union[str, List[str]]] = None) -> str:
         """
-        Orchestrates the entire process of calculating and returning feedback timestamps.
+        Calculates and returns feedback timestamps by either `feedback_column` or the first column in `key_columns`.
         """
-        # Add a block title to make the output more readable
+        # Use feedback_column as key_columns if it contains a comma
+        if feedback_column and "," in feedback_column:
+            key_columns = self.normalize_key_columns(feedback_column)
+            feedback_column = None
+        
+        # Initialize key_columns as empty list if not defined
+        if key_columns is None:
+            key_columns = []
+        else:
+            key_columns = self.normalize_key_columns(key_columns)
+
+        # Use feedback_column if defined, otherwise use the first key_columns element
+        column_to_use = feedback_column.strip() if feedback_column else (key_columns[0] if key_columns else None)
+        
+        if not column_to_use:
+            raise ValueError("Either 'feedback_column' or 'key_columns' must be provided and non-empty.")
+        
+        # Log section to confirm the chosen column for the operation
         self._log_section("Feedback Timestamps Generation", [
             f"View Name: {view_name}",
-            f"Feedback Column: {feedback_column}"
+            f"Using Column: {column_to_use}"
         ])
 
         try:
-            # Generate the feedback SQL query
-            feedback_sql = self.construct_feedback_sql(view_name, feedback_column)
-            
-            # Execute the feedback SQL query
-            df_min_max = self.execute_feedback_sql(spark, feedback_sql)
-            
-            # Handle the result and return the feedback output as JSON
+            feedback_sql = self.construct_feedback_sql(view_name, column_to_use)
+            df_min_max = spark.sql(feedback_sql)
             return self.handle_feedback_result(df_min_max, view_name)
 
         except Exception as e:
@@ -202,7 +217,7 @@ class DataStorageManager:
 
     def execute_feedback_sql(self, spark: SparkSession, feedback_sql: str) -> DataFrame:
         """
-        Executes the SQL query to get the minimum and maximum timestamps.
+        Executes a SQL query to retrieve the minimum and maximum timestamps.
         """
         try:
             return spark.sql(feedback_sql)
@@ -212,9 +227,9 @@ class DataStorageManager:
 
     def handle_feedback_result(self, df_min_max: DataFrame, view_name: str) -> str:
         """
-        Handles the result of the feedback SQL query and converts it to JSON.
+        Processes the result of the feedback SQL query and converts it to JSON format.
         """
-        if df_min_max.head(1):  # Efficient way to check if the DataFrame is empty
+        if df_min_max.head(1):
             notebook_output = df_min_max.toJSON().first()
             self._log_message(f"Notebook output: {notebook_output}")
             return notebook_output
@@ -225,7 +240,7 @@ class DataStorageManager:
 
     def construct_feedback_sql(self, view_name: str, feedback_column: str) -> str:
         """
-        Constructs an SQL query to get the minimum and maximum timestamps for the feedback column.
+        Creates an SQL query to calculate the minimum and maximum timestamps for the specified column.
         """
         feedback_sql = f"""
         SELECT
@@ -233,26 +248,8 @@ class DataStorageManager:
             MAX({feedback_column}) AS to_datetime
         FROM {view_name}
         """
-        self.logger.log_sql_query(feedback_sql)
+        self._log_message(f"Constructed SQL Query:\n{feedback_sql}", level="info")
         return feedback_sql
-
-    def ensure_path_exists(self, dbutils, destination_path: str):
-        """
-        Ensures the destination path exists in DBFS.
-        """
-        try:
-            try:
-                dbutils.fs.ls(destination_path)
-                self._log_section("Path Validation", [f"Path already exists: {destination_path}"])
-            except Exception as e:
-                if "java.io.FileNotFoundException" in str(e):
-                    dbutils.fs.mkdirs(destination_path)
-                    self._log_section("Path Validation", [f"Path did not exist. Created path: {destination_path}"])
-                else:
-                    raise
-        except Exception as e:
-            self._log_message(f"Error while ensuring path exists: {e}", level="error")
-            raise
 
     def manage_data_operation(self, 
                               spark: SparkSession, 
