@@ -26,10 +26,9 @@ class DataQualityManager:
         if self.debug:
             self.logger.log_block(header, content_lines)
 
-    def _raise_error(self, message: str):
+        def _raise_error(self, message: str):
         """Logs an error message and raises a RuntimeError."""
-        self._log_message(message, level="error")
-        raise RuntimeError(message)
+        self.logger.log_error(message)  # This will automatically raise RuntimeError in your Logger
 
     def _format_sql_query(self, query: str) -> str:
         """Formats SQL queries using sqlparse and adds custom indentation."""
@@ -387,5 +386,7 @@ class DataQualityManager:
             return temp_view_name
 
         except Exception as e:
+            error_message = f"Data quality checks failed: {e}"
+            self.logger.log_error(error_message)
             self.logger.log_end("Data Quality Check Process", success=False)
-            self._raise_error(f"Data quality checks failed: {e}")
+            raise RuntimeError(error_message)
