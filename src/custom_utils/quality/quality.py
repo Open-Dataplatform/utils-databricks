@@ -26,7 +26,7 @@ class DataQualityManager:
         if self.debug:
             self.logger.log_block(header, content_lines)
 
-        def _raise_error(self, message: str):
+    def _raise_error(self, message: str):
         """Logs an error message and raises a RuntimeError."""
         self.logger.log_error(message)  # This will automatically raise RuntimeError in your Logger
 
