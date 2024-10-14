@@ -49,8 +49,10 @@ class Logger:
             self.logger.warning(message)
         elif level == "error":
             self.logger.error(message)
+            raise RuntimeError(message)
         elif level == "critical":
             self.logger.critical(message)
+            raise RuntimeError(message)
 
     def log_block(self, header, content_lines=None, sql_query=None, level="info"):
         """
@@ -101,7 +103,6 @@ class Logger:
     def log_error(self, message):
         """Log an error message and raise a RuntimeError."""
         self.log_message(message, level="error")
-        raise RuntimeError(message)
 
     def log_warning(self, message):
         """Log a warning message."""
@@ -110,7 +111,6 @@ class Logger:
     def log_critical(self, message):
         """Log a critical message and raise a RuntimeError."""
         self.log_message(message, level="critical")
-        raise RuntimeError(message)
 
     def log_debug(self, message):
         """Log a debug message."""

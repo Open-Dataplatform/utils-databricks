@@ -58,7 +58,6 @@ class Config:
             self.schema_folder_name = get_param_value(self.dbutils, "SchemaFolderName", required=False)
             self.sheet_name = get_param_value(self.dbutils, "SheetName", required=False)
             
-            # Optional DepthLevel handling
             depth_level_str = get_param_value(self.dbutils, "DepthLevel", default_value="")
             self.depth_level = int(depth_level_str) if depth_level_str else None
             if self.depth_level is None:
@@ -126,6 +125,13 @@ class Config:
         if optional_params:
             self.logger.log_block("Optional Parameters", optional_params)
         self.logger.log_block("Extended Parameters", extended_params)
+
+    def _handle_initialization_error(self, e: Exception) -> None:
+        """Handles initialization errors by raising a RuntimeError to ensure ADF detects failure."""
+        error_message = f"Failed to initialize configuration: {str(e)}"
+        self._log(error_message, level='error')
+        self.logger.log_end("Config Initialization", success=False, additional_message="Check error logs for details.")
+        raise RuntimeError(error_message)
 
     def _raise_error(self, message: str):
         """Logs an error message and raises a RuntimeError to stop the notebook."""
