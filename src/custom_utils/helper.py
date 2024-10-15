@@ -21,10 +21,7 @@ def exit_notebook(message, dbutils=None):
         dbutils: The Databricks dbutils object, used to exit the notebook.
     """
     logger.log_message(message, level="error")  # Use logger for error messages
-    if dbutils:
-        dbutils.notebook.exit(f"[ERROR] {message}")
-    else:
-        raise SystemExit(f"[ERROR] {message}")
+    raise SystemExit(f"[ERROR] {message}")
 
 def get_adf_parameter(dbutils, param_name, default_value=""):
     """
@@ -70,7 +67,9 @@ def get_param_value(dbutils, param_name, default_value=None, required=False):
         value = os.getenv(param_name.upper(), default_value)
 
     if required and not value:
-        logger.exit_notebook(f"Required parameter '{param_name}' is missing.", dbutils)
+        # Log the error (optional) and raise a RuntimeError directly
+        logger.log_error(f"Required parameter '{param_name}' is missing.")
+        raise RuntimeError(f"Required parameter '{param_name}' is missing.")
 
     return value
 

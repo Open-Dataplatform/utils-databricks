@@ -1,5 +1,3 @@
-# File: custom_utils/quality/quality.py
-
 import pyspark.sql.functions as F
 import sqlparse
 from typing import List, Dict, Tuple, Optional, Union
@@ -30,8 +28,7 @@ class DataQualityManager:
 
     def _raise_error(self, message: str):
         """Logs an error message and raises a RuntimeError."""
-        self._log_message(message, level="error")
-        raise RuntimeError(message)
+        self.logger.log_error(message)  # This will automatically raise RuntimeError in your Logger
 
     def _format_sql_query(self, query: str) -> str:
         """Formats SQL queries using sqlparse and adds custom indentation."""
@@ -75,7 +72,7 @@ class DataQualityManager:
         available_checks = self._list_available_checks()
         self._log_block("Available Quality Checks", [f"{check}: {description}" for check, description in available_checks.items()])
 
-    def _handle_multiple_files(self, spark: SparkSession, df: DataFrame, key_columns: [str, List[str]], order_by: Optional[Union[str, List[str]]] = None, use_sql: bool = False) -> DataFrame:
+    def _handle_multiple_files(self, spark: SparkSession, df: DataFrame, key_columns: Union[str, List[str]], order_by: Optional[Union[str, List[str]]] = None, use_sql: bool = False) -> DataFrame:
         """
         Handles multiple files by keeping the latest record per key based on 'input_file_name' and the specified 'order_by' columns.
 
@@ -131,18 +128,23 @@ class DataQualityManager:
         except AnalysisException as e:
             self._raise_error(f"Failed to handle multiple files: {e}")
 
-    def _check_for_duplicates(self, spark: SparkSession, df: DataFrame, key_columns: [str, List[str]], use_sql: bool = False):
+    def _check_for_duplicates(self, spark: SparkSession, df: DataFrame, key_columns: Union[str, List[str]], 
+                            feedback_column: Optional[str] = None, remove_duplicates: bool = False, 
+                            use_sql: bool = False) -> DataFrame:
         # Ensure key_columns is a list
         if isinstance(key_columns, str):
             key_columns = [key_columns]
 
         self._log_block("Duplicate Check", [f"Checking for duplicates using key columns: {key_columns}"])
+
         try:
             if use_sql:
+                # Use temp view for SQL-based duplicate check
                 df.createOrReplaceTempView("temp_view_check_duplicates")
+                
                 duplicate_check_query = f"""
                     SELECT 
-                        COUNT(*) AS duplicate_count, {', '.join(key_columns)}
+                        {', '.join(key_columns)}, COUNT(*) AS duplicate_count
                     FROM temp_view_check_duplicates
                     GROUP BY {', '.join(key_columns)}
                     HAVING COUNT(*) > 1
@@ -153,13 +155,84 @@ class DataQualityManager:
                 duplicate_count = duplicates_df.count()
             else:
                 duplicates_df = df.groupBy(key_columns).count().filter(F.col('count') > 1)
-                self._log_message(f"DataFrame operation used: GroupBy on {key_columns} and filter where count > 1.")
                 duplicate_count = duplicates_df.count()
+                self._log_message(f"DataFrame operation used: GroupBy on {key_columns} and filter where count > 1.")
+
+            # Log the count of duplicates found
+            self._log_message(f"Duplicate check identified {duplicate_count} duplicate groups based on key columns {key_columns}.")
 
             if duplicate_count > 0:
-                self._raise_error(f"Duplicate check failed: Found {duplicate_count} duplicates based on key columns {key_columns}.")
+                # Define columns to select from `df`, removing any duplicates
+                if feedback_column:
+                    columns_to_select = ["input_File_name"] + key_columns + [feedback_column]
+                else:
+                    columns_to_select = ["input_File_name"] + key_columns
+
+                # Remove duplicates in columns_to_select by converting to a set and back to a list
+                columns_to_select = list(dict.fromkeys(columns_to_select))
+                
+                # Join and select columns explicitly from `df` to avoid duplicate columns
+                detailed_duplicates_df = (
+                    df.alias("original")
+                    .join(duplicates_df.alias("duplicates"), on=key_columns, how="inner")
+                    .select(*[F.col(f"original.{col}").alias(col) for col in columns_to_select])
+                )
+
+                # Display the table
+                self._log_block("Duplicate Records Found", [
+                    f"Details of duplicates based on {key_columns}:",
+                    f"Total duplicate groups: {duplicate_count}"
+                ])
+                self._log_message("Duplicate details table (showing first few records):")
+                detailed_duplicates_df.show(truncate=False)
+
+                if remove_duplicates:
+                    order_column = feedback_column if feedback_column else key_columns[0]
+                    message = (
+                        f"Duplicates found: Removing duplicates by keeping the latest record "
+                        f"based on '{order_column}' with order by '{order_column} DESC'."
+                    )
+                    self._log_message(message)
+
+                    if use_sql:
+                        # SQL query to remove duplicates
+                        deduplicate_query = f"""
+                            CREATE OR REPLACE TEMPORARY VIEW temp_deduplicated_data AS
+                            SELECT *
+                            FROM (
+                                SELECT t.*, ROW_NUMBER() OVER (
+                                    PARTITION BY {', '.join(key_columns)} 
+                                    ORDER BY {order_column} DESC
+                                ) AS rnr
+                                FROM temp_view_check_duplicates t
+                            ) x
+                            WHERE rnr = 1
+                        """
+                        formatted_query = self._format_sql_query(deduplicate_query)
+                        self._log_message(f"SQL query used to remove duplicates:\n{formatted_query}\n")
+
+                        # Execute the query
+                        spark.sql(deduplicate_query)
+                        df = spark.sql("SELECT * FROM temp_deduplicated_data").drop("rnr")
+                    else:
+                        # Python code to remove duplicates
+                        window_spec = Window.partitionBy(key_columns).orderBy(F.col(order_column).desc())
+                        df = df.withColumn('rnr', F.row_number().over(window_spec)).filter(F.col('rnr') == 1).drop('rnr')
+
+                        python_code = (
+                            f"df.withColumn('rnr', F.row_number().over(Window.partitionBy({key_columns}) "
+                            f".orderBy(F.col('{order_column}').desc()))).filter(F.col('rnr') == 1).drop('rnr')"
+                        )
+                        self._log_message(f"Python code used to remove duplicates:\n{python_code}\n")
+                    
+                    self._log_message("Duplicates removed successfully. Only latest records are retained.")
+                    return df
+                else:
+                    self._raise_error(f"Duplicate check failed: Found {duplicate_count} duplicates based on key columns {key_columns}.")
             else:
                 self._log_message("Duplicate check passed: No duplicates found.")
+            
+            return df
         except Exception as e:
             self._raise_error(f"Failed to check for duplicates: {e}")
 
@@ -299,57 +372,6 @@ class DataQualityManager:
         except Exception as e:
             self._raise_error(f"Failed to check field consistency: {e}")
 
-    def run_all_checks(
-        self,
-        spark: SparkSession,
-        df: DataFrame,
-        key_columns: List[str],
-        critical_columns: Optional[List[str]] = None,
-        column_ranges: Optional[Dict[str, Tuple[float, float]]] = None,
-        reference_df: Optional[DataFrame] = None,
-        join_column: Optional[str] = None,
-        consistency_pairs: Optional[List[Tuple[str, str]]] = None,
-        columns_to_exclude: Optional[List[str]] = None,
-        use_sql: bool = False
-    ) -> str:
-        """Executes all data quality checks based on the provided parameters."""
-        try:
-            # Handling multiple files
-            df = self._handle_multiple_files(df, key_columns, use_sql=use_sql)
-
-            # Check for duplicates
-            self._check_for_duplicates(spark, df, key_columns, use_sql=use_sql)
-
-            # Check for null values
-            if critical_columns:
-                self._check_for_nulls(df, critical_columns)
-
-            # Check value ranges
-            if column_ranges:
-                self._check_value_ranges(df, column_ranges)
-
-            # Check referential integrity
-            if reference_df and join_column:
-                self._check_referential_integrity(df, reference_df, join_column)
-
-            # Check field consistency
-            if consistency_pairs:
-                self._check_consistency_between_fields(df, consistency_pairs)
-
-            # Exclude columns
-            if columns_to_exclude:
-                df = df.drop(*columns_to_exclude)
-                self._log_block("Excluding Columns", [f"Excluded columns: {columns_to_exclude}"])
-
-            # Create the final view
-            temp_view_name = "cleaned_data_view"
-            df.createOrReplaceTempView(temp_view_name)
-            self._log_block("Finishing Results", [f"New temporary view '{temp_view_name}' created.", "All quality checks completed successfully."])
-            return temp_view_name
-
-        except Exception as e:
-            self._raise_error(f"Data quality checks failed: {e}")
-
     def perform_data_quality_checks(
         self,
         spark: SparkSession,
@@ -361,32 +383,37 @@ class DataQualityManager:
         join_column: Optional[str] = None,
         consistency_pairs: Optional[List[Tuple[str, str]]] = None,
         columns_to_exclude: Optional[List[str]] = None,
-        order_by: Optional[Union[str, List[str]]] = None,  # Add order_by parameter
-        use_python: Optional[bool] = None  # Optional parameter, defaults to None
+        order_by: Optional[Union[str, List[str]]] = None,
+        feedback_column: Optional[str] = None,  # Changed to None as default value
+        use_python: Optional[bool] = None,
+        remove_duplicates: Optional[bool] = True  # New parameter for removing duplicates
     ) -> str:
         """
-        Main method to start the data quality process.
+        Main method to start the data quality process, performing various checks on the input DataFrame.
 
         Args:
             spark (SparkSession): Spark session.
             df (DataFrame): DataFrame to perform quality checks on.
-            key_columns (Union[str, List[str]]): Key columns for partitioning.
+            key_columns (Union[str, List[str]]): Key columns for partitioning and duplicate checking.
             critical_columns (Optional[List[str]]): Columns to check for null values.
             column_ranges (Optional[Dict[str, Tuple[float, float]]]): Value ranges for columns.
-            reference_df (Optional[DataFrame]): Reference DataFrame for integrity check.
+            reference_df (Optional[DataFrame]): Reference DataFrame for referential integrity check.
             join_column (Optional[str]): Column to use for referential integrity check.
-            consistency_pairs (Optional[List[Tuple[str, str]]]): Column pairs for consistency check.
+            consistency_pairs (Optional[List[Tuple[str, str]]]): Column pairs for field consistency check.
             columns_to_exclude (Optional[List[str]]): Columns to exclude from the final DataFrame.
-            order_by (Optional[Union[str, List[str]]]): Columns to use for ordering. Defaults to 'input_file_name'.
-            use_python (bool): If True, uses Python syntax for operations. Defaults to False, which uses SQL.
+            order_by (Optional[Union[str, List[str]]]): Columns to use for ordering within partitions.
+            feedback_column (Optional[str]): Column to use for ordering duplicates; falls back to `key_columns` if None.
+            use_python (Optional[bool]): If True, uses Python syntax for operations; defaults to SQL.
+            remove_duplicates (Optional[bool]): If True, removes duplicate rows found during the Duplicate Check.
+                                                Keeps the latest record based on `feedback_column` or `key_columns`.
 
         Returns:
-            str: Name of the temporary view created.
+            str: Name of the temporary view created after processing.
         """
         # Log start of the process
         self.logger.log_start("Data Quality Check Process")
 
-        # Get the list of checks to perform
+        # Get the list of checks to perform based on provided parameters
         checks_to_perform = self._list_checks_to_perform(
             key_columns=key_columns,
             critical_columns=critical_columns,
@@ -397,48 +424,66 @@ class DataQualityManager:
             columns_to_exclude=columns_to_exclude
         )
 
+        # Log the quality checks that will be performed
         self._log_block("Quality Checks to Perform", [f"Checks to be performed: {', '.join(checks_to_perform)}"])
 
         try:
-            # Handling multiple files
+            # Handling multiple files: Keeps the latest record based on `input_file_name` and `order_by`
             if 'Handling Multiple Files' in checks_to_perform:
                 df = self._handle_multiple_files(spark, df, key_columns, order_by=order_by, use_sql=not use_python)
 
-            # Check for duplicates
+            # Check for duplicates and optionally remove them
+            # If feedback_column is provided, use it for ordering during duplicate removal, else fallback to order_by
+            duplicate_order_column = feedback_column if feedback_column else order_by
             if 'Duplicate Check' in checks_to_perform:
-                self._check_for_duplicates(spark, df, key_columns, use_sql=not use_python)
+                try:
+                    # Attempt to handle duplicates and potentially remove them
+                    df = self._check_for_duplicates(
+                        spark, df, key_columns, feedback_column=duplicate_order_column,
+                        remove_duplicates=remove_duplicates, use_sql=not use_python
+                    )
+                except RuntimeError as dup_error:
+                    # Catch and log duplicate error without re-raising it if remove_duplicates is enabled
+                    if remove_duplicates:
+                        self._log_message("Duplicates were found and removed as per the remove_duplicates parameter.")
+                    else:
+                        raise dup_error
 
-            # Check for null values
+            # Check for null values in specified critical columns
             if 'Null Values Check' in checks_to_perform:
                 self._check_for_nulls(spark, df, critical_columns, use_python=use_python)
 
-            # Check value ranges
+            # Check if values in specified columns fall within the defined ranges
             if 'Value Range Check' in checks_to_perform:
                 self._check_value_ranges(spark, df, column_ranges, use_python=use_python)
 
-            # Check referential integrity
+            # Verify referential integrity by checking for matching records in `reference_df`
             if 'Referential Integrity Check' in checks_to_perform:
                 self._check_referential_integrity(spark, df, reference_df, join_column, use_python=use_python)
 
-            # Check field consistency
+            # Check consistency between specified column pairs (e.g., start_date < end_date)
             if 'Field Consistency Check' in checks_to_perform:
                 self._check_consistency_between_fields(spark, df, consistency_pairs, use_python=use_python)
 
-            # Exclude columns
+            # Exclude specified columns from the final DataFrame
             if 'Exclude Columns' in checks_to_perform:
                 df = df.drop(*columns_to_exclude)
                 self._log_block("Excluding Columns", [f"Excluded columns: {columns_to_exclude}"])
 
-            # Create the final view
+            # Create the final view of the processed DataFrame
             temp_view_name = "cleaned_data_view"
             df.createOrReplaceTempView(temp_view_name)
-            self._log_block("Finishing Results", [f"New temporary view '{temp_view_name}' created.", "All quality checks completed successfully."])
-            
-            # Log end of the process
+            self._log_block("Finishing Results", [f"New temporary view '{temp_view_name}' created.",
+                                                "All quality checks completed successfully."])
+
+            # Log successful end of the process
             self.logger.log_end("Data Quality Check Process", success=True, additional_message="Proceeding with notebook execution.")
-            
+
             return temp_view_name
 
         except Exception as e:
+            # Handle any errors during the process and log them
+            error_message = f"Data quality checks failed: {e}"
+            self.logger.log_error(error_message)
             self.logger.log_end("Data Quality Check Process", success=False)
-            self._raise_error(f"Data quality checks failed: {e}")
+            raise RuntimeError(error_message)
