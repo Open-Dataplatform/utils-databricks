@@ -16,12 +16,11 @@ class Config:
         Initialize the Config class with basic parameters, set up logger, and Spark session.
         """
         self.dbutils = dbutils or globals().get("dbutils", None)
-        self.logger = logger or Logger(debug=debug)
+        self.logger = logger or Logger(debug=debug)  # Use passed logger or fallback to custom Logger
         self.debug = debug
 
         self._log("Starting Config Initialization", level='info')
         self._log("Logger initialized successfully.", level='info')
-        
         try:
             self._initialize_parameters()
             self._initialize_paths()

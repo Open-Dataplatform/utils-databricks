@@ -101,6 +101,20 @@ class DataFrameTransformer:
         """Returns a list of array or struct columns in the DataFrame."""
         return [(field.name, field.dataType) for field in df_initial.schema.fields if isinstance(field.dataType, (ArrayType, StructType))]
 
+    def _strip_dbfs_prefix(self, path: str) -> str:
+        """
+        Remove the '/dbfs' prefix from a path to make it compatible with dbutils.fs functions.
+
+        Args:
+            path (str): The path to strip.
+
+        Returns:
+            str: The path without the '/dbfs' prefix.
+        """
+        if path and path.startswith('/dbfs'):
+            return path[5:]  # Strip '/dbfs' from the path
+        return path
+
     def _apply_nested_type_mapping(self, column_name, data_type, type_mapping):
         """Recursively applies type mapping to nested arrays and structs."""
         if isinstance(data_type, ArrayType):
@@ -148,7 +162,10 @@ class DataFrameTransformer:
         return spark.read.format("binaryFile").load(file_path)
 
     def _json_schema_to_spark_struct(self, schema_file_path: str, definitions: Dict = None) -> Tuple[dict, StructType]:
-        """Converts a JSON schema file to a PySpark StructType."""
+        """
+        Converts a JSON schema file to a PySpark StructType.
+        This method reads the file from DBFS using dbutils.
+        """
         try:
             schema_content = self.dbutils.fs.head(schema_file_path)
             json_schema = json.loads(schema_content)
