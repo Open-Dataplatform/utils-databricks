@@ -384,7 +384,7 @@ class DataQualityManager:
         consistency_pairs: Optional[List[Tuple[str, str]]] = None,
         columns_to_exclude: Optional[List[str]] = None,
         order_by: Optional[Union[str, List[str]]] = None,
-        feedback_column: Optional[str] = feedback_column,  # New parameter for optional ordering during duplicate removal
+        feedback_column: Optional[str] = None,  # Changed to None as default value
         use_python: Optional[bool] = None,
         remove_duplicates: Optional[bool] = True  # New parameter for removing duplicates
     ) -> str:
