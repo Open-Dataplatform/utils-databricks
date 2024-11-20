@@ -22,6 +22,10 @@ class Validator:
         self.file_handler = FileHandler(config)
         self.logger.log_info("Validator initialized successfully.")
 
+        # Reset class-level attributes on initialization
+        Validator.exit_notebook = False
+        Validator.exit_notebook_message = ""
+
     def _get_additional_schema_paths(self, schema_folder_path: str) -> list:
         """
         Retrieves additional schema files from the schema folder.
