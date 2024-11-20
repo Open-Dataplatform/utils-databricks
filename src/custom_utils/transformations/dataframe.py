@@ -11,7 +11,6 @@ from pyspark.sql.types import (
     ArrayType, StructField, StringType, BooleanType, DoubleType, IntegerType, LongType,
     TimestampType, DecimalType, DateType, BinaryType, StructType, FloatType, DataType
 )
-
 from custom_utils.logging.logger import Logger
 from custom_utils.config.config import Config
 
@@ -381,7 +380,7 @@ class DataFrameTransformer:
                         current_depth=0,
                         definitions=schema_json.get('definitions')
                     )
-
+                    
                     # Log JSON schema info with depth details
                     self.logger.log_block("JSON Schema Info", [
                         f"Flattening to depth level: {depth_level if depth_level else max_depth}",
@@ -391,7 +390,7 @@ class DataFrameTransformer:
                     # Optionally include schema in the logs (only if debug is True)
                     if include_schema and self.debug:
                         self.logger.log_message(f"Schema JSON: {json.dumps(schema_json, indent=4)}", level="info")
-
+                
                 # Process JSON data and assign to df_initial
                 df_initial = self._process_json(df_binary, schema)
 
