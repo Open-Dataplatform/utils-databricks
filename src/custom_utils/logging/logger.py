@@ -1,5 +1,6 @@
 import logging
 import functools
+import sqlparse
 
 class Logger:
     def __init__(self, debug=False, log_to_file=None):
@@ -48,34 +49,48 @@ class Logger:
             self.logger.warning(message)
         elif level == "error":
             self.logger.error(message)
+            raise RuntimeError(message)
         elif level == "critical":
             self.logger.critical(message)
+            raise RuntimeError(message)
 
-    def log_block(self, header, content_lines, level="info"):
+    def log_block(self, header, content_lines=None, sql_query=None, level="info"):
         """
-        Utility method to log blocks of messages with a header and separators.
-        Block headers and separators don't have [INFO] - prefix.
+        Utility method to log blocks of messages with a header, separators, and optional SQL queries.
         """
         separator_length = 50
         separator = "=" * separator_length
         formatted_header = f" {header} ".center(separator_length, "=")
 
-        # Print header and separator without [INFO] -
-        print("\n" + separator)  # Add newline before the block for readability
+        # Log header and separator
+        print("\n" + separator)
         print(formatted_header)
         print(separator)
 
-        # Log each content line, avoiding empty lines or duplicate bullet points, with [INFO] -
-        for line in content_lines:
-            if line.strip():  # Only log non-empty lines
-                self.log_message(f"  {line}", level=level)  # Indent each line with normal [INFO] -
+        # Log each content line
+        if content_lines:
+            for line in content_lines:
+                if line.strip():
+                    self.log_message(f"  {line}", level=level)
 
-        # End with a separator and a newline, without [INFO] -
-        print(separator + "\n")  # Add newline after the block for readability
+        # Log the SQL query if provided
+        if sql_query:
+            self.log_sql_query(sql_query)
+
+        # End with a separator only
+        print(separator + "\n")
+
+    def log_sql_query(self, query: str, level: str = "info"):
+        """
+        Logs a formatted SQL query for better readability.
+        """
+        formatted_query = sqlparse.format(query, reindent=True, keyword_case='upper')
+        indented_query = f"\n{formatted_query.strip()}\n"
+        self.log_message(f"SQL Query:\n{indented_query}", level=level)
 
     def log_start(self, method_name):
         """Log the start of a method."""
-        self.log_message(f"Starting {method_name}...", level="info")  # Combine [INFO] - and the start message in one line
+        self.log_message(f"Starting {method_name}...", level="info")
 
     def log_end(self, method_name, success=True, additional_message=""):
         """
@@ -86,7 +101,7 @@ class Logger:
         self.log_message(end_message, level="info")
 
     def log_error(self, message):
-        """Log an error message."""
+        """Log an error message and raise a RuntimeError."""
         self.log_message(message, level="error")
 
     def log_warning(self, message):
@@ -94,22 +109,12 @@ class Logger:
         self.log_message(message, level="warning")
 
     def log_critical(self, message):
-        """Log a critical message."""
+        """Log a critical message and raise a RuntimeError."""
         self.log_message(message, level="critical")
 
     def log_debug(self, message):
         """Log a debug message."""
         self.log_message(message, level="debug")
-
-    def exit_notebook(self, message, dbutils=None):
-        """
-        Exit the notebook with an error message.
-        """
-        self.log_error(message)
-        if dbutils:
-            dbutils.notebook.exit(f"[ERROR] {message}")
-        else:
-            raise SystemExit(f"[ERROR] {message}")
 
     def log_function_entry_exit(self, func):
         """
