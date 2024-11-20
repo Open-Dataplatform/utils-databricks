@@ -340,7 +340,7 @@ class DataFrameTransformer:
             matched_file_count = len(matched_data_files)
 
             # Use Spark to load only the matched files
-            df_binary = spark.read.format("binaryFile").load(matched_data_files_full_path)
+            df_binary = self._read_binary_file(matched_data_files_full_path)
 
             # Log number of files loaded into the binary DataFrame
             loaded_file_count = df_binary.select("path").distinct().count()
