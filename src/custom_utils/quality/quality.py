@@ -16,6 +16,25 @@ class DataQualityManager:
         self.logger = logger
         self.debug = debug
 
+    @staticmethod
+    def parse_key_columns(key_columns: Union[str, List[str]]) -> List[str]:
+        """
+        Parses key_columns input to ensure it is a list of strings.
+
+        Args:
+            key_columns (Union[str, List[str]]): The key columns input, either as a string or a list.
+
+        Returns:
+            List[str]: A list of column names.
+        """
+        if isinstance(key_columns, str):
+            # Split the string by commas and strip whitespace
+            return [col.strip() for col in key_columns.split(',')]
+        elif isinstance(key_columns, list):
+            return key_columns  # Already in the correct format
+        else:
+            raise ValueError(f"Invalid type for key_columns: {type(key_columns)}. Expected str or list.")
+
     def _log_message(self, message: str, level: str = "info"):
         """Logs a message using the logger."""
         if self.debug or level != "info":
@@ -28,7 +47,7 @@ class DataQualityManager:
 
     def _raise_error(self, message: str):
         """Logs an error message and raises a RuntimeError."""
-        self.logger.log_error(message)  # This will automatically raise RuntimeError in your Logger
+        self.logger.log_error(message)
 
     def _format_sql_query(self, query: str) -> str:
         """Formats SQL queries using sqlparse and adds custom indentation."""
@@ -72,113 +91,126 @@ class DataQualityManager:
         available_checks = self._list_available_checks()
         self._log_block("Available Quality Checks", [f"{check}: {description}" for check, description in available_checks.items()])
 
-    def _handle_multiple_files(self, spark: SparkSession, df: DataFrame, key_columns: Union[str, List[str]], order_by: Optional[Union[str, List[str]]] = None, use_sql: bool = False) -> DataFrame:
+    def _handle_multiple_files(
+        self, 
+        spark: SparkSession, 
+        df: DataFrame, 
+        key_columns: Union[str, List[str]], 
+        order_by: Optional[Union[str, List[str]]] = None, 
+        use_sql: bool = False
+    ) -> DataFrame:
         """
         Handles multiple files by keeping the latest record per key based on 'input_file_name' and the specified 'order_by' columns.
 
         Args:
             df (DataFrame): Input DataFrame.
-            key_columns (str or List[str]): Columns to use for partitioning (always includes 'input_file_name').
-            order_by (Optional[str or List[str]]): Columns to use for ordering within partitions. Defaults to 'input_file_name'.
+            key_columns (Union[str, List[str]]): Columns to use for partitioning.
+            order_by (Optional[Union[str, List[str]]]): Columns to use for ordering within partitions.
             use_sql (bool): Whether to use SQL or DataFrame operations.
         
         Returns:
             DataFrame: DataFrame with the latest record per key.
         """
-        # Ensure key_columns is a list and include 'input_file_name'
-        if isinstance(key_columns, str):
-            key_columns = [key_columns]
+        # Parse key_columns to ensure consistency
+        key_columns = self.parse_key_columns(key_columns)
+
+        # Include 'input_file_name' in key_columns
         key_columns = list(set(['input_file_name'] + key_columns))
 
-        # Default to ordering by 'input_file_name' if order_by is not provided
-        if not order_by:
-            order_by = ['input_file_name']
-        elif isinstance(order_by, str):
-            order_by = [order_by]
-        
-        # Construct the order_by clause for SQL
-        order_by_clause = ", ".join([f"{col} DESC" for col in ['input_file_name'] + order_by if col not in ['input_file_name']])
+        # Parse order_by
+        order_by = self.parse_key_columns(order_by or 'input_file_name')
 
-        self._log_block("Handling Multiple Files", [f"Handling multiple files using key columns: {key_columns} and ordering by: {order_by}"])
+        # Construct the order_by clause for SQL
+        order_by_clause = ", ".join([f"{col} DESC" for col in order_by])
+
+        self._log_block("Handling Multiple Files", [f"Key columns: {key_columns}", f"Order by: {order_by}"])
+
         try:
             if use_sql:
                 df.createOrReplaceTempView("temp_original_data")
-                recent_data_query = f"""
-                    CREATE OR REPLACE TEMPORARY VIEW temp_recent_data AS
+                query = f"""
+                    CREATE OR REPLACE TEMP VIEW temp_recent_data AS
                     SELECT *
                     FROM (
                         SELECT t.*, ROW_NUMBER() OVER (PARTITION BY {', '.join(key_columns)} ORDER BY {order_by_clause}) AS rnr
                         FROM temp_original_data t
-                    ) x
-                    WHERE rnr = 1
+                    ) x WHERE rnr = 1
                 """
-                formatted_query = self._format_sql_query(recent_data_query)
-                self._log_message(f"The following SQL query is used to handle multiple files:\n{formatted_query}\n")
-                spark.sql(recent_data_query)
+                self._log_message(f"SQL Query:\n{query}")
+                spark.sql(query)
                 df = spark.sql("SELECT * FROM temp_recent_data").drop("rnr")
             else:
-                # Create window specification for DataFrame operations
                 window_spec = Window.partitionBy(key_columns).orderBy(*[F.col(col).desc() for col in order_by])
-                df = df.withColumn('rnr', F.row_number().over(window_spec)).filter(F.col('rnr') == 1).drop('rnr')
-                self._log_message(f"DataFrame operation used: Applied row_number() with partition on {key_columns} and ordered by {order_by_clause}.")
-
-            self._log_message("Handling multiple files completed successfully.")
+                df = df.withColumn("rnr", F.row_number().over(window_spec)).filter(F.col("rnr") == 1).drop("rnr")
+            self._log_message("Handling multiple files completed.")
             return df
-
         except AnalysisException as e:
             self._raise_error(f"Failed to handle multiple files: {e}")
 
-    def _check_for_duplicates(self, spark: SparkSession, df: DataFrame, key_columns: Union[str, List[str]], 
-                            feedback_column: Optional[str] = None, remove_duplicates: bool = False, 
-                            use_sql: bool = False) -> DataFrame:
-        # Ensure key_columns is a list
-        if isinstance(key_columns, str):
-            key_columns = [key_columns]
+    def _check_for_duplicates(
+        self,
+        spark: SparkSession,
+        df: DataFrame,
+        key_columns: Union[str, List[str]],
+        feedback_column: Optional[str] = None,
+        remove_duplicates: bool = False,
+        use_sql: bool = False
+    ) -> DataFrame:
+        """
+        Checks for duplicate rows in the DataFrame.
 
-        self._log_block("Duplicate Check", [f"Checking for duplicates using key columns: {key_columns}"])
+        Args:
+            spark (SparkSession): Spark session.
+            df (DataFrame): Input DataFrame.
+            key_columns (Union[str, List[str]]): Columns to check for duplicates.
+            feedback_column (Optional[str]): Column for ordering during duplicate removal.
+            remove_duplicates (bool): Whether to remove duplicates.
+            use_sql (bool): Whether to use SQL or DataFrame operations.
+
+        Returns:
+            DataFrame: Processed DataFrame.
+        """
+        # Parse key_columns
+        key_columns = self.parse_key_columns(key_columns)
+        self._log_block("Duplicate Check", [f"Key columns: {key_columns}"])
 
         try:
             if use_sql:
-                # Use temp view for SQL-based duplicate check
-                df.createOrReplaceTempView("temp_view_check_duplicates")
-                
-                duplicate_check_query = f"""
-                    SELECT 
-                        {', '.join(key_columns)}, COUNT(*) AS duplicate_count
-                    FROM temp_view_check_duplicates
+                # SQL-based duplicate check
+                df.createOrReplaceTempView("temp_duplicates")
+                query = f"""
+                    SELECT {', '.join(key_columns)}, COUNT(*) AS duplicate_count
+                    FROM temp_duplicates
                     GROUP BY {', '.join(key_columns)}
                     HAVING COUNT(*) > 1
                 """
-                formatted_query = self._format_sql_query(duplicate_check_query)
-                self._log_message(f"The following SQL query is used to check for duplicates:\n{formatted_query}\n")
-                duplicates_df = spark.sql(duplicate_check_query)
+                self._log_message(f"SQL Query:\n{query}")
+                duplicates_df = spark.sql(query)
                 duplicate_count = duplicates_df.count()
             else:
-                duplicates_df = df.groupBy(key_columns).count().filter(F.col('count') > 1)
+                # DataFrame-based duplicate check
+                duplicates_df = df.groupBy(key_columns).count().filter(F.col("count") > 1)
                 duplicate_count = duplicates_df.count()
-                self._log_message(f"DataFrame operation used: GroupBy on {key_columns} and filter where count > 1.")
-
-            # Log the count of duplicates found
-            self._log_message(f"Duplicate check identified {duplicate_count} duplicate groups based on key columns {key_columns}.")
+                self._log_message(f"Duplicate check identified {duplicate_count} duplicate groups based on key columns {key_columns}.")
 
             if duplicate_count > 0:
-                # Define columns to select from `df`, removing any duplicates
+                # Define columns to select for duplicate details
                 if feedback_column:
-                    columns_to_select = ["input_File_name"] + key_columns + [feedback_column]
+                    columns_to_select = ["input_file_name"] + key_columns + [feedback_column]
                 else:
-                    columns_to_select = ["input_File_name"] + key_columns
+                    columns_to_select = ["input_file_name"] + key_columns
 
                 # Remove duplicates in columns_to_select by converting to a set and back to a list
                 columns_to_select = list(dict.fromkeys(columns_to_select))
-                
-                # Join and select columns explicitly from `df` to avoid duplicate columns
+
+                # Join and select columns explicitly to avoid duplicates in output
                 detailed_duplicates_df = (
                     df.alias("original")
                     .join(duplicates_df.alias("duplicates"), on=key_columns, how="inner")
                     .select(*[F.col(f"original.{col}").alias(col) for col in columns_to_select])
                 )
 
-                # Display the table
+                # Display duplicate details
                 self._log_block("Duplicate Records Found", [
                     f"Details of duplicates based on {key_columns}:",
                     f"Total duplicate groups: {duplicate_count}"
@@ -187,6 +219,7 @@ class DataQualityManager:
                 detailed_duplicates_df.show(truncate=False)
 
                 if remove_duplicates:
+                    # Remove duplicates and retain the latest record
                     order_column = feedback_column if feedback_column else key_columns[0]
                     message = (
                         f"Duplicates found: Removing duplicates by keeping the latest record "
@@ -195,7 +228,7 @@ class DataQualityManager:
                     self._log_message(message)
 
                     if use_sql:
-                        # SQL query to remove duplicates
+                        # SQL-based deduplication
                         deduplicate_query = f"""
                             CREATE OR REPLACE TEMPORARY VIEW temp_deduplicated_data AS
                             SELECT *
@@ -204,34 +237,23 @@ class DataQualityManager:
                                     PARTITION BY {', '.join(key_columns)} 
                                     ORDER BY {order_column} DESC
                                 ) AS rnr
-                                FROM temp_view_check_duplicates t
+                                FROM temp_duplicates t
                             ) x
                             WHERE rnr = 1
                         """
                         formatted_query = self._format_sql_query(deduplicate_query)
                         self._log_message(f"SQL query used to remove duplicates:\n{formatted_query}\n")
-
-                        # Execute the query
                         spark.sql(deduplicate_query)
                         df = spark.sql("SELECT * FROM temp_deduplicated_data").drop("rnr")
                     else:
-                        # Python code to remove duplicates
+                        # DataFrame-based deduplication
                         window_spec = Window.partitionBy(key_columns).orderBy(F.col(order_column).desc())
-                        df = df.withColumn('rnr', F.row_number().over(window_spec)).filter(F.col('rnr') == 1).drop('rnr')
-
-                        python_code = (
-                            f"df.withColumn('rnr', F.row_number().over(Window.partitionBy({key_columns}) "
-                            f".orderBy(F.col('{order_column}').desc()))).filter(F.col('rnr') == 1).drop('rnr')"
-                        )
-                        self._log_message(f"Python code used to remove duplicates:\n{python_code}\n")
-                    
-                    self._log_message("Duplicates removed successfully. Only latest records are retained.")
-                    return df
+                        df = df.withColumn("rnr", F.row_number().over(window_spec)).filter(F.col("rnr") == 1).drop("rnr")
+                    self._log_message("Duplicates removed successfully. Only the latest records are retained.")
                 else:
                     self._raise_error(f"Duplicate check failed: Found {duplicate_count} duplicates based on key columns {key_columns}.")
             else:
                 self._log_message("Duplicate check passed: No duplicates found.")
-            
             return df
         except Exception as e:
             self._raise_error(f"Failed to check for duplicates: {e}")
@@ -412,6 +434,10 @@ class DataQualityManager:
         """
         # Log start of the process
         self.logger.log_start("Data Quality Check Process")
+
+        # Parse key_columns
+        key_columns = self.parse_key_columns(key_columns)
+        self._log_block("Data Quality Checks", [f"Key columns: {key_columns}"])
 
         # Get the list of checks to perform based on provided parameters
         checks_to_perform = self._list_checks_to_perform(
