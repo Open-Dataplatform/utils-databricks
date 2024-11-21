@@ -1,10 +1,12 @@
-from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import col
-import pandas as pd
+import os
 import json
+import pandas as pd
 from io import BytesIO
-import pyspark.sql.functions as F
 from typing import Dict, Tuple, List
+
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql.functions import col
+import pyspark.sql.functions as F
 from pyspark.sql.types import (
     ArrayType, StructField, StringType, BooleanType, DoubleType, IntegerType, LongType,
     TimestampType, DecimalType, DateType, BinaryType, StructType, FloatType, DataType
@@ -267,9 +269,43 @@ class DataFrameTransformer:
 
         return df_flattened, converted_columns
 
-    def process_and_flatten_data(self, schema_file_path: str, data_file_path: str, file_type: str, depth_level: int = None, sheet_name=None, include_schema: bool = False) -> Tuple[DataFrame, DataFrame]:
+    def _reorder_columns(self, df: DataFrame) -> DataFrame:
+        """
+        Reorders the columns of the DataFrame to place 'input_file_name' as the first column.
+        """
+        if 'input_file_name' in df.columns:
+            columns = ['input_file_name'] + [col for col in df.columns if col != 'input_file_name']
+            df = df.select(columns)
+        return df
+
+    def process_and_flatten_data(
+            self,
+            schema_file_path: str,
+            data_file_path: str,
+            file_type: str,
+            matched_data_files: List[str] = None,
+            depth_level: int = None,
+            sheet_name=None,
+            include_schema: bool = False
+        ) -> Tuple[DataFrame, DataFrame]:
         """
         Main function to process and flatten JSON or XLSX data, with dynamic logging and support for schemas.
+        Processes all files in the folder if matched_data_files is not provided.
+
+        Args:
+            schema_file_path (str): Path to the schema file.
+            data_file_path (str): Path to the data files.
+            file_type (str): Type of the files ('json' or 'xlsx').
+            matched_data_files (List[str], optional): List of matched data file names.
+            depth_level (int, optional): Depth level for flattening nested structures.
+            sheet_name (str, optional): Sheet name for XLSX files.
+            include_schema (bool, optional): Flag to include schema details in logs.
+
+        Returns:
+            Tuple[DataFrame, DataFrame]: A tuple containing the initial and flattened DataFrames.
+
+        Raises:
+            RuntimeError: If processing fails or unsupported file type is provided.
         """
         # Log the start of the process
         self.logger.log_start("process_and_flatten_data")
@@ -285,8 +321,50 @@ class DataFrameTransformer:
                 f"Data file path: {data_file_path}"
             ])
 
-            # Read the binary file
-            df_binary = self._read_binary_file(stripped_data_file_path)
+            # If matched_data_files is not provided, retrieve all files from the folder
+            if not matched_data_files:
+                self.logger.log_message("No matched_data_files provided. Fetching all files from the folder.", level="info")
+                all_files = self.dbutils.fs.ls(stripped_data_file_path)
+                matched_data_files = [file.name for file in all_files if not file.name.startswith("_")]
+
+                if not matched_data_files:
+                    raise ValueError(f"No files found in the folder: {data_file_path}")
+
+            # Correctly strip the DBFS prefix for each file path
+            matched_data_files_full_path = [
+                f"dbfs:{self._strip_dbfs_prefix(f'{data_file_path}/{file_name}')}" for file_name in matched_data_files
+            ]
+
+            # Verify file paths
+            matched_file_count = len(matched_data_files)
+
+            # Use Spark to load only the matched files
+            df_binary = self._read_binary_file(matched_data_files_full_path)
+
+            # Log number of files loaded into the binary DataFrame
+            loaded_file_count = df_binary.select("path").distinct().count()
+
+            # Include loaded file count in the "Matched Data Files" block
+            content_lines = [
+                f"Number of matched files: {matched_file_count}",
+                f"Number of loaded files: {loaded_file_count}"
+            ]
+
+            # Check if any files were not loaded
+            if matched_file_count != loaded_file_count:
+                # Find the files that were not loaded
+                loaded_file_paths = df_binary.select("path").rdd.flatMap(lambda x: x).collect()
+                loaded_file_names = [os.path.basename(path) for path in loaded_file_paths]
+                not_loaded_files = list(set(matched_data_files) - set(loaded_file_names))
+
+                # Add a warning message and display the top 10 not loaded files
+                self.logger.log_warning(f"Some files were not loaded. Matched: {matched_file_count}, Loaded: {loaded_file_count}")
+
+                content_lines.append(f"Some files were not loaded. Displaying up to 10 of {len(not_loaded_files)} files not loaded:")
+                content_lines.extend([f"- {file_name}" for file_name in not_loaded_files[:10]])
+
+            # Log the "Matched Data Files" block with the updated content
+            self.logger.log_block("Matched Data Files", content_lines)
 
             depth_log_message = ""
             schema = None
@@ -297,8 +375,12 @@ class DataFrameTransformer:
                 if self.config.use_schema and schema_file_path:
                     # Process JSON schema
                     schema_json, schema = self._json_schema_to_spark_struct(stripped_schema_file_path)
-                    max_depth = self._calculate_schema_depth(schema_json, current_depth=0, definitions=schema_json.get('definitions'))
-
+                    max_depth = self._calculate_schema_depth(
+                        schema_json,
+                        current_depth=0,
+                        definitions=schema_json.get('definitions')
+                    )
+                    
                     # Log JSON schema info with depth details
                     self.logger.log_block("JSON Schema Info", [
                         f"Flattening to depth level: {depth_level if depth_level else max_depth}",
@@ -311,6 +393,9 @@ class DataFrameTransformer:
                 
                 # Process JSON data and assign to df_initial
                 df_initial = self._process_json(df_binary, schema)
+
+                # Reorder columns to place 'input_file_name' as the first column
+                df_initial = self._reorder_columns(df_initial)
 
                 # Set depth level if not provided explicitly
                 if not self.config.use_schema:
@@ -337,12 +422,11 @@ class DataFrameTransformer:
             if df_initial is None:
                 raise RuntimeError(f"Failed to process the file. No DataFrame was created for file type: {file_type}")
 
-            # Ensure the 'input_file_name' column is present, add it if not
-            if 'input_file_name' not in df_initial.columns:
-                df_initial = df_initial.withColumn("input_file_name", F.lit(data_file_path))
-
             # Create a temporary DataFrame for logging without 'input_file_name' if it exists
-            df_logged_initial = df_initial.drop("input_file_name") if "input_file_name" in df_initial.columns else df_initial
+            if 'input_file_name' in df_initial.columns:
+                df_logged_initial = df_initial.drop("input_file_name")
+            else:
+                df_logged_initial = df_initial
 
             # Log Initial DataFrame info (before flattening)
             initial_row_count = df_initial.count()
@@ -355,9 +439,8 @@ class DataFrameTransformer:
             # Flatten the DataFrame if necessary (for JSON, typically)
             df_flattened, converted_columns = self.flatten_df(df_initial, depth_level=depth_level)
 
-            # Reorganize columns so 'input_file_name' is always the first column
-            flattened_columns = ["input_file_name"] + [col for col in df_flattened.columns if col != "input_file_name"]
-            df_flattened = df_flattened.select(flattened_columns)
+            # Reorder columns to place 'input_file_name' as the first column
+            df_flattened = self._reorder_columns(df_flattened)
 
             # Log flattened DataFrame info
             flattened_row_count = df_flattened.count()
@@ -377,6 +460,7 @@ class DataFrameTransformer:
             # End log
             self.logger.log_end("process_and_flatten_data", success=True)
 
+            # Return DataFrames
             return df_initial, df_flattened
 
         except Exception as e:
