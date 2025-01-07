@@ -8,6 +8,7 @@ import json
 import xmlschema
 import pandas as pd
 import shutil
+import logging
 from io import BytesIO
 from typing import Dict, Tuple, List
 
