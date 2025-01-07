@@ -1,8 +1,8 @@
 import pyspark.sql.functions as F
-import sqlparse
 from typing import List, Dict, Tuple, Optional, Union
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql.utils import AnalysisException
+from custom_utils.logging.logger import Logger
 
 class DataQualityManager:
     def __init__(self, logger, debug=False):
@@ -13,7 +13,7 @@ class DataQualityManager:
             logger (Logger): Logger object for logging messages.
             debug (bool): If True, enables debug-level logging.
         """
-        self.logger = logger
+        self.logger = logger if logger else Logger(debug=debug)
         self.debug = debug
 
     @staticmethod
@@ -34,27 +34,6 @@ class DataQualityManager:
             return key_columns  # Already in the correct format
         else:
             raise ValueError(f"Invalid type for key_columns: {type(key_columns)}. Expected str or list.")
-
-    def _log_message(self, message: str, level: str = "info"):
-        """Logs a message using the logger."""
-        if self.debug or level != "info":
-            self.logger.log_message(message, level=level)
-
-    def _log_block(self, header: str, content_lines: List[str]):
-        """Logs a block of messages under a common header using the logger."""
-        if self.debug:
-            self.logger.log_block(header, content_lines)
-
-    def _raise_error(self, message: str):
-        """Logs an error message and raises a RuntimeError."""
-        self.logger.log_error(message)
-
-    def _format_sql_query(self, query: str) -> str:
-        """Formats SQL queries using sqlparse and adds custom indentation."""
-        sql_indent = " " * 7  # Indentation to match "[INFO] "
-        formatted_query = sqlparse.format(query, reindent=True, keyword_case='upper')
-        indented_query = "\n".join([sql_indent + line if line.strip() else line for line in formatted_query.splitlines()])
-        return f"{indented_query}\n"
 
     def _list_available_checks(self):
         """Lists all available checks with a description of their parameters."""
@@ -89,7 +68,7 @@ class DataQualityManager:
     def describe_available_checks(self):
         """Logs the available checks and the parameters required to trigger them."""
         available_checks = self._list_available_checks()
-        self._log_block("Available Quality Checks", [f"{check}: {description}" for check, description in available_checks.items()])
+        self.logger.log_block("Available Quality Checks", [f"{check}: {description}" for check, description in available_checks.items()])
 
     def _handle_multiple_files(
         self, 
@@ -123,7 +102,7 @@ class DataQualityManager:
         # Construct the order_by clause for SQL
         order_by_clause = ", ".join([f"{col} DESC" for col in order_by])
 
-        self._log_block("Handling Multiple Files", [f"Key columns: {key_columns}", f"Order by: {order_by}"])
+        self.logger.log_block("Handling Multiple Files", [f"Key columns: {key_columns}", f"Order by: {order_by}"])
 
         try:
             if use_sql:
@@ -136,16 +115,16 @@ class DataQualityManager:
                         FROM temp_original_data t
                     ) x WHERE rnr = 1
                 """
-                self._log_message(f"SQL Query:\n{query}")
+                self.logger.log_sql_query(query)
                 spark.sql(query)
                 df = spark.sql("SELECT * FROM temp_recent_data").drop("rnr")
             else:
                 window_spec = Window.partitionBy(key_columns).orderBy(*[F.col(col).desc() for col in order_by])
                 df = df.withColumn("rnr", F.row_number().over(window_spec)).filter(F.col("rnr") == 1).drop("rnr")
-            self._log_message("Handling multiple files completed.")
+            self.logger.log_message("Handling multiple files completed.")
             return df
         except AnalysisException as e:
-            self._raise_error(f"Failed to handle multiple files: {e}")
+            self.logger.log_error(f"Failed to handle multiple files: {e}")
 
     def _check_for_duplicates(
         self,
@@ -172,7 +151,7 @@ class DataQualityManager:
         """
         # Parse key_columns
         key_columns = self.parse_key_columns(key_columns)
-        self._log_block("Duplicate Check", [f"Key columns: {key_columns}"])
+        self.logger.log_block("Duplicate Check", [f"Key columns: {key_columns}"])
 
         try:
             if use_sql:
@@ -184,14 +163,14 @@ class DataQualityManager:
                     GROUP BY {', '.join(key_columns)}
                     HAVING COUNT(*) > 1
                 """
-                self._log_message(f"SQL Query:\n{query}")
+                self.logger.log_sql_query(query)
                 duplicates_df = spark.sql(query)
                 duplicate_count = duplicates_df.count()
             else:
                 # DataFrame-based duplicate check
                 duplicates_df = df.groupBy(key_columns).count().filter(F.col("count") > 1)
                 duplicate_count = duplicates_df.count()
-                self._log_message(f"Duplicate check identified {duplicate_count} duplicate groups based on key columns {key_columns}.")
+                self.logger.log_message(f"Duplicate check identified {duplicate_count} duplicate groups based on key columns {key_columns}.")
 
             if duplicate_count > 0:
                 # Define columns to select for duplicate details
@@ -211,11 +190,11 @@ class DataQualityManager:
                 )
 
                 # Display duplicate details
-                self._log_block("Duplicate Records Found", [
+                self.logger.log_block("Duplicate Records Found", [
                     f"Details of duplicates based on {key_columns}:",
                     f"Total duplicate groups: {duplicate_count}"
                 ])
-                self._log_message("Duplicate details table (showing first few records):")
+                self.logger.log_message("Duplicate details table (showing first few records):")
                 detailed_duplicates_df.show(truncate=False)
 
                 if remove_duplicates:
@@ -225,7 +204,7 @@ class DataQualityManager:
                         f"Duplicates found: Removing duplicates by keeping the latest record "
                         f"based on '{order_column}' with order by '{order_column} DESC'."
                     )
-                    self._log_message(message)
+                    self.logger.log_message(message)
 
                     if use_sql:
                         # SQL-based deduplication
@@ -241,38 +220,37 @@ class DataQualityManager:
                             ) x
                             WHERE rnr = 1
                         """
-                        formatted_query = self._format_sql_query(deduplicate_query)
-                        self._log_message(f"SQL query used to remove duplicates:\n{formatted_query}\n")
+                        self.logger.log_sql_query(f"SQL query used to remove duplicates:\n{deduplicate_query}\n")
                         spark.sql(deduplicate_query)
                         df = spark.sql("SELECT * FROM temp_deduplicated_data").drop("rnr")
                     else:
                         # DataFrame-based deduplication
                         window_spec = Window.partitionBy(key_columns).orderBy(F.col(order_column).desc())
                         df = df.withColumn("rnr", F.row_number().over(window_spec)).filter(F.col("rnr") == 1).drop("rnr")
-                    self._log_message("Duplicates removed successfully. Only the latest records are retained.")
+                    self.logger.log_message("Duplicates removed successfully. Only the latest records are retained.")
                 else:
-                    self._raise_error(f"Duplicate check failed: Found {duplicate_count} duplicates based on key columns {key_columns}.")
+                    self.logger.log_error(f"Duplicate check failed: Found {duplicate_count} duplicates based on key columns {key_columns}.")
             else:
-                self._log_message("Duplicate check passed: No duplicates found.")
+                self.logger.log_message("Duplicate check passed: No duplicates found.")
             return df
         except Exception as e:
-            self._raise_error(f"Failed to check for duplicates: {e}")
+            self.logger.log_error(f"Failed to check for duplicates: {e}")
 
     def _check_for_nulls(self, spark: SparkSession, df: DataFrame, critical_columns: List[str], use_python: bool = False):
         """Checks for null values in the specified critical columns using either SQL or Python."""
-        self._log_block("Null Values Check", [f"Checking for null values in columns: {critical_columns}"])
+        self.logger.log_block("Null Values Check", [f"Checking for null values in columns: {critical_columns}"])
         try:
             if use_python:
                 for col in critical_columns:
                     # Python approach
                     null_count = df.filter(F.col(col).isNull()).count()
                     python_code = f"df.filter(F.col('{col}').isNull()).count()"
-                    self._log_message(f"Python code: {python_code}")
+                    self.logger.log_python_code(python_code)
 
                     if null_count > 0:
-                        self._raise_error(f"Null values check failed: Column '{col}' has {null_count} missing values.")
+                        self.logger.log_error(f"Null values check failed: Column '{col}' has {null_count} missing values.")
                     else:
-                        self._log_message(f"Column '{col}' has no missing values.")
+                        self.logger.log_message(f"Column '{col}' has no missing values.")
             else:
                 # SQL approach
                 df.createOrReplaceTempView("temp_view_check_nulls")
@@ -280,32 +258,31 @@ class DataQualityManager:
                     f"SELECT COUNT(*) AS null_count, '{col}' AS column_name FROM temp_view_check_nulls WHERE {col} IS NULL"
                     for col in critical_columns
                 ])
-                formatted_query = self._format_sql_query(null_check_query)
-                self._log_message(f"The following SQL query is used to check for null values:\n{formatted_query}\n")
+                self.logger.log_sql_query(f"The following SQL query is used to check for null values:\n{null_check_query}\n")
 
                 nulls_df = spark.sql(null_check_query)
                 for row in nulls_df.collect():
                     if row['null_count'] > 0:
-                        self._raise_error(f"Null values check failed: Column '{row['column_name']}' has {row['null_count']} missing values.")
-                self._log_message("Null values check passed: No missing values found in specified columns.")
+                        self.logger.log_error(f"Null values check failed: Column '{row['column_name']}' has {row['null_count']} missing values.")
+                self.logger.log_message("Null values check passed: No missing values found in specified columns.")
         except Exception as e:
-            self._raise_error(f"Failed to check for null values: {e}")
+            self.logger.log_error(f"Failed to check for null values: {e}")
 
     def _check_value_ranges(self, spark: SparkSession, df: DataFrame, column_ranges: Dict[str, Tuple[float, float]], use_python: bool = False):
         """Checks if values in the specified columns are within the provided ranges using either SQL or Python."""
-        self._log_block("Value Range Check", [f"Checking value ranges for columns: {list(column_ranges.keys())}"])
+        self.logger.log_block("Value Range Check", [f"Checking value ranges for columns: {list(column_ranges.keys())}"])
         try:
             if use_python:
                 for col, (min_val, max_val) in column_ranges.items():
                     # Python approach
                     out_of_range_count = df.filter((F.col(col) < min_val) | (F.col(col) > max_val)).count()
                     python_code = f"df.filter((F.col('{col}') < {min_val}) | (F.col('{col}') > {max_val})).count()"
-                    self._log_message(f"Python code: {python_code}")
+                    self.logger.log_python_code(python_code)
 
                     if out_of_range_count > 0:
-                        self._raise_error(f"Value range check failed: Column '{col}' has {out_of_range_count} values out of range [{min_val}, {max_val}].")
+                        self.logger.log_error(f"Value range check failed: Column '{col}' has {out_of_range_count} values out of range [{min_val}, {max_val}].")
                     else:
-                        self._log_message(f"Column '{col}' values are within the specified range [{min_val}, {max_val}].")
+                        self.logger.log_message(f"Column '{col}' values are within the specified range [{min_val}, {max_val}].")
             else:
                 # SQL approach
                 df.createOrReplaceTempView("temp_view_check_ranges")
@@ -313,31 +290,30 @@ class DataQualityManager:
                     f"SELECT COUNT(*) AS out_of_range_count, '{col}' AS column_name FROM temp_view_check_ranges WHERE {col} < {min_val} OR {col} > {max_val}"
                     for col, (min_val, max_val) in column_ranges.items()
                 ])
-                formatted_query = self._format_sql_query(range_check_query)
-                self._log_message(f"The following SQL query is used to check value ranges:\n{formatted_query}\n")
+                self.logger.log_sql_query(f"The following SQL query is used to check value ranges:\n{range_check_query}\n")
 
                 ranges_df = spark.sql(range_check_query)
                 for row in ranges_df.collect():
                     if row['out_of_range_count'] > 0:
-                        self._raise_error(f"Value range check failed: Column '{row['column_name']}' has {row['out_of_range_count']} values out of range.")
-                self._log_message("Value range check passed: All values are within the specified ranges.")
+                        self.logger.log_error(f"Value range check failed: Column '{row['column_name']}' has {row['out_of_range_count']} values out of range.")
+                self.logger.log_message("Value range check passed: All values are within the specified ranges.")
         except Exception as e:
-            self._raise_error(f"Failed to check value ranges: {e}")
+            self.logger.log_error(f"Failed to check value ranges: {e}")
 
     def _check_referential_integrity(self, spark: SparkSession, df: DataFrame, reference_df: DataFrame, join_column: str, use_python: bool = False):
         """Checks if all records in the DataFrame have matching references in the reference DataFrame using either SQL or Python."""
-        self._log_block("Referential Integrity Check", [f"Checking referential integrity on column '{join_column}'"])
+        self.logger.log_block("Referential Integrity Check", [f"Checking referential integrity on column '{join_column}'"])
         try:
             if use_python:
                 # Python approach
                 unmatched_count = df.join(reference_df, df[join_column] == reference_df[join_column], "left_anti").count()
                 python_code = f"df.join(reference_df, df['{join_column}'] == reference_df['{join_column}'], 'left_anti').count()"
-                self._log_message(f"Python code: {python_code}")
+                self.logger.log_python_code(python_code)
 
                 if unmatched_count > 0:
-                    self._raise_error(f"Referential integrity check failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
+                    self.logger.log_error(f"Referential integrity check failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
                 else:
-                    self._log_message(f"Referential integrity check passed for column '{join_column}'.")
+                    self.logger.log_message(f"Referential integrity check passed for column '{join_column}'.")
             else:
                 # SQL approach
                 df.createOrReplaceTempView("temp_view_check_referential")
@@ -348,34 +324,33 @@ class DataQualityManager:
                     LEFT JOIN reference_view r ON t.{join_column} = r.{join_column}
                     WHERE r.{join_column} IS NULL
                 """
-                formatted_query = self._format_sql_query(referential_query)
-                self._log_message(f"The following SQL query is used to check referential integrity:\n{formatted_query}\n")
+                self.logger.log_sql_query(f"The following SQL query is used to check referential integrity:\n{referential_query}\n")
 
                 referential_df = spark.sql(referential_query)
                 unmatched_count = referential_df.collect()[0]['unmatched_count']
 
                 if unmatched_count > 0:
-                    self._raise_error(f"Referential integrity check failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
+                    sself.logger.log_error(f"Referential integrity check failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
                 else:
-                    self._log_message(f"Referential integrity check passed for column '{join_column}'.")
+                    self.logger.log_message(f"Referential integrity check passed for column '{join_column}'.")
         except Exception as e:
-            self._raise_error(f"Failed to check referential integrity: {e}")
+            self.logger.log_error(f"Failed to check referential integrity: {e}")
 
     def _check_consistency_between_fields(self, spark: SparkSession, df: DataFrame, consistency_pairs: List[Tuple[str, str]], use_python: bool = False):
         """Checks consistency between specified field pairs using either SQL or Python."""
-        self._log_block("Field Consistency Check", [f"Checking consistency between field pairs: {consistency_pairs}"])
+        self.logger.log_block("Field Consistency Check", [f"Checking consistency between field pairs: {consistency_pairs}"])
         try:
             if use_python:
                 for col1, col2 in consistency_pairs:
                     # Python approach
                     inconsistency_count = df.filter(F.col(col1) > F.col(col2)).count()
                     python_code = f"df.filter(F.col('{col1}') > F.col('{col2}')).count()"
-                    self._log_message(f"Python code: {python_code}")
+                    self.logger.log_python_code(python_code)
 
                     if inconsistency_count > 0:
-                        self._raise_error(f"Consistency check failed: {inconsistency_count} records have '{col1}' greater than '{col2}'.")
+                        self.logger.log_error(f"Consistency check failed: {inconsistency_count} records have '{col1}' greater than '{col2}'.")
                     else:
-                        self._log_message(f"Consistency check passed for '{col1}' and '{col2}'.")
+                        self.logger.log_message(f"Consistency check passed for '{col1}' and '{col2}'.")
             else:
                 # SQL approach
                 df.createOrReplaceTempView("temp_view_check_consistency")
@@ -383,16 +358,15 @@ class DataQualityManager:
                     f"SELECT COUNT(*) AS inconsistency_count, '{col1}' AS column_1, '{col2}' AS column_2 FROM temp_view_check_consistency WHERE {col1} > {col2}"
                     for col1, col2 in consistency_pairs
                 ])
-                formatted_query = self._format_sql_query(consistency_queries)
-                self._log_message(f"The following SQL query is used to check field consistency:\n{formatted_query}\n")
+                self.logger.log_sql_query(f"The following SQL query is used to check field consistency:\n{consistency_queries}\n")
 
                 consistency_df = spark.sql(consistency_queries)
                 for row in consistency_df.collect():
                     if row['inconsistency_count'] > 0:
-                        self._raise_error(f"Consistency check failed: {row['inconsistency_count']} records have '{row['column_1']}' greater than '{row['column_2']}'.")
-                self._log_message("Consistency check passed for all specified pairs.")
+                        self.logger.log_error(f"Consistency check failed: {row['inconsistency_count']} records have '{row['column_1']}' greater than '{row['column_2']}'.")
+                self.logger.log_message("Consistency check passed for all specified pairs.")
         except Exception as e:
-            self._raise_error(f"Failed to check field consistency: {e}")
+            self.logger.log_error(f"Failed to check field consistency: {e}")
 
     def perform_data_quality_checks(
         self,
@@ -426,8 +400,7 @@ class DataQualityManager:
             order_by (Optional[Union[str, List[str]]]): Columns to use for ordering within partitions.
             feedback_column (Optional[str]): Column to use for ordering duplicates; falls back to `key_columns` if None.
             use_python (Optional[bool]): If True, uses Python syntax for operations; defaults to SQL.
-            remove_duplicates (Optional[bool]): If True, removes duplicate rows found during the Duplicate Check.
-                                                Keeps the latest record based on `feedback_column` or `key_columns`.
+            remove_duplicates (Optional[bool]): If True, removes duplicate rows found during the Duplicate Check. Keeps the latest record based on `feedback_column` or `key_columns`.
 
         Returns:
             str: Name of the temporary view created after processing.
@@ -437,7 +410,7 @@ class DataQualityManager:
 
         # Parse key_columns
         key_columns = self.parse_key_columns(key_columns)
-        self._log_block("Data Quality Checks", [f"Key columns: {key_columns}"])
+        self.logger.log_block("Data Quality Checks", [f"Key columns: {key_columns}"])
 
         # Get the list of checks to perform based on provided parameters
         checks_to_perform = self._list_checks_to_perform(
@@ -451,7 +424,7 @@ class DataQualityManager:
         )
 
         # Log the quality checks that will be performed
-        self._log_block("Quality Checks to Perform", [f"Checks to be performed: {', '.join(checks_to_perform)}"])
+        self.logger.log_block("Quality Checks to Perform", [f"Checks to be performed: {', '.join(checks_to_perform)}"])
 
         try:
             # Handling multiple files: Keeps the latest record based on `input_file_name` and `order_by`
@@ -471,7 +444,7 @@ class DataQualityManager:
                 except RuntimeError as dup_error:
                     # Catch and log duplicate error without re-raising it if remove_duplicates is enabled
                     if remove_duplicates:
-                        self._log_message("Duplicates were found and removed as per the remove_duplicates parameter.")
+                        self.logger.log_message("Duplicates were found and removed as per the remove_duplicates parameter.")
                     else:
                         raise dup_error
 
@@ -494,12 +467,12 @@ class DataQualityManager:
             # Exclude specified columns from the final DataFrame
             if 'Exclude Columns' in checks_to_perform:
                 df = df.drop(*columns_to_exclude)
-                self._log_block("Excluding Columns", [f"Excluded columns: {columns_to_exclude}"])
+                self.logger.log_block("Excluding Columns", [f"Excluded columns: {columns_to_exclude}"])
 
             # Create the final view of the processed DataFrame
             temp_view_name = "cleaned_data_view"
             df.createOrReplaceTempView(temp_view_name)
-            self._log_block("Finishing Results", [f"New temporary view '{temp_view_name}' created.",
+            self.logger.log_block("Finishing Results", [f"New temporary view '{temp_view_name}' created.",
                                                 "All quality checks completed successfully."])
 
             # Log successful end of the process

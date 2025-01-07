@@ -2,7 +2,6 @@ from custom_utils.dp_storage import writer
 from pyspark.sql import SparkSession, DataFrame
 from typing import List, Optional, Union
 from custom_utils.logging.logger import Logger
-import sqlparse
 
 class DataStorageManager:
     def __init__(self, 
@@ -23,23 +22,7 @@ class DataStorageManager:
         self.destination_folder_path = destination_folder_path
         
         # Track logged sections to avoid redundant log entries
-        self.sections_logged = set()
-
-    def _log_message(self, message: str, level: str = "info"):
-        """
-        Logs a message if in debug mode or if the log level is not 'info'.
-        """
-        if self.debug or level != "info":
-            self.logger.log_message(message, level=level)
-
-    def _log_section(self, section_title: str, content_lines: Optional[List[str]] = None):
-        """
-        Logs a structured section with a title and optional content lines.
-        """
-        if self.debug and section_title not in self.sections_logged:
-            content_lines = content_lines if content_lines else []
-            self.logger.log_block(section_title, content_lines)
-            self.sections_logged.add(section_title)
+        #self.sections_logged = set()
 
     def ensure_path_exists(self, dbutils, destination_path: str):
         """
@@ -47,13 +30,13 @@ class DataStorageManager:
         """
         try:
             dbutils.fs.ls(destination_path)
-            self._log_section("Path Validation", [f"Path already exists: {destination_path}"])
+            self.logger.log_block("Path Validation", [f"Path already exists: {destination_path}"])
         except Exception as e:
             if "java.io.FileNotFoundException" in str(e):
                 dbutils.fs.mkdirs(destination_path)
-                self._log_section("Path Validation", [f"Path did not exist. Created path: {destination_path}"])
+                self.logger.log_block("Path Validation", [f"Path did not exist. Created path: {destination_path}"])
             else:
-                self._log_message(f"Error while ensuring path exists: {e}", level="error")
+                self.logger.log_error(f"Error while ensuring path exists: {e}")
                 raise RuntimeError(f"Error while ensuring path exists: {e}")
 
     def normalize_key_columns(self, key_columns: Union[str, List[str]]) -> List[str]:
@@ -73,7 +56,7 @@ class DataStorageManager:
             table_exists = tables_df.count() > 0
             return table_exists
         except Exception as e:
-            self._log_message(f"Error checking table existence: {e}", level="error")
+            self.logger.log_error(f"Error checking table existence: {e}")
             raise RuntimeError(f"Error checking table existence: {e}")
 
     def create_or_replace_table(self, spark: SparkSession, database_name: str, table_name: str, destination_path: str, cleaned_data_view: str, use_python: Optional[bool] = False):
@@ -101,25 +84,25 @@ class DataStorageManager:
 
             if use_python:
                 # Log DataFrame operation for table creation
-                self._log_section("Table Creation Process", [f"Writing DataFrame to Delta at path '{destination_path}' and registering table '{database_name}.{table_name}'."])
+                self.logger.log_sql_query("Table Creation Process", [f"Writing DataFrame to Delta at path '{destination_path}' and registering table '{database_name}.{table_name}'."])
                 
                 # Write DataFrame to Delta format and register the table
                 df.write.format("delta").mode("overwrite").option("path", destination_path).saveAsTable(f"{database_name}.{table_name}")
                 
-                self._log_message(f"Table {database_name}.{table_name} created using DataFrame operations.")
+                self.logger.log_message(f"Table {database_name}.{table_name} created using DataFrame operations.")
             else:
                 # Check if table already exists before creation
                 if not self.check_if_table_exists(spark, database_name, table_name):
                     spark.sql(create_table_sql)
-                    self._log_message(f"Table {database_name}.{table_name} created.")
+                    self.logger.log_message(f"Table {database_name}.{table_name} created.")
                     
                     # Write data to the Delta table
                     df.write.format("delta").mode("overwrite").save(destination_path)
-                    self._log_message(f"Data written to {destination_path}.")
+                    self.logger.log_message(f"Data written to {destination_path}.")
                 else:
-                    self._log_message(f"Table {database_name}.{table_name} already exists.")
+                    self.logger.log_message(f"Table {database_name}.{table_name} already exists.")
         except Exception as e:
-            self._log_message(f"Error creating or replacing table: {e}", level="error")
+            self.logger.log_error(f"Error creating or replacing table: {e}")
             raise RuntimeError(f"Error creating or replacing table: {e}")
 
     def generate_merge_sql(self, spark: SparkSession, cleaned_data_view: str, database_name: str, table_name: str, key_columns: Union[str, List[str]]) -> str:
@@ -149,7 +132,7 @@ class DataStorageManager:
             """
             return merge_sql
         except Exception as e:
-            self._log_message(f"Error generating merge SQL: {e}", level="error")
+            self.logger.log_error(f"Error generating merge SQL: {e}")
             raise RuntimeError(f"Error generating merge SQL: {e}")
 
     def execute_merge(self, spark: SparkSession, database_name: str, table_name: str, cleaned_data_view: str, key_columns: Union[str, List[str]], use_python: Optional[bool] = False) -> int:
@@ -160,23 +143,34 @@ class DataStorageManager:
             key_columns = self.normalize_key_columns(key_columns)
 
             if use_python:
-                pass
+                raise NotImplementedError("Python-based merge is not yet implemented.")
             else:
+                # Generate the merge SQL query
                 merge_sql = self.generate_merge_sql(spark, cleaned_data_view, database_name, table_name, key_columns)
-                self.logger.log_block("Data Merge", sql_query=merge_sql)
+                self.logger.log_block("Executing Data Merge", sql_query=merge_sql)
 
-                initial_row_count = spark.sql(f"SELECT * FROM {database_name}.{table_name}").count()
-                spark.sql(merge_sql)
-                final_row_count = spark.sql(f"SELECT * FROM {database_name}.{table_name}").count()
-                affected_rows = final_row_count - initial_row_count
+                # Execute the merge operation and capture the results
+                merge_result = spark.sql(merge_sql)
 
-                self._log_message(f"Data merged into {database_name}.{table_name} using SQL.")
-                self._log_message(f"Number of affected rows: {affected_rows}")
+                # Extract merge statistics
+                merge_stats = merge_result.collect()[0].asDict()
+                deleted_count = merge_stats.get("num_deleted_rows", 0)
+                updated_count = merge_stats.get("num_updated_rows", 0)
+                inserted_count = merge_stats.get("num_inserted_rows", 0)
 
-            return affected_rows
+                # Log the results
+                self.logger.log_block("Merge Summary", [
+                    f"Deleted Records: {deleted_count}",
+                    f"Updated Records: {updated_count}",
+                    f"Inserted Records: {inserted_count}",
+                ])
+                total_affected_rows = deleted_count + updated_count + inserted_count
+                self.logger.log_message(f"Total number of affected rows: {total_affected_rows}")
+
+                return total_affected_rows
         except Exception as e:
             self.logger.log_end("Data Merge Process", success=False, additional_message=f"Error: {e}")
-            self._log_message(f"Error during data merge: {e}", level="error")
+            self.logger.log_error(f"Error during data merge: {e}")
             raise RuntimeError(f"Error during data merge: {e}")
 
     def generate_feedback_timestamps(self, spark: SparkSession, view_name: str, feedback_column: Optional[str] = None, key_columns: Optional[Union[str, List[str]]] = None) -> str:
@@ -201,7 +195,7 @@ class DataStorageManager:
             raise ValueError("Either 'feedback_column' or 'key_columns' must be provided and non-empty.")
         
         # Log section to confirm the chosen column for the operation
-        self._log_section("Feedback Timestamps Generation", [
+        self.logger.log_block("Feedback Timestamps Generation", [
             f"View Name: {view_name}",
             f"Using Column: {column_to_use}"
         ])
@@ -213,7 +207,7 @@ class DataStorageManager:
 
         except Exception as e:
             error_message = f"Error in feedback timestamps generation: {e}"
-            self._log_message(error_message, level="error")
+            self.logger.log_error(error_message)
             raise RuntimeError(error_message)
 
     def execute_feedback_sql(self, spark: SparkSession, feedback_sql: str) -> DataFrame:
@@ -224,7 +218,7 @@ class DataStorageManager:
             return spark.sql(feedback_sql)
         except Exception as e:
             error_message = f"Error executing SQL query: {e}"
-            self._log_message(error_message, level="error")
+            self.logger.log_error(error_message)
             raise RuntimeError(error_message)
 
     def handle_feedback_result(self, df_min_max: DataFrame, view_name: str) -> str:
@@ -233,11 +227,11 @@ class DataStorageManager:
         """
         if df_min_max.head(1):
             notebook_output = df_min_max.toJSON().first()
-            self._log_message(f"Notebook output: {notebook_output}")
+            self.logger.log_message(f"Notebook output: {notebook_output}")
             return notebook_output
         else:
             error_message = f"No data found in {view_name} to calculate the feedback timestamps."
-            self._log_message(error_message, level="error")
+            self.logger.log_error(error_message)
             raise ValueError(error_message)
 
     def construct_feedback_sql(self, view_name: str, feedback_column: str) -> str:
@@ -250,7 +244,7 @@ class DataStorageManager:
             MAX({feedback_column}) AS to_datetime
         FROM {view_name}
         """
-        self._log_message(f"Constructed SQL Query:\n{feedback_sql}", level="info")
+        self.logger.log_sql_query(feedback_sql)
         return feedback_sql
 
     def manage_data_operation(self, 
@@ -291,7 +285,7 @@ class DataStorageManager:
                 raise ValueError("The 'destination_folder_path', 'destination_environment', and 'source_datasetidentifier' must be provided either via arguments or configuration.")
 
             # Log destination details
-            self._log_section("Destination Details", [
+            self.logger.log_block("Destination Details", [
                 f"Destination Path: {destination_folder_path}",
                 f"Database: {destination_environment}",
                 f"Table: {source_datasetidentifier}"
@@ -306,10 +300,10 @@ class DataStorageManager:
 
             # Log merge result
             if merge_result == 0:
-                self._log_message("Merge completed, but no new rows were affected.", level="info")
+                self.logger.log_message("Merge completed, but no new rows were affected.")
             else:
-                self._log_message(f"Merge completed successfully. {merge_result} rows were affected.", level="info")
+                self.logger.log_message(f"Merge completed successfully. {merge_result} rows were affected.")
 
         except Exception as e:
-            self._log_message(f"Error managing data operation: {e}", level="error")
+            self.logger.log_error(f"Error managing data operation: {e}")
             raise RuntimeError(f"Error managing data operation: {e}")
