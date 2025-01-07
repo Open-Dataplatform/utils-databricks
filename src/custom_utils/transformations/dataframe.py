@@ -1,4 +1,3 @@
-from pyspark.sql.functions import col
 from custom_utils.logging.logger import Logger
 from custom_utils.config.config import Config
 from custom_utils.validation.validation import Validator
