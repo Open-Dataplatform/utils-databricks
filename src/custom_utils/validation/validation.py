@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from pyspark.sql.utils import AnalysisException
 from custom_utils.logging.logger import Logger
 from custom_utils.config.config import Config
