@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import Tuple, Optional, List
 from pyspark.sql.utils import AnalysisException
 from custom_utils.logging.logger import Logger
