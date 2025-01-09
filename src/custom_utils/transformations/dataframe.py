@@ -577,6 +577,7 @@ class DataFrameTransformer:
 
             # Step 2: Combine paths into a single string
             self.logger.log_debug("Reading XML files in batch...")
+            spark = SparkSession.builder.getOrCreate()
             df_initial = spark.read.format("xml").options(rowTag=root_name).load(",".join(resolved_file_paths))
 
             # Step 3: Sanitize column names
