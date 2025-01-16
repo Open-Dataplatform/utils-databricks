@@ -54,7 +54,9 @@ def clear_widgets_except_common(dbutils, logger: Optional[Logger] = None):
         raise RuntimeError(f"Failed to clear widgets: {str(e)}")
 
 
-def initialize_widgets(dbutils, selected_dataset: str, external_params: Optional[Dict[str, str]] = None, logger: Optional[Logger] = None):
+def initialize_widgets(
+    dbutils, selected_dataset: str, external_params: Optional[Dict[str, str]] = None, logger: Optional[Logger] = None
+):
     """
     Dynamically initializes and updates widget values based on the selected dataset.
 
@@ -65,28 +67,48 @@ def initialize_widgets(dbutils, selected_dataset: str, external_params: Optional
         logger (Optional[Logger]): Optional logger instance for logging.
     """
     try:
+        # Clear widgets except common ones
         clear_widgets_except_common(dbutils, logger)
 
+        # Define dataset-specific widget configurations
         dataset_config = {
-            "example_dataset": {
+            "triton__flow_plans": {
                 "FileType": "json",
-                "SourceFileName": "example_dataset*",
-                "KeyColumns": "column1,column2",
+                "SourceFileName": "triton__flow_plans*",
+                "KeyColumns": "Guid",
                 "FeedbackColumn": "EventTimestamp",
                 "DepthLevel": "1",
-                "SchemaFolderName": "schemachecks"
+                "SchemaFolderName": "schemachecks",
             },
-            # Add more dataset configurations as needed
+            "cpx_so__nomination": {
+                "FileType": "json",
+                "SourceFileName": "cpx_so__nomination*",
+                "KeyColumns": "flows_accountInternal_code, flows_accountExternal_code, flows_location_code, flows_direction, flows_periods_validityPeriod_begin, flows_periods_validityPeriod_end",
+                "FeedbackColumn": "dateCreated",
+                "DepthLevel": "",
+                "SchemaFolderName": "schemachecks",
+            },
+            "ddp_cm__mfrr_settlement": {
+                "FileType": "xml",
+                "SourceFileName": "ddp_cm__mfrr_settlement*",
+                "KeyColumns": "mRID, TimeSeries_mRID, TimeSeries_Period_timeInterval_start, TimeSeries_Period_Point_position, TimeSeries_Period_resolution",
+                "FeedbackColumn": "createdDateTime",
+                "DepthLevel": "",
+                "SchemaFolderName": "schemachecks",
+                "XmlRootName": "ReserveAllocationResult_MarketDocument",
+            },
         }
 
+        # Validate selected dataset
         if selected_dataset not in dataset_config:
             raise ValueError(f"Unknown dataset identifier: {selected_dataset}")
 
+        # Create widgets dynamically
         dataset_widgets = dataset_config[selected_dataset]
-
         for key, value in dataset_widgets.items():
             dbutils.widgets.text(key, value, key)
 
+        # Apply external parameters if provided
         if external_params:
             for key, value in external_params.items():
                 if key in dataset_widgets:
