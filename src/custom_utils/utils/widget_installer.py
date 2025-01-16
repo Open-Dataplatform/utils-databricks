@@ -11,6 +11,7 @@ def initialize_common_widgets(dbutils, logger=None):
     """
     try:
         # Step 1: Initialize common widgets
+        dbutils.widgets.dropdown("FileType", "json", ["json", "xml", "xlsx"], "Select File Type")
         dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest", "Source Storage Account")
         dbutils.widgets.text("DestinationStorageAccount", "dpuniformstoragetest", "Destination Storage Account")
         dbutils.widgets.text("SourceContainer", "landing", "Source Container")
@@ -22,7 +23,7 @@ def initialize_common_widgets(dbutils, logger=None):
             # Initialize SourceDatasetidentifier dropdown if it doesn't exist
             dbutils.widgets.dropdown(
                 "SourceDatasetidentifier",
-                "ddp_cm__mfrr_settlement",  # Default value
+                "triton__flow_plans",  # Default value
                 [
                     "triton__flow_plans",
                     "cpx_so__nomination",
