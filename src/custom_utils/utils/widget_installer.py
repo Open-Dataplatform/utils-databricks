@@ -116,10 +116,26 @@ def initialize_widgets(dbutils, selected_dataset, external_params=None, logger=N
         # Step 1: Clear all widgets to start fresh
         clear_all_widgets(dbutils, logger)
 
-        # Step 2: Reinitialize common widgets, including SourceDatasetidentifier
+        # Step 2: Reinitialize common widgets
         initialize_common_widgets(dbutils, logger)
 
-        # Step 3: Define dataset-specific widget configurations
+        # Step 3: Set SourceDatasetidentifier to the selected dataset
+        dbutils.widgets.dropdown(
+            "SourceDatasetidentifier",
+            selected_dataset,  # Override with selected_dataset
+            [
+                "triton__flow_plans",
+                "cpx_so__nomination",
+                "ddp_em__dayahead_flows_nemo",
+                "pluto_pc__units_scadamw",
+                "ddp_cm__mfrr_settlement"
+            ],
+            "Select Dataset Identifier"
+        )
+        if logger:
+            logger.log_message(f"SourceDatasetidentifier set to: {selected_dataset}")
+
+        # Step 4: Define dataset-specific widget configurations
         dataset_config = {
             "triton__flow_plans": {
                 "FileType": "json",
@@ -163,16 +179,16 @@ def initialize_widgets(dbutils, selected_dataset, external_params=None, logger=N
             }
         }
 
-        # Step 4: Validate selected dataset and get its configuration
+        # Step 5: Validate selected dataset and get its configuration
         if selected_dataset not in dataset_config:
             raise ValueError(f"Unknown dataset identifier: {selected_dataset}")
         dataset_widgets = dataset_config[selected_dataset]
 
-        # Step 5: Create widgets dynamically based on dataset configuration
+        # Step 6: Create widgets dynamically based on dataset configuration
         for key, value in dataset_widgets.items():
             dbutils.widgets.text(key, value, key)
 
-        # Step 6: Apply external parameters if provided
+        # Step 7: Apply external parameters if provided
         if external_params:
             for key, value in external_params.items():
                 if key in dataset_widgets:
