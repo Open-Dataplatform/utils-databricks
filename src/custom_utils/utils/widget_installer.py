@@ -1,18 +1,21 @@
 from typing import Dict, Optional
 from custom_utils.logging.logger import Logger
 
-def initialize_common_widgets(dbutils, logger: Optional[Logger] = None):
+def initialize_common_widgets(dbutils, logger=None):
     """
-    Initializes common widgets that are the same across all datasets.
+    Initializes common widgets that are the same across all datasets, ensuring required widgets are created.
 
     Args:
         dbutils: The Databricks utilities object.
-        logger (Optional[Logger]): Optional logger instance for logging.
+        logger: Optional logger instance for logging.
     """
     try:
+        # Define the required common widgets
+        dbutils.widgets.text("SourceDatasetidentifier", "", "Source Dataset Identifier")
         dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest", "Source Storage Account")
         dbutils.widgets.text("DestinationStorageAccount", "dpuniformstoragetest", "Destination Storage Account")
         dbutils.widgets.text("SourceContainer", "landing", "Source Container")
+
         if logger:
             logger.log_message("Common widgets initialized successfully.")
     except Exception as e:
@@ -93,17 +96,10 @@ def initialize_widgets(dbutils, selected_dataset, external_params=None, logger=N
         # Step 1: Clear all widgets to start fresh
         clear_all_widgets(dbutils, logger)
 
-        # Step 2: Reinitialize common widgets
-        dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest", "Source Storage Account")
-        dbutils.widgets.text("DestinationStorageAccount", "dpuniformstoragetest", "Destination Storage Account")
-        dbutils.widgets.text("SourceContainer", "landing", "Source Container")
-        if logger:
-            logger.log_message("Common widgets initialized successfully.")
+        # Step 2: Reinitialize common widgets, including SourceDatasetidentifier
+        initialize_common_widgets(dbutils, logger)
 
-        # Step 3: Clear dataset-specific widgets except common ones
-        clear_widgets_except_common(dbutils, logger)
-
-        # Step 4: Define dataset-specific widget configurations
+        # Step 3: Define dataset-specific widget configurations
         dataset_config = {
             "triton__flow_plans": {
                 "FileType": "json",
@@ -147,16 +143,16 @@ def initialize_widgets(dbutils, selected_dataset, external_params=None, logger=N
             }
         }
 
-        # Step 5: Validate selected dataset and get its configuration
+        # Step 4: Validate selected dataset and get its configuration
         if selected_dataset not in dataset_config:
             raise ValueError(f"Unknown dataset identifier: {selected_dataset}")
         dataset_widgets = dataset_config[selected_dataset]
 
-        # Step 6: Create widgets dynamically based on dataset configuration
+        # Step 5: Create widgets dynamically based on dataset configuration
         for key, value in dataset_widgets.items():
             dbutils.widgets.text(key, value, key)
 
-        # Step 7: Apply external parameters if provided
+        # Step 6: Apply external parameters if provided
         if external_params:
             for key, value in external_params.items():
                 if key in dataset_widgets:
