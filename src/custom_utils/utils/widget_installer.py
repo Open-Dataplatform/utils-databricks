@@ -10,11 +10,30 @@ def initialize_common_widgets(dbutils, logger=None):
         logger: Optional logger instance for logging.
     """
     try:
-        # Define the required common widgets
-        dbutils.widgets.text("SourceDatasetidentifier", "", "Source Dataset Identifier")
+        # Step 1: Initialize common widgets
         dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest", "Source Storage Account")
         dbutils.widgets.text("DestinationStorageAccount", "dpuniformstoragetest", "Destination Storage Account")
         dbutils.widgets.text("SourceContainer", "landing", "Source Container")
+
+        # Step 2: Ensure SourceDatasetidentifier exists
+        try:
+            dbutils.widgets.get("SourceDatasetidentifier")
+        except Exception:
+            # Initialize SourceDatasetidentifier dropdown if it doesn't exist
+            dbutils.widgets.dropdown(
+                "SourceDatasetidentifier",
+                "ddp_cm__mfrr_settlement",  # Default value
+                [
+                    "triton__flow_plans",
+                    "cpx_so__nomination",
+                    "ddp_em__dayahead_flows_nemo",
+                    "pluto_pc__units_scadamw",
+                    "ddp_cm__mfrr_settlement"
+                ],
+                "Select Dataset Identifier"
+            )
+            if logger:
+                logger.log_message("SourceDatasetidentifier dropdown initialized successfully.")
 
         if logger:
             logger.log_message("Common widgets initialized successfully.")
