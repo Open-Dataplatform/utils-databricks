@@ -165,7 +165,7 @@ def initialize_widgets(dbutils, selected_dataset, external_params=None, logger=N
             "ddp_cm__mfrr_settlement": {
                 "FileType": "xml",
                 "SourceFileName": "ddp_cm__mfrr_settlement*",
-                "KeyColumns": "mRID, TimeSeries_mRID, TimeSeries_Period_timeInterval_start, TimeSeries_Period_Point_position, TimeSeries_Period_resolution",
+                "KeyColumns": "mfrr_mRID, ts_mRID, timestamp_utc",
                 "FeedbackColumn": "createdDateTime",
                 "DepthLevel": "",
                 "SchemaFolderName": "schemachecks",
