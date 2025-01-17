@@ -52,6 +52,45 @@ class DataFrameTransformer:
             f"Validator: {'Provided' if validator else 'Default Validator'}",
             "Initialization completed successfully."
         ], level="debug")
+        
+    def rename_and_process(self, df: DataFrame, column_mapping: Dict[str, str], cast_columns: Dict[str, str]) -> DataFrame:
+        """
+        Renames columns, casts specific columns, and removes originals.
+
+        Args:
+            df (DataFrame): The input DataFrame to process.
+            column_mapping (dict): Mapping of old column names to new names.
+            cast_columns (dict): Columns to cast with their target data types.
+
+        Returns:
+            DataFrame: The processed DataFrame.
+        """
+        self.logger.log_start("rename_and_process")
+
+        try:
+            # Rename columns based on the mapping
+            for old_col, new_col in column_mapping.items():
+                if old_col in df.columns:
+                    self.logger.log_message(f"Renaming column: {old_col} -> {new_col}", level="debug")
+                    df = df.withColumnRenamed(old_col, new_col)
+                else:
+                    self.logger.log_warning(f"Column '{old_col}' not found in DataFrame, skipping renaming.")
+
+            # Cast specific columns to required types
+            for col_name, data_type in cast_columns.items():
+                if col_name in df.columns:
+                    self.logger.log_message(f"Casting column: {col_name} to {data_type}", level="debug")
+                    df = df.withColumn(col_name, col(col_name).cast(data_type))
+                else:
+                    self.logger.log_warning(f"Column '{col_name}' not found in DataFrame, skipping casting.")
+
+            self.logger.log_end("rename_and_process", success=True)
+            return df
+
+        except Exception as e:
+            self.logger.log_error(f"Error in rename_and_process: {str(e)}")
+            self.logger.log_end("rename_and_process", success=False)
+            raise RuntimeError(f"Failed to rename and process DataFrame: {e}")       
 
     def _log_processing_configuration(self, schema_file_path, data_file_path, file_type, matched_data_files):
         """Logs the processing configuration."""
