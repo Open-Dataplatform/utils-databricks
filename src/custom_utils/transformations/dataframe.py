@@ -55,7 +55,7 @@ class DataFrameTransformer:
         
     def rename_and_process(self, df: DataFrame, column_mapping: Dict[str, str], cast_columns: Dict[str, str]) -> DataFrame:
         """
-        Renames columns, casts specific columns, and removes originals.
+        Renames columns (case-insensitive), casts specific columns, and removes originals.
 
         Args:
             df (DataFrame): The input DataFrame to process.
@@ -68,13 +68,18 @@ class DataFrameTransformer:
         self.logger.log_start("rename_and_process")
 
         try:
+            # Normalize column names in the DataFrame to lowercase
+            normalized_columns = {col.lower(): col for col in df.columns}
+
             # Rename columns based on the mapping
             for old_col, new_col in column_mapping.items():
-                if old_col in df.columns:
-                    self.logger.log_message(f"Renaming column: {old_col} -> {new_col}", level="debug")
-                    df = df.withColumnRenamed(old_col, new_col)
+                normalized_old_col = old_col.lower()
+                if normalized_old_col in normalized_columns:
+                    actual_col = normalized_columns[normalized_old_col]
+                    self.logger.log_message(f"Renaming column: {actual_col} -> {new_col}", level="debug")
+                    df = df.withColumnRenamed(actual_col, new_col)
                 else:
-                    self.logger.log_warning(f"Column '{old_col}' not found in DataFrame, skipping renaming.")
+                    self.logger.log_warning(f"Column '{old_col}' not found in DataFrame (case-insensitive), skipping renaming.")
 
             # Cast specific columns to required types
             for col_name, data_type in cast_columns.items():
@@ -90,7 +95,7 @@ class DataFrameTransformer:
         except Exception as e:
             self.logger.log_error(f"Error in rename_and_process: {str(e)}")
             self.logger.log_end("rename_and_process", success=False)
-            raise RuntimeError(f"Failed to rename and process DataFrame: {e}")       
+            raise RuntimeError(f"Failed to rename and process DataFrame: {e}")     
 
     def _log_processing_configuration(self, schema_file_path, data_file_path, file_type, matched_data_files):
         """Logs the processing configuration."""
