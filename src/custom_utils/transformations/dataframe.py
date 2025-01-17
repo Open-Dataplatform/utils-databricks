@@ -93,7 +93,7 @@ class DataFrameTransformer:
                 else:
                     skipped_columns.append(col_name)
 
-            # Log formatted debug block summarizing column operations
+            # Log formatted info block summarizing column operations
             self.logger.log_block("Rename and Process Summary", [
                 f"Renamed Columns ({len(renamed_columns)}):",
                 *renamed_columns,
@@ -101,7 +101,7 @@ class DataFrameTransformer:
                 *skipped_columns,
                 f"Casted Columns ({len(casted_columns)}):",
                 *casted_columns,
-            ], level="debug")
+            ], level="info")
 
             self.logger.log_end("rename_and_process", success=True)
             return df
