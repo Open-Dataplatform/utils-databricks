@@ -55,7 +55,7 @@ class DataFrameTransformer:
         
     def rename_and_process(self, df: DataFrame, column_mapping: Dict[str, str], cast_columns: Dict[str, str]) -> DataFrame:
         """
-        Renames columns (case-insensitive), casts specific columns, and removes originals.
+        Renames columns, casts specific columns, and handles case-insensitive matching.
 
         Args:
             df (DataFrame): The input DataFrame to process.
@@ -66,28 +66,42 @@ class DataFrameTransformer:
             DataFrame: The processed DataFrame.
         """
         self.logger.log_start("rename_and_process")
-
+        renamed_columns = []
+        skipped_columns = []
+        casted_columns = []
         try:
-            # Normalize column names in the DataFrame to lowercase
+            # Normalize column names in DataFrame for case-insensitive matching
             normalized_columns = {col.lower(): col for col in df.columns}
 
-            # Rename columns based on the mapping
+            # Rename columns
             for old_col, new_col in column_mapping.items():
                 normalized_old_col = old_col.lower()
                 if normalized_old_col in normalized_columns:
                     actual_col = normalized_columns[normalized_old_col]
                     self.logger.log_message(f"Renaming column: {actual_col} -> {new_col}", level="debug")
                     df = df.withColumnRenamed(actual_col, new_col)
+                    renamed_columns.append(f"{actual_col} -> {new_col}")
                 else:
-                    self.logger.log_warning(f"Column '{old_col}' not found in DataFrame (case-insensitive), skipping renaming.")
+                    skipped_columns.append(old_col)
 
             # Cast specific columns to required types
             for col_name, data_type in cast_columns.items():
                 if col_name in df.columns:
                     self.logger.log_message(f"Casting column: {col_name} to {data_type}", level="debug")
                     df = df.withColumn(col_name, col(col_name).cast(data_type))
+                    casted_columns.append(f"{col_name} to {data_type}")
                 else:
-                    self.logger.log_warning(f"Column '{col_name}' not found in DataFrame, skipping casting.")
+                    skipped_columns.append(col_name)
+
+            # Log formatted debug block summarizing column operations
+            self.logger.log_block("Rename and Process Summary", [
+                f"Renamed Columns ({len(renamed_columns)}):",
+                *renamed_columns,
+                f"Skipped Columns ({len(skipped_columns)}):",
+                *skipped_columns,
+                f"Casted Columns ({len(casted_columns)}):",
+                *casted_columns,
+            ], level="debug")
 
             self.logger.log_end("rename_and_process", success=True)
             return df
@@ -95,7 +109,7 @@ class DataFrameTransformer:
         except Exception as e:
             self.logger.log_error(f"Error in rename_and_process: {str(e)}")
             self.logger.log_end("rename_and_process", success=False)
-            raise RuntimeError(f"Failed to rename and process DataFrame: {e}")     
+            raise RuntimeError(f"Failed to rename and process DataFrame: {e}")   
 
     def _log_processing_configuration(self, schema_file_path, data_file_path, file_type, matched_data_files):
         """Logs the processing configuration."""
