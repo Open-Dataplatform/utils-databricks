@@ -6,17 +6,29 @@ from io import StringIO
 import pkg_resources
 
 class PackageInstaller:
-    def __init__(self, logger=None, debug: bool = False):
+    def __init__(self, debug: bool = False):
         """
-        Initializes the PackageInstaller with a logger and debug mode.
+        Initializes the PackageInstaller with a basic logger.
 
         Args:
-            logger: Logger instance for logging activities.
-            debug (bool): Enables debug-level logging.
+            debug (bool): Enables debug-level logging if set to True.
         """
-        self.logger = logger or logging.getLogger(__name__)
         self.debug = debug
-        self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
+        self.logger = self._initialize_logger()
+
+    def _initialize_logger(self):
+        """
+        Sets up a basic logger for the class.
+
+        Returns:
+            Logger: A configured logger instance.
+        """
+        logger = logging.getLogger("PackageInstaller")
+        logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        logger.addHandler(handler)
+        return logger
 
     @contextmanager
     def suppress_output(self):
@@ -52,13 +64,16 @@ class PackageInstaller:
         Run a pip command using subprocess.
 
         Args:
-            command (str): The pip command to run.
+            command (str): The pip command to execute.
+
+        Raises:
+            SystemExit: If the pip command fails.
         """
         try:
             subprocess.run(command, shell=True, check=True)
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Error running pip command: {e}")
-            raise SystemExit("Pip command failed.")
+            raise SystemExit(f"Pip command failed: {e}")
 
     def install_package(self, git_project, package_name, desired_version, uninstall_existing=False):
         """
@@ -72,7 +87,6 @@ class PackageInstaller:
         """
         version = f"v{desired_version.lstrip('v')}"
 
-        # Step 1: Uninstall the existing package if requested.
         if uninstall_existing:
             installed_version = self.get_installed_version(package_name)
             if installed_version:
@@ -84,7 +98,6 @@ class PackageInstaller:
                     self.logger.error(f"Error during uninstallation: {e}")
                     raise SystemExit("Uninstallation failed. Aborting process.")
 
-        # Step 2: Attempt to install the specified version from GitHub.
         try:
             self.logger.info(f"Attempting to install {package_name} version {version} from {git_project}...")
             self.run_pip_command(f"pip install git+https://github.com/{git_project}.git@{version}")
@@ -93,7 +106,6 @@ class PackageInstaller:
             self.logger.warning(f"Failed to install version {version}. Error: {e}")
             self.logger.info(f"Falling back to installing from the 'main' branch...")
 
-            # Step 3: Fallback to the main branch if the version installation fails.
             try:
                 self.run_pip_command(f"pip install git+https://github.com/{git_project}.git@main")
                 self.logger.info(f"Fallback installation of {package_name} from the 'main' branch was successful.")
@@ -101,5 +113,22 @@ class PackageInstaller:
                 self.logger.error(f"Failed to install from the 'main' branch. Error: {fallback_error}")
                 raise SystemExit("Installation aborted due to errors.")
 
-        # Final log to indicate process completion.
         self.logger.info("Process completed. Please restart the environment to verify the installation.")
+
+    def install_packages(self, packages: list):
+        """
+        Install a list of Python packages using pip.
+
+        Args:
+            packages (list): List of package names to install (can include specific versions).
+
+        Raises:
+            SystemExit: If a pip command fails.
+        """
+        for package in packages:
+            try:
+                self.logger.debug(f"Installing package: {package}")
+                self.run_pip_command(f"pip install {package}")
+                self.logger.info(f"Successfully installed: {package}")
+            except SystemExit:
+                self.logger.warning(f"Failed to install {package}. Continuing with the next package.")
