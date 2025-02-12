@@ -9,7 +9,7 @@ from pygments.lexers import SqlLexer, PythonLexer
 from pygments.formatters import TerminalFormatter
 
 class Logger:
-        """
+    """
     Custom logger class for enhanced logging functionality, including debugging,
     block logging, SQL query formatting, Python code formatting, and function entry/exit logging.
     """
