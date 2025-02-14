@@ -1,6 +1,7 @@
 import logging
 import functools
 import sqlparse
+import sys
 
 from pyspark.sql import DataFrame
 from pygments import highlight
@@ -12,7 +13,6 @@ class Logger:
     Custom logger class for enhanced logging functionality, including debugging,
     block logging, SQL query formatting, Python code formatting, and function entry/exit logging.
     """
-
     def __init__(self, debug: bool = False, log_to_file: str = None):
         """
         Initialize the Logger using Python's built-in logging.
@@ -24,24 +24,24 @@ class Logger:
         self.debug = debug
         self.logger = logging.getLogger("custom_logger")
 
-        # Clear existing handlers to prevent duplicate logging
-        if self.logger.hasHandlers():
-            self.logger.handlers.clear()
+        # **Prevent logs from propagating to the Databricks root logger**
+        self.logger.propagate = False  
 
-        # Set initial logging level
-        self.set_level(debug)
+        # Prevent duplicate handlers
+        if not self.logger.hasHandlers():
+            self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
-        # Console handler
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(logging.Formatter('[%(levelname)s] - %(message)s'))
-        self.logger.addHandler(console_handler)
+            # Console handler
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(logging.Formatter('[%(levelname)s] - %(message)s'))
+            self.logger.addHandler(console_handler)
 
-        # File handler (if provided)
-        if log_to_file:
-            file_handler = logging.FileHandler(log_to_file)
-            file_handler.setFormatter(logging.Formatter('[%(levelname)s] - %(message)s'))
-            self.logger.addHandler(file_handler)
-
+            # File handler (if provided)
+            if log_to_file:
+                file_handler = logging.FileHandler(log_to_file)
+                file_handler.setFormatter(logging.Formatter('[%(levelname)s] - %(message)s'))
+                self.logger.addHandler(file_handler)
+                
     def set_level(self, debug: bool):
         """Set the logging level based on the debug flag."""
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
@@ -66,36 +66,33 @@ class Logger:
 
     def log_block(self, header, content_lines=None, sql_query=None, level="info"):
         """
-        Utility method to log blocks of messages with a header, separators, and optional SQL queries.
-
-        Args:
-            header (str): The header text for the block.
-            content_lines (list, optional): A list of lines to log within the block.
-            sql_query (str, optional): SQL query to log with syntax highlighting.
-            level (str): The logging level for the block content.
+        Ensures structured block logging in Databricks by using `print()` instead of `logger.info()`.
+        Prevents duplicate `INFO:custom_logger:` output.
         """
-        log_level = getattr(logging, level.upper(), logging.INFO)
-        if not self.logger.isEnabledFor(log_level):
-            return
 
         separator_length = 100
         start_separator = "=" * separator_length
-        end_separator = "-" * separator_length
         formatted_header = f" {header} ".center(separator_length, "=")
+        end_separator = "-" * separator_length
 
-        print("\n" + start_separator)
-        print(formatted_header)
-        print(start_separator)
+        # Force everything to be printed together to avoid reordering in Databricks
+        output_lines = [
+            "\n" + start_separator,
+            formatted_header,
+            start_separator,
+        ]
 
         if content_lines:
-            for line in content_lines:
-                if line.strip():
-                    self.log_message(line, level=level)
+            output_lines.extend([f"[{level.upper()}] - {line}" for line in content_lines])
 
         if sql_query:
-            self.log_sql_query(sql_query, level=level)
+            output_lines.append(f"SQL Query:\n{sql_query}")
 
-        print(end_separator + "\n")
+        output_lines.append(end_separator)
+
+        # Print the whole block as a single output to prevent interleaving with Databricks logs
+        print("\n".join(output_lines))
+        sys.stdout.flush()  # Flush to force ordering in Databricks
 
     def log_sql_query(self, query: str, level: str = "info"):
         """
