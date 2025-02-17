@@ -12,7 +12,6 @@ class Logger:
     """
     Custom logger with structured block logging, syntax highlighting, and improved readability.
     """
-
     ICONS = {
         "debug": "🐞",   # Debugging
         "info": "ℹ️",    # Information
@@ -48,6 +47,12 @@ class Logger:
                 file_handler.setFormatter(console_formatter)
                 self.logger.addHandler(file_handler)
 
+            # File handler (if provided)
+            if log_to_file:
+                file_handler = logging.FileHandler(log_to_file)
+                file_handler.setFormatter(logging.Formatter('[%(levelname)s] - %(message)s'))
+                self.logger.addHandler(file_handler)
+                
     def set_level(self, debug: bool):
         """Set logging level based on debug flag."""
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
@@ -115,7 +120,9 @@ class Logger:
 
         # ✅ Log SQL queries inside the block
         if sql_query:
-            self.log_sql_query(sql_query, level=level)
+            output_lines.append(f"SQL Query:\n{sql_query}")
+
+        output_lines.append(end_separator)
 
         # ✅ Log Python queries inside the block
         if python_query:
