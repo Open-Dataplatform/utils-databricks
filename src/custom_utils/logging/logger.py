@@ -2,6 +2,7 @@ import logging
 import functools
 import sqlparse
 import sys
+
 from pyspark.sql import DataFrame
 from pygments import highlight
 from pygments.lexers import SqlLexer, PythonLexer
@@ -11,9 +12,6 @@ class Logger:
     """
     Custom logger with structured block logging, syntax highlighting, and improved readability.
     """
-
-    _instance = None  # ✅ Store a single instance of Logger
-
     ICONS = {
         "debug": "🐞",   # Debugging
         "info": "ℹ️",    # Information
@@ -22,19 +20,13 @@ class Logger:
         "critical": "🔥"  # Critical issue
     }
 
-    def __new__(cls, debug: bool = False, log_to_file: str = None):
+    def __init__(self, debug: bool = False, log_to_file: str = None):
         """
-        Implements a singleton pattern to prevent duplicate Logger instances.
-        Ensures that only one logger is created and reused across the entire system.
-        """
-        if cls._instance is None:
-            cls._instance = super(Logger, cls).__new__(cls)
-            cls._instance._initialize(debug, log_to_file)
-        return cls._instance
+        Initialize the Logger with an improved format to prevent duplicate log levels.
 
-    def _initialize(self, debug: bool, log_to_file: str):
-        """
-        Initialize the Logger instance.
+        Args:
+            debug (bool): Enable debug-level logging if True.
+            log_to_file (str, optional): File path to log messages to a file.
         """
         self.logger = logging.getLogger("custom_logger")
         self.logger.propagate = False  # Prevents duplicate logs in Databricks
@@ -43,7 +35,7 @@ class Logger:
         self.debug = debug
         self.set_level(debug)  # ✅ Ensure the correct log level is set
 
-        if not self.logger.hasHandlers():  # ✅ Prevent duplicate handlers
+        if not self.logger.hasHandlers():
             console_handler = logging.StreamHandler()
             console_formatter = logging.Formatter('%(message)s')  
             console_handler.setFormatter(console_formatter)
@@ -55,16 +47,26 @@ class Logger:
                 self.logger.addHandler(file_handler)
 
         self.log_info(f"🔄 Logger initialized with debug={self.debug}")
-
+                
     def set_level(self, debug: bool):
         """Set logging level based on debug flag."""
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
         self.debug = debug  # ✅ Ensure self.debug is properly updated
+        
+    def update_debug_mode(self, debug: bool, log_update: bool = True):
+        """
+        Dynamically updates the debug mode and adjusts the logger level accordingly.
 
-    def update_debug_mode(self, debug: bool):
-        """Update debug mode and adjust logging level dynamically."""
-        self.set_level(debug)
-        self.log_info(f"🔄 Debug mode updated. New debug state: {self.debug}")
+        Args:
+            debug (bool): If True, enables debug-level logging. Otherwise, sets it to info-level.
+            log_update (bool): If True, logs the update message (set to False inside __init__()).
+        """
+        self.debug = debug
+        self.set_level(debug)  # ✅ Adjust log level dynamically
+
+        # ✅ Log only if explicitly requested (to prevent duplicate logs in __init__()).
+        if log_update:
+            self.log_info(f"🔄 Debug mode updated. New debug state: {self.debug}")
 
     def log_header(self, title: str):
         """Logs a structured header section."""
