@@ -31,54 +31,45 @@ class Config:
     def __init__(self, dbutils=None, debug: bool = False):
         """
         Initialize the Config object with logging and debugging options.
+
+        Args:
+            dbutils: Databricks utilities instance (default: None).
+            debug (bool): If True, enables debug-level logging.
         """
         self.dbutils = dbutils or globals().get("dbutils", None)
-        self.debug = debug
-        self.logger = Logger(debug=self.debug)
+
+        # ✅ Initialize logger with `debug`
+        self.logger = Logger(debug=debug)
+        
+        # ✅ Ensure `self.debug` is consistent with the logger
+        self.debug = self.logger.debug
 
         try:
             self.logger.log_info("Starting Config Initialization")
 
-            # Widgets Initialization Block
-            self.logger.log_block("Initializing Widgets (DEBUG)", [
-                "Initializing widgets..."
-            ], level="debug")
+            # ✅ Log the debug state
+            self.logger.log_debug(f"Debug mode is {'enabled' if self.debug else 'disabled'}.")
+
+            # ✅ Initialization steps
+            self.logger.log_debug("Initializing widgets...")
             self._initialize_widgets()
 
-            # Parameters Initialization Block
-            self.logger.log_block("Initializing Parameters (DEBUG)", [
-                "Initializing parameters..."
-            ], level="debug")
+            self.logger.log_debug("Initializing parameters...")
             self._initialize_parameters()
 
-            # Paths Initialization Block
-            self.logger.log_block("Initializing Paths (DEBUG)", [
-                "Initializing paths..."
-            ], level="debug")
+            self.logger.log_debug("Initializing paths...")
             self._initialize_paths()
 
-            # Spark Session Initialization Block
-            self.logger.log_block("Initializing Spark Session (DEBUG)", [
-                "Initializing Spark session..."
-            ], level="debug")
+            self.logger.log_debug("Initializing Spark session...")
             self.spark = self._initialize_spark()
 
-            # Schema Usage Block
             self.use_schema = bool(self.schema_folder_name)
-            self.logger.log_block("Determining Schema Usage (DEBUG)", [
-                f"Use Schema: {self.use_schema}"
-            ], level="debug")
-
-            # Configuration Validation Block
-            self.logger.log_block("Validating Configuration (DEBUG)", [
-                "Validating configuration..."
-            ], level="debug")
+            self.logger.log_debug(f"Use Schema: {self.use_schema}")
+            
+            self.logger.log_debug("Validating configuration...")
             self._validate_config()
 
-            # Logging Configuration Parameters Block
-            self.logger.log_block("Logging All Configuration Parameters (DEBUG)", [
-                "Logging all configuration parameters..."
-            ], level="debug")
+            self.logger.log_debug("Logging all configuration parameters...")
             self._log_params()
 
             self.logger.log_info("Finished Config Initialization successfully. Proceeding with notebook execution.")
