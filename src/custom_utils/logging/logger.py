@@ -56,6 +56,17 @@ class Logger:
     def set_level(self, debug: bool):
         """Set logging level based on debug flag."""
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
+        
+    def update_debug_mode(self, debug: bool):
+        """
+        Dynamically updates the debug mode and adjusts the logger level accordingly.
+
+        Args:
+            debug (bool): If True, enables debug-level logging. Otherwise, sets it to info-level.
+        """
+        self.debug = debug
+        self.set_level(debug)  # ✅ Adjusts the logger's log level dynamically
+        self.log_info(f"🔄 Debug mode updated. New debug state: {self.debug}")        
 
     def log_header(self, title: str):
         """Logs a structured header section."""
