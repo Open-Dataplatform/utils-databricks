@@ -155,6 +155,7 @@ class Logger:
             output_lines.append(end_separator)
 
         print("\n".join(output_lines))
+        print(end_separator + "\n")
         sys.stdout.flush()
 
     def log_sql_query(self, query: str, level: str = "info"):
