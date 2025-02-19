@@ -46,7 +46,10 @@ class Logger:
                 file_handler.setFormatter(console_formatter)
                 self.logger.addHandler(file_handler)
 
-        self.log_info(f"🔄 Logger initialized with debug={self.debug}")
+        # ✅ Prevent duplicate initialization messages
+        if not hasattr(self, "_initialized"):
+            self.log_info(f"🔄 Logger initialized with debug={self.debug}")
+            self._initialized = True  # ✅ Flag to prevent duplicate messages
                 
     def set_level(self, debug: bool):
         """Set logging level based on debug flag."""
@@ -93,12 +96,7 @@ class Logger:
         formatted_message = f"{icon} [{level.upper()}] - {message}"
 
         log_function = getattr(self.logger, level, self.logger.info)
-
-        if level == "debug":
-            self.logger.debug(formatted_message)  # ✅ Explicitly log debug messages
-
-        else:
-            log_function(formatted_message)
+        log_function(formatted_message)
 
         if level in {"error", "critical"}:
             raise RuntimeError(message)
@@ -135,7 +133,7 @@ class Logger:
                 for line in content_lines
             ])
 
-        # ✅ Ensure SQL query is logged properly
+        # ✅ Log SQL query with formatting
         if sql_query:
             formatted_query = sqlparse.format(sql_query, reindent=True, keyword_case='upper')
             highlighted_query = highlight(formatted_query, SqlLexer(), TerminalFormatter())
@@ -146,7 +144,7 @@ class Logger:
             output_lines.append(f"\n{highlighted_query.strip()}\n")
             output_lines.append(end_separator)
 
-        # ✅ Ensure Python query is logged properly
+        # ✅ Log Python query with formatting
         if python_query:
             highlighted_code = highlight(python_query, PythonLexer(), TerminalFormatter())
 
