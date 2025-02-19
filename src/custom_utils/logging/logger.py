@@ -22,23 +22,19 @@ class Logger:
 
     def __init__(self, debug: bool = False, log_to_file: str = None):
         """
-        Initialize the Logger.
+        Initialize the Logger with an improved format to prevent duplicate log levels.
 
         Args:
             debug (bool): Enable debug-level logging if True.
             log_to_file (str, optional): File path to log messages to a file.
         """
         self.logger = logging.getLogger("custom_logger")
-        self.logger.propagate = False  # Prevent duplicate logs in Databricks
+        self.logger.propagate = False  # Prevents duplicate logs in Databricks
 
         # ✅ Set debug mode immediately
         self.debug = debug
-        self.set_level(debug)  
+        self.set_level(debug)  # ✅ Ensure the correct log level is set
 
-        # ✅ Track if this instance has logged initialization
-        self.initialized = False
-
-        # ✅ Only add handlers if there are none
         if not self.logger.hasHandlers():
             console_handler = logging.StreamHandler()
             console_formatter = logging.Formatter('%(message)s')  
@@ -50,10 +46,7 @@ class Logger:
                 file_handler.setFormatter(console_formatter)
                 self.logger.addHandler(file_handler)
 
-            # ✅ Log only for the first initialized instance
-            if not self.initialized:
-                self.log_info(f"🔄 Logger initialized with debug={self.debug}")
-                self.initialized = True
+        self.log_info(f"🔄 Logger initialized with debug={self.debug}")
                 
     def set_level(self, debug: bool):
         """Set logging level based on debug flag."""
@@ -270,12 +263,19 @@ class LoggerTester:
 
     def __init__(self, logger: Logger):
         """
-        Initialize LoggerTester with an existing Logger instance.
+        Initializes the LoggerTester.
 
         Args:
-            logger (Logger): The logger instance to test.
+            logger (Logger): Existing logger instance.
         """
+        # ✅ Use the provided logger directly
         self.logger = logger
+
+        # ✅ Ensure consistency with the passed logger’s debug state
+        self.debug = self.logger.debug
+
+        # ✅ Log the debug state for verification
+        self.logger.log_debug(f"LoggerTester initialized with debug={self.debug}")
 
     def run_all_tests(self):
         """Runs all tests inside a structured logging block."""
