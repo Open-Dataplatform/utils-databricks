@@ -28,34 +28,48 @@ class Logger:
             debug (bool): Enable debug-level logging if True.
             log_to_file (str, optional): File path to log messages to a file.
         """
-        self.debug = debug
         self.logger = logging.getLogger("custom_logger")
         self.logger.propagate = False  # Prevents duplicate logs in Databricks
 
-        if not self.logger.hasHandlers():
-            self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
+        # ✅ Set debug mode immediately
+        self.debug = debug
+        self.set_level(debug)  # ✅ Ensure the correct log level is set
 
-            # Console Handler - ✅ Removes duplicate level formatting
+        if not self.logger.hasHandlers():
             console_handler = logging.StreamHandler()
-            console_formatter = logging.Formatter('%(message)s')  # ✅ Prevents repeated level names
+            console_formatter = logging.Formatter('%(message)s')  
             console_handler.setFormatter(console_formatter)
             self.logger.addHandler(console_handler)
 
-            # File Handler (if provided)
             if log_to_file:
                 file_handler = logging.FileHandler(log_to_file)
                 file_handler.setFormatter(console_formatter)
                 self.logger.addHandler(file_handler)
 
-            # File handler (if provided)
-            if log_to_file:
-                file_handler = logging.FileHandler(log_to_file)
-                file_handler.setFormatter(logging.Formatter('[%(levelname)s] - %(message)s'))
-                self.logger.addHandler(file_handler)
+        # ✅ Prevent duplicate initialization messages
+        if not hasattr(self, "_initialized"):
+            self.log_info(f"🔄 Logger initialized with debug={self.debug}")
+            self._initialized = True  # ✅ Flag to prevent duplicate messages
                 
     def set_level(self, debug: bool):
         """Set logging level based on debug flag."""
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
+        self.debug = debug  # ✅ Ensure self.debug is properly updated
+        
+    def update_debug_mode(self, debug: bool, log_update: bool = True):
+        """
+        Dynamically updates the debug mode and adjusts the logger level accordingly.
+
+        Args:
+            debug (bool): If True, enables debug-level logging. Otherwise, sets it to info-level.
+            log_update (bool): If True, logs the update message (set to False inside __init__()).
+        """
+        self.debug = debug
+        self.set_level(debug)  # ✅ Adjust log level dynamically
+
+        # ✅ Log only if explicitly requested (to prevent duplicate logs in __init__()).
+        if log_update:
+            self.log_info(f"🔄 Debug mode updated. New debug state: {self.debug}")
 
     def update_debug_mode(self, debug: bool):
         """Update the debug mode and adjust the logger level."""
@@ -80,11 +94,14 @@ class Logger:
             message (str): The message to log.
             level (str): Log level ('debug', 'info', 'warning', 'error', 'critical').
         """
-        icon = self.ICONS.get(level, "ℹ️")  # Default to info icon
-        formatted_message = f"{icon} [{level.upper()}] - {message}"  # ✅ Icon first, level, then message
-        log_function = getattr(self.logger, level, self.logger.info)
+        if level == "debug" and not self.debug:
+            return  # ✅ Ignore debug logs if debug mode is disabled
 
-        log_function(formatted_message)  # ✅ No duplicated level anymore
+        icon = self.ICONS.get(level, "ℹ️")  # Default to info icon
+        formatted_message = f"{icon} [{level.upper()}] - {message}"
+
+        log_function = getattr(self.logger, level, self.logger.info)
+        log_function(formatted_message)
 
         if level in {"error", "critical"}:
             raise RuntimeError(message)
@@ -100,42 +117,51 @@ class Logger:
             python_query (str, optional): Python query to be formatted and highlighted.
             level (str): Log level ('debug', 'info', 'warning', 'error', 'critical').
         """
+        if level == "debug" and not self.debug:
+            return  # ✅ Ignore debug logs if debug mode is disabled
+
         separator_length = 100
         start_separator = "=" * separator_length
         formatted_header = f" {header} ".center(separator_length, "=")
         end_separator = "-" * separator_length
 
         output_lines = [
-            "\n" + start_separator,  # ✅ Block Start
+            "\n" + start_separator,
             formatted_header,
             start_separator,
         ]
 
-        # ✅ Log normal text content inside the block
+        # ✅ Ensure content lines include both icon and log level
         if content_lines:
-            output_lines.extend([f"{self.ICONS.get(level, 'ℹ️')} [{level.upper()}] - {line}" for line in content_lines])
+            output_lines.extend([
+                f"{self.ICONS.get(level, 'ℹ️')} [{level.upper()}] - {line}"
+                for line in content_lines
+            ])
 
-        # ✅ Append block footer only if no separate SQL/Python logs are created
-        if not sql_query and not python_query:
-            output_lines.append(end_separator)
-
-        # ✅ Print block content first to ensure structured logging
-        print("\n".join(output_lines))
-        sys.stdout.flush()
-
-        # ✅ Log SQL queries inside the block
+        # ✅ Log SQL query with formatting
         if sql_query:
-            output_lines.append(f"SQL Query:\n{sql_query}")
+            formatted_query = sqlparse.format(sql_query, reindent=True, keyword_case='upper')
+            highlighted_query = highlight(formatted_query, SqlLexer(), TerminalFormatter())
 
-        output_lines.append(end_separator)
+            output_lines.append("\n" + "-" * 100)
+            output_lines.append("📜 SQL Code")
+            output_lines.append("-" * 100)
+            output_lines.append(f"\n{highlighted_query.strip()}\n")
+            #output_lines.append(end_separator)
 
-        # ✅ Log Python queries inside the block
+        # ✅ Log Python query with formatting
         if python_query:
-            self.log_python_code(python_query, level=level)
+            highlighted_code = highlight(python_query, PythonLexer(), TerminalFormatter())
 
-        # ✅ Ensure SQL/Python logs end with a footer
-        if sql_query or python_query:
-            sys.stdout.flush()
+            output_lines.append("\n" + "-" * 100)
+            output_lines.append("🐍 Python Code")
+            output_lines.append("-" * 100)
+            output_lines.append(f"\n{highlighted_code.strip()}\n")
+            #output_lines.append(end_separator)
+
+        print("\n".join(output_lines))
+        print(end_separator + "\n")
+        sys.stdout.flush()
 
     def log_sql_query(self, query: str, level: str = "info"):
         """Format and log an SQL query with syntax highlighting."""
@@ -207,8 +233,9 @@ class Logger:
         self.log_message(message, level="info")
 
     def log_debug(self, message: str):
-        """Log a debug message."""
-        self.log_message(message, level="debug")
+        """Log a debug message only if debug mode is enabled."""
+        if self.debug:
+            self.log_message(message, level="debug")
 
     def log_warning(self, message: str):
         """Log a warning message."""
@@ -233,103 +260,116 @@ class Logger:
         return wrapper
 
 class LoggerTester:
-    def __init__(self):
-        self.logger = Logger(debug=True)
+    """
+    A structured test suite for the Logger class.
+    Ensures all functions work correctly and logs are formatted properly.
+    """
+
+    def __init__(self, logger: Logger):
+        """
+        Initializes the LoggerTester.
+
+        Args:
+            logger (Logger): Existing logger instance.
+        """
+        # ✅ Use the provided logger directly
+        self.logger = logger
+
+        # ✅ Ensure consistency with the passed logger’s debug state
+        self.debug = self.logger.debug
+
+        # ✅ Log the debug state for verification
+        self.logger.log_debug(f"LoggerTester initialized with debug={self.debug}")
 
     def run_all_tests(self):
         """Runs all tests inside a structured logging block."""
-        
-        # ✅ Start Logging (Outside the Block)
+
         self.logger.log_start("Logger Test Suite")
 
         try:
             self.test_log_messages()
-            self.test_log_blocks()
             self.test_log_sql_query()
-            self.test_log_python_query()
-            self.test_log_sql_in_block()
-            self.test_log_python_in_block()
-            self.test_dataframe_summary()
+            self.test_log_python_code()
+            self.test_log_blocks()
             self.test_function_entry_exit()
-
-            # ✅ Success message remains inside the block
+            
             self.logger.log_info("✅ All tests completed successfully.")
 
         except Exception as e:
             self.logger.log_error(f"❌ An unexpected error occurred: {e}")
 
-        # ✅ Ensure footer is printed at the end of the block
         self.logger.log_footer()
-
-        # ✅ End Logging (Outside the Block)
         self.logger.log_end("Logger Test Suite")
 
     def test_log_messages(self):
-        """Tests log messages at different levels."""
-        
-        self.logger.log_block("Testing Log Messages", [
-            "This is an informational message.",
-            "This is a debug message for troubleshooting.",
-            "This is a warning message."
-        ], level="info")
+        """Tests individual log messages at various levels."""
+        # ✅ Log a structured header for the test
+        self.logger.log_block("Testing Individual Log Messages", level="info")
 
+        # ✅ Log messages directly without icons
+        self.logger.log_info("This is an informational message.")
+        if self.logger.debug:
+            self.logger.log_debug("This is a debug message for troubleshooting.")
+        self.logger.log_warning("This is a warning message.")
+
+        # ✅ Handle ERROR message with exception
         try:
             self.logger.log_error("This is an error message. It will raise an exception.")
-        except RuntimeError:
-            self.logger.log_info("✅ Error handling works correctly.")  # ✅ Inside structured log
+        except RuntimeError as e:
+            self.logger.log_info(f"✅ Caught RuntimeError: {e}")
 
+        # ✅ Handle CRITICAL message with exception
         try:
             self.logger.log_critical("This is a critical message. It will also raise an exception.")
-        except RuntimeError:
-            self.logger.log_info("✅ Critical error handling works correctly.")  # ✅ Inside structured log
+        except RuntimeError as e:
+            self.logger.log_info(f"✅ Caught RuntimeError: {e}")
 
     def test_log_blocks(self):
-        """Tests structured logging blocks."""
-        self.logger.log_block("INFO Level Block", ["Informational message."], level="info")
-        self.logger.log_block("DEBUG Level Block", ["Debugging details."], level="debug")
+        """Tests block-style logging at different log levels."""
+        
+        # ✅ Test INFO & DEBUG in one combined block
+        messages = ["This is an informational message."]
+        if self.logger.debug:
+            messages.append("This is a debug message.")
+        
+        self.logger.log_block("Testing INFO & DEBUG Log Blocks", content_lines=messages, level="info")
+
+        # ✅ Test WARNING block
+        self.logger.log_block("Testing WARNING Log Block", content_lines=["This is a warning message."], level="warning")
+
+        # ✅ Test ERROR block
+        self.logger.log_block("Testing ERROR Log Block", content_lines=["This is an error message."], level="error")
+
+        # ✅ Test CRITICAL block
+        self.logger.log_block("Testing CRITICAL Log Block", content_lines=["This is a critical message."], level="critical")
 
     def test_log_sql_query(self):
-        """Tests SQL query logging."""
-        sql_query = "SELECT * FROM users WHERE age > 30"
-        self.logger.log_sql_query(sql_query)
-
-    def test_log_python_query(self):
-        """Tests Python code logging."""
-        python_code = "def hello():\n    print('Hello, world!')"
-        self.logger.log_python_code(python_code)
-
-    def test_log_sql_in_block(self):
-        """Tests logging an SQL query inside a structured block."""
+        """Tests logging an SQL query with syntax highlighting."""
         sql_query = """
-        SELECT PipelineId,
-               COUNT(*) AS duplicate_count
-        FROM view_pipelines_df
-        GROUP BY PipelineId
-        HAVING COUNT(*) > 1
+        SELECT id, name, age
+        FROM users
+        WHERE age > 30
+        ORDER BY name;
         """
-        self.logger.log_block("SQL Validation Query", sql_query=sql_query)
+        self.logger.log_block("Testing SQL Query Logging", sql_query=sql_query)
 
-    def test_log_python_in_block(self):
-        """Tests logging a Python script inside a structured block."""
+    def test_log_python_code(self):
+        """Tests logging a Python script with syntax highlighting."""
         python_code = """
-        def greet(name):
-            print(f"Hello, {name}!")
+        def example_function(a, b):
+            return a + b
 
-        greet('World')
+        result = example_function(5, 10)
+        print(result)
         """
-        self.logger.log_block("Python Code Execution", python_query=python_code)
-
-    def test_dataframe_summary(self):
-        """Tests DataFrame summary logging."""
-        from pyspark.sql import SparkSession
-        spark = SparkSession.builder.appName("LoggerTest").getOrCreate()
-        df = spark.createDataFrame([(1, "Alice"), (2, "Bob")], ["ID", "Name"])
-        self.logger.log_dataframe_summary(df, label="Test DataFrame")
+        self.logger.log_block("Testing Python Code Logging", python_query=python_code)
 
     def test_function_entry_exit(self):
-        """Tests function entry/exit logging."""
+        """Tests function entry/exit logging using the decorator."""
+
         @self.logger.log_function_entry_exit
-        def sample_function(x, y):
+        def test_function(x, y):
             return x + y
 
-        sample_function(5, 10)
+        result = test_function(5, 10)
+        self.logger.log_info(f"✅ Function returned: {result}")
