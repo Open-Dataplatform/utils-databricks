@@ -4,6 +4,7 @@ from pyspark.sql.functions import col
 import pyspark.sql.functions as F
 import logging
 import json
+import time
 import pandas as pd
 from io import BytesIO
 from pyspark.sql.types import (
@@ -436,15 +437,18 @@ class DataFrameTransformer:
         self.logger.log_start("_handle_xml_processing")
 
         # Debugging step: Log all parameters in a block
+        matched_schemas = params.get("matched_schema_files", [])
+
         self.logger.log_block("XML Processing Parameters (DEBUG)", [
-            f"matched_data_files: {params.get('matched_data_files', 'None')}",
-            f"schema_file_path: {params.get('schema_file_path', 'None')}",
-            f"matched_schema_files: {params.get('matched_schema_files', 'None')}",
-            f"root_name: {root_name}"
+            f"📂 Number of data files: {len(params.get('matched_data_files', []))}",
+            f"📑 Schema File: {params.get('schema_file_path', 'None')}",
+            f"📜 Matched Schema Files ({len(matched_schemas)}): {[schema['name'] for schema in matched_schemas]}",
+            f"🔍 Root Name: {root_name}",
+            f"🛠 Depth Level: {depth_level if depth_level is not None else 'No limit'}"
         ], level="debug")
 
         # Extract parameters
-        matched_data_files = params.get("matched_data_files")
+        matched_data_files = params.get("matched_data_files", [])
         schema_path = params.get("schema_file_path")
         matched_schema_files = params.get("matched_schema_files", [])
 
@@ -465,9 +469,10 @@ class DataFrameTransformer:
         except Exception as e:
             error_context = (
                 f"Root Name: {root_name}, Depth Level: {depth_level}, "
-                f"Matched Schemas: {matched_schema_files}"
+                f"Matched Schemas: {[schema['name'] for schema in matched_schema_files]}"
             )
             self._handle_processing_error("_handle_xml_processing", f"{e} | Context: {error_context}")
+            raise RuntimeError(f"Error in _handle_xml_processing: {e}")
 
     def _handle_xlsx_processing(self, params: dict, sheet_name: str) -> Tuple[DataFrame, DataFrame]:
         """
@@ -574,10 +579,6 @@ class DataFrameTransformer:
 
             # Print initial schema
             self.logger.log_dataframe_summary(df_initial, "Initial DataFrame", level="info")
-            #self.logger.log_block("Initial DataFrame schema", [
-            #    f"Loaded JSON initial schema: {schema_file_path}"
-            #], level="info")
-            #df_initial.printSchema()
 
             # Step 5: Flatten JSON DataFrame
             df_flattened, filtered_conversions = self._flatten_json_df(df_initial, depth_level)
@@ -611,7 +612,7 @@ class DataFrameTransformer:
 
     def _process_xml_data(self, matched_data_files: List[str], schema_path: str, matched_schema_files: List[dict], root_name: str, depth_level: int = None) -> Tuple[DataFrame, DataFrame]:
         """
-        Processes XML files and flattens the data.
+        Processes XML files and flattens the data in batches.
 
         Args:
             matched_data_files (List[str]): List of matched XML file names.
@@ -628,14 +629,67 @@ class DataFrameTransformer:
         try:
             # Step 1: Resolve file paths
             resolved_file_paths = [f"dbfs:{self.config.source_data_folder_path}/{file}" for file in matched_data_files]
+            total_files = len(resolved_file_paths)
             self.logger.log_block("Resolved File Paths (DEBUG)", resolved_file_paths, level="debug")
 
-            # Step 2: Combine paths into a single string
-            self.logger.log_debug("Reading XML files in batch...")
+            # Initialize Spark session
             spark = SparkSession.builder.getOrCreate()
-            df_initial = spark.read.format("xml").options(rowTag=root_name).load(",".join(resolved_file_paths))
+            batch_size = 2  # Adjust batch size
+            batch_results = []
+            batch_times = []  # Store batch durations
+            total_batches = (total_files // batch_size) + (1 if total_files % batch_size > 0 else 0)
 
-            # Step 3: Sanitize column names
+            total_start_time = time.time()  # Track full process execution time
+
+            for i in range(0, total_files, batch_size):
+                batch_files = resolved_file_paths[i:i + batch_size]
+                batch_number = (i // batch_size) + 1
+                remaining_batches = total_batches - batch_number
+
+                # **PRINT ESTIMATED REMAINING TIME**
+                if batch_times:
+                    avg_batch_time = sum(batch_times) / len(batch_times)
+                    estimated_remaining_time = avg_batch_time * (remaining_batches + 1)  # Fix to include the last batch
+                    self.logger.log_info(f"⏳ Estimated total remaining time: {estimated_remaining_time:.2f} seconds ({estimated_remaining_time / 60:.2f} minutes).")
+
+                self.logger.log_info(f"📦 Processing batch {batch_number}/{total_batches} - Files: {len(batch_files)}")
+
+                # Start time tracking
+                start_time = time.time()
+
+                try:
+                    # Read XML batch
+                    df_batch = spark.read.format("xml").options(rowTag=root_name).load(",".join(batch_files))
+                    batch_results.append(df_batch)
+                except Exception as batch_error:
+                    self.logger.log_error(f"❌ Error in batch {batch_number}: {batch_error}")
+                    batch_results.append(None)
+
+                # End time tracking
+                elapsed_time = time.time() - start_time
+                batch_times.append(elapsed_time)
+
+                self.logger.log_info(f"✅ Batch {batch_number} completed in {elapsed_time:.2f} seconds.")
+
+            # **FILTER OUT None VALUES**
+            batch_results = [df for df in batch_results if df is not None]
+
+            # **Ensure at least one DataFrame is available**
+            if not batch_results:
+                raise RuntimeError("❌ No valid data was processed in any batch.")
+
+            # **Final execution time logging**
+            total_elapsed_time = time.time() - total_start_time
+            self.logger.log_info(f"⏳ Total execution time: {total_elapsed_time:.2f} seconds ({total_elapsed_time / 60:.2f} minutes).")
+
+            # **Iteratively Merge DataFrames**
+            self.logger.log_info("🔄 Merging all processed batches into a single DataFrame...")
+
+            df_initial = batch_results[0]
+            for df in batch_results[1:]:
+                df_initial = df_initial.unionByName(df, allowMissingColumns=True)
+
+            # Step 2: Sanitize column names
             sanitized_columns = {col: self._sanitize_column_name(col) for col in df_initial.columns}
             self.logger.log_block("Sanitized Columns (Before)", sanitized_columns, level="debug")
 
@@ -645,13 +699,13 @@ class DataFrameTransformer:
 
             self.logger.log_debug("Column names sanitized successfully.")
 
-            # Step 4: Drop unwanted columns
+            # Step 3: Drop unwanted columns
             unwanted_columns = [col for col in df_initial.columns if "_xmlns" in col]
             if unwanted_columns:
                 self.logger.log_info(f"Dropping unwanted '_xmlns' columns: {unwanted_columns}")
                 df_initial = df_initial.drop(*unwanted_columns)
 
-            # Step 5: Reorder and add input_file_name
+            # Step 4: Reorder and add input_file_name
             self.logger.log_debug("Adding input_file_name and reordering columns...")
             df_initial = df_initial.withColumn("input_file_name", F.input_file_name())
             df_initial = self._reorder_columns(df_initial)
@@ -659,11 +713,11 @@ class DataFrameTransformer:
             # Log initial DataFrame summary
             self.logger.log_dataframe_summary(df_initial, "Initial DataFrame", level="info")
 
-            # Step 6: Flatten XML DataFrame
+            # Step 5: Flatten XML DataFrame
             self.logger.log_debug("Flattening XML DataFrame...")
             df_flattened, filtered_conversions = self._flatten_xml_df(df_initial, depth_level=depth_level)
 
-            # Step 3: Sanitize column names
+            # Step 6: Sanitize flattened columns
             sanitized_columns = {col: self._sanitize_column_name(col) for col in df_flattened.columns}
             self.logger.log_block("Sanitized Columns (After)", sanitized_columns, level="debug")
 
@@ -677,7 +731,7 @@ class DataFrameTransformer:
                     self.logger.log_block("Formatted Converted Columns", formatted_conversions)
 
             # Step 8: Log results
-            self.logger.log_block("JSON Processing Results (DEBUG)", [
+            self.logger.log_block("XML Processing Results (DEBUG)", [
                 f"Initial DataFrame columns: {df_initial.columns}",
                 f"Flattened DataFrame columns: {df_flattened.columns}",
                 f"Number of converted columns: {len(filtered_conversions)}"
@@ -687,7 +741,7 @@ class DataFrameTransformer:
             return df_initial, df_flattened
 
         except Exception as e:
-            error_message = f"Error in _process_xml_data: {e}"
+            error_message = f"❌ Error in _process_xml_data: {e}"
             self.logger.log_error(error_message)
             self.logger.log_end("_process_xml_data", success=False)
             raise RuntimeError(error_message)
