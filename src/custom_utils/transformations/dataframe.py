@@ -622,7 +622,7 @@ class DataFrameTransformer:
             matched_schema_files (List[dict]): List of matched schema files.
             root_name (str): Root name for the XML structure.
             depth_level (int, optional): Maximum depth level for flattening. Defaults to None.
-            batch_size (int, optional): Number of files to process per batch. Defaults to 100.
+            batch_size (int, optional): Number of files to process per batch. Defaults to 1000.
 
         Returns:
             Tuple[DataFrame, DataFrame]: Initial parsed DataFrame and the flattened DataFrame.
@@ -633,7 +633,6 @@ class DataFrameTransformer:
             # Step 1: Resolve file paths
             resolved_file_paths = [f"dbfs:{self.config.source_data_folder_path}/{file}" for file in matched_data_files]
             total_files = len(resolved_file_paths)
-            self.logger.log_block("Resolved File Paths (DEBUG)", resolved_file_paths, level="debug")
 
             # Initialize Spark session
             spark = SparkSession.builder.getOrCreate()
@@ -651,7 +650,7 @@ class DataFrameTransformer:
                 # **PRINT ESTIMATED REMAINING TIME**
                 if batch_times:
                     avg_batch_time = sum(batch_times) / len(batch_times)
-                    estimated_remaining_time = avg_batch_time * (remaining_batches + 1)  # Fix to include the last batch
+                    estimated_remaining_time = avg_batch_time * (remaining_batches + 1)
                     self.logger.log_info(f"⏳ Estimated total remaining time: {estimated_remaining_time:.2f} seconds ({estimated_remaining_time / 60:.2f} minutes).")
 
                 self.logger.log_info(f"📦 Processing batch {batch_number}/{total_batches} - Batch files: {len(batch_files)}")
@@ -660,9 +659,25 @@ class DataFrameTransformer:
                 start_time = time.time()
 
                 try:
+                    # Log each file being processed inside the batch (debug level)
+                    file_start_time = time.time()  # Track time for each file
+                    for file_index, file in enumerate(batch_files, start=1):
+                        elapsed_time_per_file = (time.time() - file_start_time) / file_index if file_index > 1 else 0
+                        estimated_time_remaining_files = elapsed_time_per_file * (len(batch_files) - file_index)
+
+                        self.logger.log_debug(
+                            f"🔍 Processing file {file_index}/{len(batch_files)} in batch {batch_number}: {file}"
+                        )
+
                     # Read XML batch
                     df_batch = spark.read.format("xml").options(rowTag=root_name).load(",".join(batch_files))
-                    batch_results.append(df_batch)
+                    
+                    # Ensure batch data is valid before appending
+                    if df_batch is not None and df_batch.count() > 0:
+                        batch_results.append(df_batch)
+                    else:
+                        self.logger.log_warning(f"⚠️ Batch {batch_number} produced an empty DataFrame.")
+
                 except Exception as batch_error:
                     self.logger.log_error(f"❌ Error in batch {batch_number}: {batch_error}")
                     batch_results.append(None)
