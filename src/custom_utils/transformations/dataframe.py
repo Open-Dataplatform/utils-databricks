@@ -422,7 +422,7 @@ class DataFrameTransformer:
         except Exception as e:
             self._handle_processing_error("_handle_json_processing", e)
 
-    def _handle_xml_processing(self, params: dict, root_name: str, depth_level: int = None) -> Tuple[DataFrame, DataFrame]:
+    def _handle_xml_processing(self, params: dict, root_name: str, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
         """
         Handles processing and flattening of XML files.
 
@@ -445,6 +445,7 @@ class DataFrameTransformer:
             f"📜 Matched Schema Files ({len(matched_schemas)}): {[schema['name'] for schema in matched_schemas]}",
             f"🔍 Root Name: {root_name}",
             f"🛠 Depth Level: {depth_level if depth_level is not None else 'No limit'}"
+            f"📦 Batch Size: {batch_size}"
         ], level="debug")
 
         # Extract parameters
@@ -459,7 +460,8 @@ class DataFrameTransformer:
                 schema_path=schema_path,
                 matched_schema_files=matched_schema_files,
                 root_name=root_name,
-                depth_level=depth_level
+                depth_level=depth_level,
+                batch_size=batch_size
             )
 
             # Log success
@@ -610,7 +612,7 @@ class DataFrameTransformer:
             error_context = f"Schema Path: {schema_file_path}, Data Path: {data_file_path}"
             self._handle_processing_error("_process_json_data", f"{e} | Context: {error_context}")
 
-    def _process_xml_data(self, matched_data_files: List[str], schema_path: str, matched_schema_files: List[dict], root_name: str, depth_level: int = None) -> Tuple[DataFrame, DataFrame]:
+    def _process_xml_data(self, matched_data_files: List[str], schema_path: str, matched_schema_files: List[dict], root_name: str, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
         """
         Processes XML files and flattens the data in batches.
 
@@ -620,6 +622,7 @@ class DataFrameTransformer:
             matched_schema_files (List[dict]): List of matched schema files.
             root_name (str): Root name for the XML structure.
             depth_level (int, optional): Maximum depth level for flattening. Defaults to None.
+            batch_size (int, optional): Number of files to process per batch. Defaults to 100.
 
         Returns:
             Tuple[DataFrame, DataFrame]: Initial parsed DataFrame and the flattened DataFrame.
@@ -634,7 +637,6 @@ class DataFrameTransformer:
 
             # Initialize Spark session
             spark = SparkSession.builder.getOrCreate()
-            batch_size = 2  # Adjust batch size
             batch_results = []
             batch_times = []  # Store batch durations
             total_batches = (total_files // batch_size) + (1 if total_files % batch_size > 0 else 0)
@@ -652,7 +654,7 @@ class DataFrameTransformer:
                     estimated_remaining_time = avg_batch_time * (remaining_batches + 1)  # Fix to include the last batch
                     self.logger.log_info(f"⏳ Estimated total remaining time: {estimated_remaining_time:.2f} seconds ({estimated_remaining_time / 60:.2f} minutes).")
 
-                self.logger.log_info(f"📦 Processing batch {batch_number}/{total_batches} - Files: {len(batch_files)}")
+                self.logger.log_info(f"📦 Processing batch {batch_number}/{total_batches} - Batch files: {len(batch_files)}")
 
                 # Start time tracking
                 start_time = time.time()
@@ -1042,7 +1044,7 @@ class DataFrameTransformer:
         self.logger.log_end("_flatten_xlsx_df")
         return df_flattened, filtered_conversions
 
-    def process_and_flatten_data(self, depth_level: int = None) -> Tuple[DataFrame, DataFrame]:
+    def process_and_flatten_data(self, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
         """
         Main function to process and flatten JSON, XML, or XLSX data.
 
@@ -1098,7 +1100,7 @@ class DataFrameTransformer:
                 # Handles processing and flattening of JSON files
                 "json": lambda: self._handle_json_processing(common_params, depth_level)[:2],
                 # Handles processing and flattening of XML files
-                "xml": lambda: self._handle_xml_processing(common_params, self.config.xml_root_name, depth_level)[:2],
+                "xml": lambda: self._handle_xml_processing(common_params, self.config.xml_root_name, depth_level, batch_size)[:2],
                 # Handles processing of XLSX files
                 "xlsx": lambda: self._handle_xlsx_processing(common_params, self.config.sheet_name)[:2]
             }
