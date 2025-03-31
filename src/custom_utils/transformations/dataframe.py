@@ -575,8 +575,7 @@ class DataFrameTransformer:
 
             # Step 4: Combine metadata and reorder columns
             self.logger.log_debug("Adding input_file_name and reordering columns...")
-            input_file_name = df_with_filename.select("input_file_name").first()[0]
-            df_initial = df_parsed.withColumn("input_file_name", F.lit(input_file_name))
+            df_initial = df_parsed.withColumn("input_file_name", F.input_file_name())
             df_initial = self._reorder_columns(df_initial)
 
             # Print initial schema
