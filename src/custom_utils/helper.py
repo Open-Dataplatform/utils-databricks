@@ -3,17 +3,18 @@
 """Helper common functions for logging, parameter retrieval, and notebook control."""
 
 import os
+from typing import Any
 from custom_utils import adf
 from custom_utils.logging.logger import Logger  # Import Logger
 
 # Initialize the Logger
 logger = Logger()
 
-def write_message(message):
+def write_message(message: Any):
     """Log or print a message."""
     print(message)
 
-def exit_notebook(message, dbutils=None):
+def exit_notebook(message: str, dbutils=None):
     """
     Exit the notebook with an error message. If `dbutils` is not available, raises a system exit.
     Args:
