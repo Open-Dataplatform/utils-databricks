@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Union, Optional
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col
 import pyspark.sql.functions as F
@@ -307,7 +307,7 @@ class DataFrameTransformer:
         file_paths = [f"dbfs:{data_file_path}/{file}" for file in matched_data_files]
         return spark.read.format("binaryFile").load(file_paths)
 
-    def _json_schema_to_spark_struct(self, schema_file_path: str, definitions: Dict = None) -> Tuple[dict, StructType]:
+    def _json_schema_to_spark_struct(self, schema_file_path: str, definitions: Optional[Dict] = None) -> Tuple[dict, StructType]:
         """
         Converts a JSON schema file to a PySpark StructType.
 
@@ -520,7 +520,7 @@ class DataFrameTransformer:
         self.logger.log_end(method_name, success=False)
         raise RuntimeError(error_message)
 
-    def _process_json_data(self, params: dict, depth_level: int) -> Tuple[DataFrame, DataFrame]:
+    def _process_json_data(self, params: dict, depth_level: int) -> Union[Tuple[DataFrame, DataFrame], None]:
         """
         Processes and flattens JSON files.
 
@@ -762,7 +762,7 @@ class DataFrameTransformer:
             self.logger.log_end("_process_xml_data", success=False)
             raise RuntimeError(error_message)
 
-    def _process_xlsx_data(self, params: dict, sheet_name: str) -> Tuple[DataFrame, DataFrame]:
+    def _process_xlsx_data(self, params: dict, sheet_name: str) -> Optional[Tuple[DataFrame, DataFrame]]:
         """
         Processes XLSX files into DataFrames.
 
@@ -848,6 +848,7 @@ class DataFrameTransformer:
         except Exception as e:
             error_context = f"Sheet Name: {sheet_name}, Data Path: {data_file_path}"
             self._handle_processing_error("_process_xlsx_data", f"{e} | Context: {error_context}")
+            return None
 
     def _flatten_json_df(self, input_df: DataFrame, depth_level: int = None, root_level: int = 0) -> Tuple[DataFrame, List[Tuple[str, str, str]]]:
         """
