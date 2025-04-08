@@ -245,14 +245,14 @@ class DataFrameTransformer:
         type_mapping = {
             "string": StringType(),
             "boolean": BooleanType(),
-            "number": FloatType(),  # Keeping FloatType for compatibility with original behavior
+            "number": DecimalType(38,18),  # Casting to DecimalType to circumvent rounding errors.
             "integer": IntegerType(),
             "long": LongType(),
-            "double": FloatType(),  # Keeping FloatType to align with previous behavior
+            "double": DecimalType(38,18),  # Casting to DecimalType to circumvent rounding errors.
             "array": ArrayType(StringType()),  # Retain array structure with StringType elements
             "object": StructType([]),  # Default to an empty StructType for nested objects
             "datetime": TimestampType(),
-            "decimal": FloatType(),  # Precision handling can be added if needed
+            "decimal": DecimalType(38,18),  # Precision handling can be added if needed
             "date": DateType(),
             "binary": BinaryType(),
         }
@@ -885,6 +885,10 @@ class DataFrameTransformer:
                 ])
             original_type = data_type.simpleString()
             new_type = type_mapping.get(original_type, data_type)
+            if isinstance(new_type, DecimalType):
+                self.logger.log_message(f"Dataype for column: {column_name} is {new_type}. "\
+                    "Assess the required number of significant digits, and convert accordingly.", 
+                    level="warning")
             if original_type != new_type.simpleString():
                 converted_columns.append((sanitize_column_name(column_name), original_type, new_type.simpleString()))
             return new_type
@@ -959,6 +963,10 @@ class DataFrameTransformer:
                 ])
             original_type = data_type.simpleString()
             new_type = type_mapping.get(original_type, data_type)
+            if isinstance(new_type, DecimalType):
+                self.logger.log_message(f"Dataype for column: {column_name} is {new_type}. "\
+                    "Assess the required number of significant digits, and convert accordingly.", 
+                    level="warning")
             if original_type != new_type.simpleString():
                 converted_columns.append((self._sanitize_column_name(column_name), original_type, new_type.simpleString()))
             return new_type
@@ -1036,6 +1044,10 @@ class DataFrameTransformer:
             """Applies type mapping for XLSX columns."""
             original_type = data_type.simpleString()
             new_type = type_mapping.get(original_type, data_type)
+            if isinstance(new_type, DecimalType):
+                self.logger.log_message(f"Dataype for column: {column_name} is {new_type}. "\
+                    "Assess the required number of significant digits, and convert accordingly.", 
+                    level="warning")
             if original_type != new_type.simpleString():
                 converted_columns.append((sanitize_column_name(column_name), original_type, new_type.simpleString()))
             return new_type
