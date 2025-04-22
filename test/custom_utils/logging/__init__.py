@@ -1,2 +1,2 @@
 import unittest
-from custom_utils
+from custom_utils import logging
