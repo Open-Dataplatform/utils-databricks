@@ -1,9 +1,9 @@
 import os
 from typing import Tuple
 from pyspark.sql import SparkSession
-from custom_utils.logging.logger import Logger
-from custom_utils.helper import get_param_value
-from custom_utils.path_utils import generate_source_path, generate_schema_path
+from ..logging.logger import Logger
+from ..helper import get_param_value
+from ..path_utils import generate_source_path, generate_schema_path
 
 class Config:
     """
@@ -85,7 +85,7 @@ class Config:
         """Dynamically creates widgets based on the selected file type."""
         # Create the FileType dropdown widget first
         self.dbutils.widgets.dropdown("FileType", "json", ["json", "xlsx", "xml"], "File Type")
-        self.dbutils.widgets.text("SourceStorageAccount", "", "Source Storage Account")
+        self.dbutils.widgets.text("SourceStorageAccount", " ", "Source Storage Account")
         self.file_type = get_param_value(self.dbutils, "FileType").lower()
 
         # Remove stale widgets after determining the current file type
@@ -95,7 +95,6 @@ class Config:
         widget_definitions = self.WIDGET_CONFIG.get(self.file_type, [])
         for widget in widget_definitions:
             self.dbutils.widgets.text(widget["name"], widget["default"], widget["label"])
-
         self.logger.log_info(f"Widgets initialized for file type: {self.file_type}")
         self.logger.log_debug(f"Widget Definitions: {widget_definitions}")
 
@@ -105,7 +104,6 @@ class Config:
 
         # Get the current file type and the relevant widgets for it
         current_widget_names = {widget["name"] for widget in self.WIDGET_CONFIG.get(self.file_type, [])}
-
         for widget_group in self.WIDGET_CONFIG.values():
             for widget in widget_group:
                 widget_name = widget["name"]

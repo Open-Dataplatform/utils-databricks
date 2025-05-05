@@ -1,7 +1,7 @@
-from custom_utils.dp_storage import writer
+from ..dp_storage import writer
 from pyspark.sql import SparkSession, DataFrame
 from typing import List, Optional, Union
-from custom_utils.logging.logger import Logger
+from ..logging.logger import Logger
 
 class DataStorageManager:
     def __init__(self, 

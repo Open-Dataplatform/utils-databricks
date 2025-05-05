@@ -13,9 +13,9 @@ from pyspark.sql.types import (
 )
 
 
-from custom_utils.logging.logger import Logger
-from custom_utils.config.config import Config
-from custom_utils.validation.validation import Validator
+from ..logging.logger import Logger
+from ..config.config import Config
+from ..validation.validation import Validator
 
 class DataFrameTransformer:
     """
