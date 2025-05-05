@@ -2,8 +2,8 @@ import pytest
 from typing import Any, Callable
 
 from ..test_utils import dbutils
-# from ...custom_utils.config.config import Config
 from ...custom_utils import Config
+
 class TestConfig:
     def setup_method(self, method: Callable):
         print(f"Setting up {method}")

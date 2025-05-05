@@ -2,9 +2,9 @@ import os
 import logging
 from typing import Tuple, Optional, List
 from pyspark.sql.utils import AnalysisException
-from custom_utils.logging.logger import Logger
-from custom_utils.config.config import Config
-from custom_utils.file_handler.file_handler import FileHandler
+from ..logging.logger import Logger
+from ..config.config import Config
+from ..file_handler.file_handler import FileHandler
 
 class Validator:
     """
