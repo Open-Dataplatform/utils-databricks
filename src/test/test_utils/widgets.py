@@ -36,3 +36,6 @@ class Widgets:
     
     def __str__(self):
         return f"widgets: {self.widgets}"
+    
+    def __call__(self):
+        return self.widgets
