@@ -3,7 +3,7 @@ import pytest
 from typing import Any
 
 from .test_utils import dbutils
-from ..custom_utils.adf import (
+from custom_utils.adf import (
     get_parameter,
     #get_config_parameter,
     #get_source_config,

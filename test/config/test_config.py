@@ -2,7 +2,7 @@ import pytest
 from typing import Any
 
 from ..test_utils import dbutils
-from ...custom_utils import Config
+from custom_utils import Config
 
 class TestConfig:
     def setup_method(self, method: callable):
