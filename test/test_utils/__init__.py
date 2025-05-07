@@ -1,13 +1,16 @@
 
 from dataclasses import dataclass
-from .widgets import Widgets
 from typing import Any
+
+from .widgets import Widgets
+from .filesystem import fs
+
 
 @dataclass
 class dbutils:
     credentials = 0
     data = 0
-    fs = 0
+    fs = fs()
     jobs = 0
     library = 0
     meta = 0
