@@ -1,13 +1,13 @@
 import pytest
 from typing import Any
 
-from ..test_utils import dbutils
+from databricks.sdk.runtime import dbutils
 from custom_utils import Config
 
 class TestConfig:
     def setup_method(self, method: callable):
         print(f"Setting up {method}")
-        self.dbutils: dbutils = dbutils()
+        self.dbutils: dbutils = dbutils
         self.debug: bool = False
         self.config = Config(dbutils=self.dbutils, debug=self.debug)
 
@@ -29,3 +29,10 @@ class TestConfig:
         initial_namespace = namespace.copy()
         self.config.unpack(namespace=namespace)
         assert initial_namespace != namespace
+        
+if __name__ == "__main__":
+    dbutils: dbutils = dbutils
+    debug: bool = True
+    dbutils.widgets.dropdown("FileType", "json", ["json", "xlsx", "xml"], "File Type")
+    print(dbutils.widgets.get("FileType"))
+    config = Config(dbutils=dbutils, debug=debug)

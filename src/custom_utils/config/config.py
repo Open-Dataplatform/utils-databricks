@@ -186,7 +186,7 @@ class Config:
             self.logger.log_debug(f"Schema Path: {schema_path}")
             return schema_path
         self.logger.log_debug("No schema folder specified; skipping schema path generation.")
-        return None
+
 
 
     def _validate_config(self):
