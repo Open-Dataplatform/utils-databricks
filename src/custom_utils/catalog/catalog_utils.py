@@ -111,11 +111,12 @@ class DataStorageManager:
         """
         try:
             key_columns = self.normalize_key_columns(key_columns)
-
-            target_table_columns = [field.name for field in spark.table(f"{database_name}.{table_name}").schema]
+            df = spark.table(f"{database_name}.{table_name}")
+            target_table_columns = [field.name for field in df.schema]
+            nullable_dict = {col.name: col.nullable for col in df.schema}
             all_columns = [col for col in spark.table(cleaned_data_view).columns if col in target_table_columns and col not in key_columns]
 
-            match_sql = ' AND '.join([f"s.`{col}` = t.`{col}`" for col in key_columns])
+            match_sql = ' AND '.join([f"s.`{col}` = t.`{col}`" if not nullable_dict[col] else f"""COALESCE(CAST(s.`{col}` AS VARCHAR(120)), '') = COALESCE(t.`{col}`::VARCHAR(120), '')""" for col in key_columns])
             update_sql = ', '.join([f"t.`{col}` = s.`{col}`" for col in all_columns])
             insert_columns = key_columns + all_columns
             insert_values = [f"s.`{col}`" for col in insert_columns]
