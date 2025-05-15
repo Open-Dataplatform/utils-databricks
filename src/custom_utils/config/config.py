@@ -11,6 +11,14 @@ class Config:
     Includes structured logging for INFO and DEBUG levels.
     """
 
+    CONSTANT_WIDGETS = [
+        {"name": "SourceStorageAccount", "default": "dplandingstorage", "label": "Source Storage Account"},
+        {"name": "DestinationStorageAccount", "default": "dpuniformstorage", "label": "Destination Storage Account"},
+        {"name": "SourceContainer", "default": "None", "label": "Source Container"},
+        {"name": "SourceDatasetidentifier" , "default": "None", "label": "Source Dataset Identifier"},
+        {"name": "SourceFileName", "default": "None", "label": "Source File Name"},
+        {"name": "KeyColumns", "default": "None", "label": "Key Columns"},
+    ]
     WIDGET_CONFIG = {
         "json": [
             {"name": "FeedbackColumn", "default": "EventTimestamp", "label": "Feedback Column"},
@@ -37,7 +45,6 @@ class Config:
             debug (bool): If True, enables debug-level logging.
         """
         self.dbutils = dbutils or globals().get("dbutils", None)
-
         # ✅ Initialize logger with `debug`
         self.logger = Logger(debug=debug)
         
@@ -87,12 +94,12 @@ class Config:
         self.dbutils.widgets.dropdown("FileType", "json", ["json", "xlsx", "xml"], "File Type")
         self.dbutils.widgets.text("SourceStorageAccount", " ", "Source Storage Account")
         self.file_type = get_param_value(self.dbutils, "FileType").lower()
-
         # Remove stale widgets after determining the current file type
         self._remove_widgets()
 
         # Add widgets based on the current file type
         widget_definitions = self.WIDGET_CONFIG.get(self.file_type, [])
+        widget_definitions.extend(self.CONSTANT_WIDGETS)
         for widget in widget_definitions:
             self.dbutils.widgets.text(widget["name"], widget["default"], widget["label"])
         self.logger.log_info(f"Widgets initialized for file type: {self.file_type}")
@@ -173,7 +180,7 @@ class Config:
             self.logger.log_debug(f"Schema Path: {schema_path}")
             return schema_path
         self.logger.log_debug("No schema folder specified; skipping schema path generation.")
-        return None
+
 
     def _validate_config(self):
         """Performs validation of configuration parameters."""

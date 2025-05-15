@@ -60,9 +60,6 @@ def get_param_value(dbutils, param_name, default_value=None, required=False):
     except Exception as e:
         if required:
             logger.log_message(f"Could not retrieve required widget '{param_name}': {e}", level="error")
-        else:
-            # Silently handle optional parameters
-            pass
 
     if not value:
         value = os.getenv(param_name.upper(), default_value)
@@ -71,7 +68,6 @@ def get_param_value(dbutils, param_name, default_value=None, required=False):
         # Log the error (optional) and raise a RuntimeError directly
         logger.log_error(f"Required parameter '{param_name}' is missing.")
         raise RuntimeError(f"Required parameter '{param_name}' is missing.")
-
     return value
 
 def get_key_columns_list(key_columns: str) -> list:
