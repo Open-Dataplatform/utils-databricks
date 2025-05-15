@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, Mock
 from .test_utils import dbutils
-from ..custom_utils.helper import (
+from custom_utils.helper import (
     write_message,
     exit_notebook,
     get_adf_parameter,
