@@ -10,17 +10,23 @@ class TestDataFrameTransformer:
         self.temp_path: Path = Path('/mnt')
         
         self.dbutils: dbutils = dbutils
-        # self.widget_subdirs: list[str] = [
-        #     "source_schema_folder_path",
-        #     "source_data_folder_path",
-        #     "destination_data_folder_path",
-        # ]
-        # self.widgets: dict[str, str] = {}
-        # for subdir in self.widget_subdirs:
-        #     dir_path: Path = self.temp_path/subdir
-        #     dir_path.mkdir(parents=True, exist_ok=True)
-        #     label: str = subdir.replace("_", " ")
-        #     self.dbutils.widgets.text(name=subdir, default=dir_path, label=label)
+        self.dbutils.widgets.dropdown("FileType", "json", ["json", "xml", "xlsx"], "File Type")
+
+        # Step 2: Define Source and Destination Storage Accounts
+        self.dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest", "Source Storage Account")
+        self.dbutils.widgets.text("DestinationStorageAccount", "dpuniformstoragetest", "Destination Storage Account")
+
+        # Step 3: Configure Source Container and Dataset Identifier
+        self.dbutils.widgets.text("SourceContainer", "landing", "Source Container")
+        self.dbutils.widgets.text("SourceDatasetidentifier", "custom_utils_test_data", "Source Datasetidentifier")
+
+        # Step 4: Specify Source File Name and Key Columns
+        self.dbutils.widgets.text("SourceFileName", "custom_utils_test_data*", "Source File Name")
+        self.dbutils.widgets.text("KeyColumns", "uuid", "Key Columns")
+
+        # Step 5: Set Additional Parameters for Feedback Column, Depth Level, Schema Folder
+        self.dbutils.widgets.text("DepthLevel", "", "Depth Level (Leave blank for no limit)")
+        self.dbutils.widgets.text("SchemaFolderName", "schemachecks", "Schema Folder Name")
             
         self.config = Config(dbutils=self.dbutils)
         self.transformer: DataFrameTransformer = DataFrameTransformer(config=self.config)

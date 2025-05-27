@@ -3,7 +3,7 @@ from typing import Any
 from pathlib import Path
 from os import getcwd
 from uuid import uuid4
-from ..test_utils import dbutils
+from databricks.sdk.runtime import dbutils
 from custom_utils import DataStorageManager
 
 class TestDataStorageManager:
@@ -35,6 +35,7 @@ class TestDataStorageManager:
         with pytest.raises(RuntimeError) as exc_info:
             self.storage_manager.ensure_path_exists(dbutils=self.dbutils,
                                                     destination_path=runtime_error_path)
+
     @pytest.mark.parametrize("key_columns, expected_returns", [('hello, there', ['hello', 'there']), (['hello', 'there'], ['hello', 'there'])])
     def test_normalize_key_columns(self, key_columns, expected_returns):
         return_list: list[str] = self.storage_manager.normalize_key_columns(key_columns)
