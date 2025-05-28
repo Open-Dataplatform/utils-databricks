@@ -14,14 +14,19 @@ class TestDataFrameTransformer:
         self.dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest")
         self.dbutils.widgets.text("DestinationStorageAccount", "dpuniformstoragetest")
         self.dbutils.widgets.text("SourceContainer", "landing")
-        self.dbutils.widgets.text("SourceDatasetidentifier", "custom_utils_test_data")
-        self.dbutils.widgets.text("SourceFileName", "custom_utils_test_data*")
+        self.dbutils.widgets.text("SourceDatasetidentifier", "ddp_eam__afrr_activations")#"custom_utils_test_data")
+        self.dbutils.widgets.text("SourceFileName", "ddp_eam__afrr_activations*")#"custom_utils_test_data*")
         self.dbutils.widgets.text("KeyColumns", "A")
         self.dbutils.widgets.text("DepthLevel", "")
         self.dbutils.widgets.text("SchemaFolderName", "schemachecks")
-            
+        for i, j in self.dbutils.widgets.__dict__["_widgets"].items():
+            print(i, j)   
         self.config = Config(dbutils=self.dbutils)
         self.config.unpack(globals())
+        print(self.config.source_data_folder_path)
+        for i, j in self.dbutils.widgets.__dict__["_widgets"].items():
+            print(i, j)
+        # print(self.dbutils.fs.ls())
         self.transformer: DataFrameTransformer = DataFrameTransformer(config=self.config)
         
     def teardown_method(self):
@@ -29,8 +34,6 @@ class TestDataFrameTransformer:
         
     def test_process_and_flatten_data(self):
         depth_level: int = 1
-        print(self.dbutils.widgets.get("SourceDatasetidentifier"))
-        print(self.dbutils.widgets.get("SourceContainer"))
         df_init, df_flat = self.transformer.process_and_flatten_data(depth_level=depth_level)
         print(df_init)
         print(df_flat)
