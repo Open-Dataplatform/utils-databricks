@@ -385,7 +385,7 @@ class DataFrameTransformer:
             self.logger.log_end("_json_schema_to_spark_struct", success=False)
             raise ValueError(error_message)
 
-    def _handle_json_processing(self, params: dict, depth_level: int) -> Tuple[DataFrame, DataFrame]:
+    def _handle_json_processing(self, params: dict, depth_level: int) -> Tuple[DataFrame, DataFrame] | Tuple[None, None]:
         """
         Handles processing and flattening of JSON files.
 
@@ -421,6 +421,7 @@ class DataFrameTransformer:
 
         except Exception as e:
             self._handle_processing_error("_handle_json_processing", e)
+            return None, None
 
     def _handle_xml_processing(self, params: dict, root_name: str, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
         """
@@ -476,7 +477,7 @@ class DataFrameTransformer:
             self._handle_processing_error("_handle_xml_processing", f"{e} | Context: {error_context}")
             raise RuntimeError(f"Error in _handle_xml_processing: {e}")
 
-    def _handle_xlsx_processing(self, params: dict, sheet_name: str) -> Tuple[DataFrame, DataFrame]:
+    def _handle_xlsx_processing(self, params: dict, sheet_name: str) -> Tuple[Union[DataFrame, None], Union[DataFrame, None]]:
         """
         Handles processing of XLSX files.
 
@@ -506,6 +507,7 @@ class DataFrameTransformer:
             # Contextual error handling
             context = f"Sheet name: {sheet_name}, File path: {params.get('data_file_path')}"
             self._handle_processing_error("_handle_xlsx_processing", f"{e} | Context: {context}")
+            return None, None
 
     def _handle_processing_error(self, method_name: str, exception: Exception):
         """
@@ -520,7 +522,7 @@ class DataFrameTransformer:
         self.logger.log_end(method_name, success=False)
         raise RuntimeError(error_message)
 
-    def _process_json_data(self, params: dict, depth_level: int) -> Union[Tuple[DataFrame, DataFrame], None]:
+    def _process_json_data(self, params: dict, depth_level: int) -> Union[Tuple[DataFrame, DataFrame], Tuple[None, None]]:
         """
         Processes and flattens JSON files.
 
@@ -610,6 +612,7 @@ class DataFrameTransformer:
         except Exception as e:
             error_context = f"Schema Path: {schema_file_path}, Data Path: {data_file_path}"
             self._handle_processing_error("_process_json_data", f"{e} | Context: {error_context}")
+            return None, None
 
     def _process_xml_data(self, matched_data_files: List[str], schema_path: str, matched_schema_files: List[dict], root_name: str, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
         """
@@ -1071,7 +1074,7 @@ class DataFrameTransformer:
         self.logger.log_end("_flatten_xlsx_df")
         return df_flattened, filtered_conversions
 
-    def process_and_flatten_data(self, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
+    def process_and_flatten_data(self, depth_level: Optional[int] = None, batch_size: int = 1000) -> Tuple[Union[DataFrame, None], Union[DataFrame, None]]:
         """
         Main function to process and flatten JSON, XML, or XLSX data.
 
@@ -1151,3 +1154,4 @@ class DataFrameTransformer:
 
         except Exception as e:
             self._handle_processing_error("process_and_flatten_data", e)
+            return None, None

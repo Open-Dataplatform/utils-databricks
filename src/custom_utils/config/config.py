@@ -1,5 +1,5 @@
 import os
-from typing import Tuple
+from typing import Tuple, Union
 from pyspark.sql import SparkSession
 from ..logging.logger import Logger
 from ..helper import get_param_value
@@ -92,7 +92,6 @@ class Config:
         """Dynamically creates widgets based on the selected file type."""
         # Create the FileType dropdown widget first
         self.dbutils.widgets.dropdown("FileType", "json", ["json", "xlsx", "xml"], "File Type")
-        self.dbutils.widgets.text("SourceStorageAccount", " ", "Source Storage Account")
         self.file_type = get_param_value(self.dbutils, "FileType").lower()
         # Remove stale widgets after determining the current file type
         self._remove_widgets()
@@ -101,7 +100,8 @@ class Config:
         widget_definitions = self.WIDGET_CONFIG.get(self.file_type, [])
         widget_definitions.extend(self.CONSTANT_WIDGETS)
         for widget in widget_definitions:
-            self.dbutils.widgets.text(widget["name"], widget["default"], widget["label"])
+            if widget["name"] not in self.dbutils.widgets.__dict__["_widgets"]:
+                self.dbutils.widgets.text(widget["name"], widget["default"], widget["label"])
         self.logger.log_info(f"Widgets initialized for file type: {self.file_type}")
         self.logger.log_debug(f"Widget Definitions: {widget_definitions}")
 
@@ -173,13 +173,14 @@ class Config:
         self.logger.log_debug(f"Destination Path: {destination_path}")
         return source_path, destination_path
 
-    def _generate_schema_path(self) -> str:
+    def _generate_schema_path(self) -> Union[str| None]:
         """Generates the schema folder path if applicable."""
         if self.schema_folder_name:
             schema_path = f"{generate_schema_path(self.source_environment, self.schema_folder_name, self.source_datasetidentifier)}".rstrip('/')
             self.logger.log_debug(f"Schema Path: {schema_path}")
             return schema_path
         self.logger.log_debug("No schema folder specified; skipping schema path generation.")
+        return None
 
 
     def _validate_config(self):

@@ -55,40 +55,40 @@ def _generate_data(n: int =100, seed: int = 42, include_date_time: bool = True, 
 
 def _get_schema():
     schema_string: str = '''
-    {
-    "$id": "https://example.com/address.schema.json",
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "description": "An address similar to http://microformats.org/wiki/h-card",
-    "type": "array",
-    "items": {
-        "type": "object",
-        "properties": {
-        "A": {
-        "type": "number"
-        },
-        "B": {
-        "type": "number"
-        },
-        "C": {
-        "type": "integer"
-        },
-        "D": {
-        "type": "number"
-        },
-        "E": {
-        "type": "string"
-        },
-        "F": {
-        "type": "string"
-        },
-        "G": {
-        "type": "string",
-        "format": "date-time"
-        }
+{
+"$id": "https://example.com/address.schema.json",
+"$schema": "https://json-schema.org/draft/2020-12/schema",
+"description": "An address similar to http://microformats.org/wiki/h-card",
+"type": "array",
+"items": {
+    "type": "object",
+    "properties": {
+    "A": {
+    "type": "number"
     },
-    "required": [ "A", "B", "C", "D", "E", "F", "G" ]
+    "B": {
+    "type": "number"
+    },
+    "C": {
+    "type": "integer"
+    },
+    "D": {
+    "type": "number"
+    },
+    "E": {
+    "type": "string"
+    },
+    "F": {
+    "type": "string"
+    },
+    "G": {
+    "type": "string",
+    "format": "date-time"
     }
-    }'''
+},
+"required": [ "A", "B", "C", "D", "E", "F", "G" ]
+}
+}'''
     return schema_string
     
     
