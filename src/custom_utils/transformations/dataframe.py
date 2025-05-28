@@ -542,7 +542,6 @@ class DataFrameTransformer:
         self.logger.log_end(method_name, success=False)
         raise RuntimeError(error_message)
 
-
     def _process_json_data(self, params: dict, depth_level: int) -> Union[Tuple[DataFrame, DataFrame], Tuple[None, None]]:
         """
         Processes and flattens JSON files.
