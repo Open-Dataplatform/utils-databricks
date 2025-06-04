@@ -3,6 +3,7 @@ import fnmatch
 import os
 from typing import Optional, Tuple, List, Dict
 from pyspark.sql.utils import AnalysisException
+from pathlib import Path
 from ..config.config import Config
 
 class FileHandler:

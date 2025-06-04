@@ -50,6 +50,12 @@ class Config:
         
         # ✅ Ensure `self.debug` is consistent with the logger
         self.debug = self.logger.debug
+        
+        # Parameter to enable developer mode and unittesting. Should only be modified for unittesting purposes or local data fetching
+        if self.dbutils is not None and "unittest_data_path" in self.dbutils.widgets.__dict__["_widgets"]:
+            self._data_base_path: str = self.dbutils.widgets.get("unittest_data_path")
+        else:
+            self._data_base_path: str = ""
 
         try:
             self.logger.log_info("Starting Config Initialization")
@@ -167,8 +173,8 @@ class Config:
     def _generate_data_paths(self) -> Tuple[str, str]:
         """Generates paths for source and destination data folders."""
         self.logger.log_debug("Generating paths for source and destination data folders...")
-        source_path = generate_source_path(self.source_environment, self.source_datasetidentifier)
-        destination_path = generate_source_path(self.destination_environment, self.source_datasetidentifier)
+        source_path = generate_source_path(self.source_environment, self.source_datasetidentifier, self._data_base_path)
+        destination_path = generate_source_path(self.destination_environment, self.source_datasetidentifier, self._data_base_path)
         self.logger.log_debug(f"Source Path: {source_path}")
         self.logger.log_debug(f"Destination Path: {destination_path}")
         return source_path, destination_path
@@ -176,7 +182,7 @@ class Config:
     def _generate_schema_path(self) -> Union[str| None]:
         """Generates the schema folder path if applicable."""
         if self.schema_folder_name:
-            schema_path = f"{generate_schema_path(self.source_environment, self.schema_folder_name, self.source_datasetidentifier)}".rstrip('/')
+            schema_path = f"{generate_schema_path(self.source_environment, self.schema_folder_name, self.source_datasetidentifier, self._data_base_path)}".rstrip('/')
             self.logger.log_debug(f"Schema Path: {schema_path}")
             return schema_path
         self.logger.log_debug("No schema folder specified; skipping schema path generation.")

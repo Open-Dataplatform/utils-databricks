@@ -94,6 +94,8 @@ def _get_schema():
     
 def generate_files(data_dump_dir: Path, n_files: int = 10, n_data_points: int = 1000, include_duplicates: bool = True):
     data_dump_dir.mkdir(exist_ok=True, parents=True)
+    schema_dir: Path = (data_dump_dir.parent/"schemachecks")/data_dump_dir.name
+    schema_dir.mkdir(exist_ok=True, parents=True)
     if include_duplicates:
         seed_base: int = 2 # Every second file is a duplicate. This is an arbitrary choice made by AJKKU
     else:
@@ -110,7 +112,7 @@ def generate_files(data_dump_dir: Path, n_files: int = 10, n_data_points: int = 
         with open(data_dump_dir/f"custom_utils_test_data_{date_time_ext}_{uuid_ext}.json", "w") as f:
             f.write(json_data)
     schema: str = _get_schema()
-    with open(data_dump_dir/f"custom_utils_test_data_schema.json", "w") as f:
+    with open(schema_dir/f"custom_utils_test_data_schema.json", "w") as f:
         f.write(schema)    
 
 

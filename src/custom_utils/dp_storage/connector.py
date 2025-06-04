@@ -58,7 +58,11 @@ def get_mount_point(dbutils, source_environment, logger):
 
 def get_mount_point_name(storage_account: str) -> str:
     """Returns the mount point name for a given storage account."""
-    return f"/mnt/{storage_account}"
+    base: str = "/mnt"
+    if "unittest_mount_path" in globals():
+        assert isinstance(globals()["unittest_mount_path"], int)
+        base = globals()["unittest_mount_path"]
+    return f"{base}/{storage_account}"
 
 
 def _is_mounted(dbutils, storage_account: str) -> bool:
