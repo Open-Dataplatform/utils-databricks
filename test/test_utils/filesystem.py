@@ -1,6 +1,6 @@
+import os
 from pathlib import Path
 from dataclasses import dataclass
-from os import listdir
 from typing import Any
 @dataclass
 class FileInfo:
@@ -33,7 +33,11 @@ class fs:
             elif path.is_file():
                 return [fs._path_to_fileinfo(path)]
             elif path.is_dir():
-                dir_content: list[str] = listdir(str(path))
+                dir_content: list = []
+                for path, subdirs, files in os.walk(str(path)):
+                    for name in files:
+                        dir_content.append(os.path.join(path, name))
+                #dir_content: list[str] = listdir(str(path))
                 return [fs._path_to_fileinfo(Path(content)) for content in dir_content]
             else:
                 raise RuntimeError("Unknown error.")
@@ -44,7 +48,7 @@ class fs:
     def _path_to_fileinfo(path: Path) -> FileInfo:
         if path.is_file():
             path = path.expanduser().resolve()
-            name: str = path.expanduser().resolve().parts[0]
+            name: str = path.expanduser().resolve().parts[-1]
             size: int = path.stat().st_size
             modificationTime: float = path.stat().st_mtime
             return FileInfo(path=str(path), name=name, size=size, modificationTime=modificationTime)
