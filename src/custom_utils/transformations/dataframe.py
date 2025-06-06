@@ -11,7 +11,7 @@ from pyspark.sql.types import (
     ArrayType, StructField, StringType, BooleanType, DoubleType, IntegerType, LongType,
     TimestampType, DecimalType, DateType, BinaryType, StructType, FloatType, DataType
 )
-
+from pathlib import Path
 
 from ..logging.logger import Logger
 from ..config.config import Config
@@ -43,7 +43,7 @@ class DataFrameTransformer:
 
         # Validate configuration and initialize dbutils
         self.dbutils = self.config.dbutils
-
+        self.unittest = False if not "unittest_data_path" in self.dbutils.widgets.__dict__["_widgets"] else True
         self.logger.log_block("DataFrameTransformer Initialization", [
             f"Debug Mode: {self.debug}",
             f"Logger: {'Custom Logger' if logger else 'Config Logger'}",
@@ -304,7 +304,7 @@ class DataFrameTransformer:
             DataFrame: Binary DataFrame containing file content.
         """
         spark = SparkSession.builder.getOrCreate()
-        file_paths = [f"dbfs:{data_file_path}/{file}" for file in matched_data_files]
+        file_paths = [f"dbfs:{data_file_path}/{file}" if not self.unittest else str(Path(data_file_path)/file) for file in matched_data_files]
         return spark.read.format("binaryFile").load(file_paths)
 
     def _json_schema_to_spark_struct(self, schema_file_path: str, definitions: Optional[Dict] = None) -> Tuple[dict, StructType]:
@@ -324,6 +324,7 @@ class DataFrameTransformer:
             # Step 1: Load the schema file
             schema_content = self.dbutils.fs.head(schema_file_path)
             json_schema = json.loads(schema_content)
+            print(json_schema)
 
             # Step 2: Retrieve or initialize definitions
             definitions = definitions or json_schema.get("definitions", {})
@@ -633,7 +634,7 @@ class DataFrameTransformer:
 
         try:
             # Step 1: Resolve file paths
-            resolved_file_paths = [f"dbfs:{self.config.source_data_folder_path}/{file}" for file in matched_data_files]
+            resolved_file_paths = [f"dbfs:{self.config.source_data_folder_path}/{file}" if not self.unittest else str(Path(self.config.source_data_folder_path)/file) for file in matched_data_files]
             total_files = len(resolved_file_paths)
 
             # Initialize Spark session
@@ -1096,7 +1097,7 @@ class DataFrameTransformer:
             data_file_path = self.config.source_data_folder_path
             source_filename = self.config.source_filename
             use_schema = self.config.use_schema
-            schema_file_path = f"{self.config.source_schema_folder_path}/{self.validator.main_schema_name}" \
+            schema_file_path = str(Path(self.config.source_schema_folder_path)/self.validator.main_schema_name) \
                 if self.config.use_schema else None
 
             # Debug logging for essential paths
