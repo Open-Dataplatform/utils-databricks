@@ -34,10 +34,9 @@ class fs:
                 return [fs._path_to_fileinfo(path)]
             elif path.is_dir():
                 dir_content: list = []
-                for path, subdirs, files in os.walk(str(path)):
+                for path, _, files in os.walk(str(path)):
                     for name in files:
                         dir_content.append(os.path.join(path, name))
-                #dir_content: list[str] = listdir(str(path))
                 return [fs._path_to_fileinfo(Path(content)) for content in dir_content]
             else:
                 raise RuntimeError("Unknown error.")
