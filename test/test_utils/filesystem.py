@@ -56,3 +56,9 @@ class fs:
     @staticmethod
     def mkdirs(path: str):
         Path(path).mkdir(parents=True, exist_ok=True)
+        
+    @staticmethod
+    def head(path: str) -> str:
+        with open(path, "r") as f:
+            stream = f.read()
+        return stream
