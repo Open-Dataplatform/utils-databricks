@@ -49,7 +49,9 @@ def _generate_data(n: int =100, seed: int = 42, include_date_time: bool = True, 
             'F' : random.choice(enum_str),
             }
         if include_date_time:
-            row['G'] = start_date + timedelta(days=_+1) 
+            row['G'] = start_date + timedelta(days=_+1)
+        row['H'] = {'id': str(uuid4()),
+                    'value': random.choice(range(10))}
         data.append(row)
     return data
 
@@ -84,15 +86,28 @@ def _get_schema():
         "G": {
         "type": "string",
         "format": "date-time"
+        },
+        "H": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "value": {
+                    "type": "integer"
+                }
+            },
+            "required": ["id", "value"]
         }
     },
-    "required": [ "A", "B", "C", "D", "E", "F", "G" ]
+    "required": [ "A", "B", "C", "D", "E", "F", "G", "H"]
     }
 }'''
     return schema_string
     
     
-def generate_files(data_dump_dir: Path, n_files: int = 10, n_data_points: int = 1000, include_duplicates: bool = True):
+def generate_files(data_dump_dir: Path, n_files: int = 3, n_data_points: int = 10, include_duplicates: bool = True):
     data_dump_dir.mkdir(exist_ok=True, parents=True)
     schema_dir: Path = (data_dump_dir.parent/"schemachecks")/data_dump_dir.name
     schema_dir.mkdir(exist_ok=True, parents=True)
