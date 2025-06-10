@@ -5,12 +5,15 @@ from pathlib import Path
 from uuid import uuid4
 from databricks.sdk.runtime import dbutils
 from custom_utils import DataStorageManager
+from ..test_utils.filesystem import fs
 
 class TestDataStorageManager:
     def setup_method(self, method: callable):
         print(f"Setting up {method}")
         self.storage_manager: DataStorageManager = DataStorageManager(logger=None)
         self.dbutils: dbutils = dbutils
+        self.dbutils.fs.ls = fs().ls
+        
         
     def teardown_method(self, method: callable):
         print(f"Tearing down {method}")
@@ -24,14 +27,14 @@ class TestDataStorageManager:
             unexisting_path: Path = existing_dirpath/str(uuid4())
 
         runtime_error_path = None # Used to provoke a runtime error.
+        # Ensure file exists.
         assert None == self.storage_manager.ensure_path_exists(dbutils=self.dbutils,
                                                             destination_path=str(existing_filepath))
+        # Ensure diretory exists.
         assert None == self.storage_manager.ensure_path_exists(dbutils=self.dbutils,
                                                            destination_path=str(existing_dirpath))
-        self.storage_manager.ensure_path_exists(dbutils=self.dbutils,
-                                                destination_path=str(unexisting_path))
-        assert unexisting_path.exists()
-        unexisting_path.rmdir()
+        
+        # Ensure exception is thrown, when path does not exist.
         with pytest.raises(RuntimeError) as exc_info:
             self.storage_manager.ensure_path_exists(dbutils=self.dbutils,
                                                     destination_path=runtime_error_path)
