@@ -8,7 +8,7 @@ from pathlib import Path
 import random
 from json import dumps, JSONEncoder
 from typing import Any
-from uuid import uuid4
+from uuid import uuid4, UUID
 from time import sleep
 
 class DateTimeEncoder(JSONEncoder):
@@ -50,12 +50,12 @@ def _generate_data(n: int =100, seed: int = 42, include_date_time: bool = True, 
             }
         if include_date_time:
             row['G'] = start_date + timedelta(days=_+1)
-        row['H'] = {'id': str(uuid4()),
+        row['H'] = {'id': str(UUID(bytes=bytes(random.getrandbits(8) for _ in range(16)), version=4)),
                     'value': random.choice(range(10))}
         data.append(row)
     return data
 
-def _get_schema():
+def get_schema():
     schema_string: str = '''
 {
     "id": "https://example.com/address.schema.json",
@@ -107,7 +107,7 @@ def _get_schema():
     return schema_string
     
     
-def generate_files(data_dump_dir: Path, n_files: int = 3, n_data_points: int = 10, include_duplicates: bool = True):
+def generate_files(data_dump_dir: Path, n_files: int = 2, n_data_points: int = 3, include_duplicates: bool = True):
     data_dump_dir.mkdir(exist_ok=True, parents=True)
     schema_dir: Path = (data_dump_dir.parent/"schemachecks")/data_dump_dir.name
     schema_dir.mkdir(exist_ok=True, parents=True)
@@ -126,7 +126,7 @@ def generate_files(data_dump_dir: Path, n_files: int = 3, n_data_points: int = 1
         
         with open(data_dump_dir/f"custom_utils_test_data_{date_time_ext}_{uuid_ext}.json", "w") as f:
             f.write(json_data)
-    schema: str = _get_schema()
+    schema: str = get_schema()
     with open(schema_dir/f"custom_utils_test_data_schema.json", "w") as f:
         f.write(schema)    
 
