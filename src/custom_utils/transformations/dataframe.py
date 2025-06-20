@@ -329,8 +329,10 @@ class DataFrameTransformer:
             for key in json_schema.keys():
                 if "defs" in key:
                     definitions_key: str = key
+                    break
                 elif "definitions" in key:
                     definitions_key: str = key
+                    break
                 else:
                     definitions_key: str = "definitions"
             definitions = definitions or json_schema.get(definitions_key, {})
