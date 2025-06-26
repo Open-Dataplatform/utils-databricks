@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Union, Optional
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col
 import pyspark.sql.functions as F
@@ -11,11 +11,11 @@ from pyspark.sql.types import (
     ArrayType, StructField, StringType, BooleanType, DoubleType, IntegerType, LongType,
     TimestampType, DecimalType, DateType, BinaryType, StructType, FloatType, DataType
 )
+from pathlib import Path
 
-
-from custom_utils.logging.logger import Logger
-from custom_utils.config.config import Config
-from custom_utils.validation.validation import Validator
+from ..logging.logger import Logger
+from ..config.config import Config
+from ..validation.validation import Validator
 
 class DataFrameTransformer:
     """
@@ -43,7 +43,7 @@ class DataFrameTransformer:
 
         # Validate configuration and initialize dbutils
         self.dbutils = self.config.dbutils
-
+        self.unittest = False if not "unittest_data_path" in self.dbutils.widgets.__dict__["_widgets"] else True
         self.logger.log_block("DataFrameTransformer Initialization", [
             f"Debug Mode: {self.debug}",
             f"Logger: {'Custom Logger' if logger else 'Config Logger'}",
@@ -304,10 +304,10 @@ class DataFrameTransformer:
             DataFrame: Binary DataFrame containing file content.
         """
         spark = SparkSession.builder.getOrCreate()
-        file_paths = [f"dbfs:{data_file_path}/{file}" for file in matched_data_files]
+        file_paths = [f"dbfs:{data_file_path}/{file}" if not self.unittest else str(Path(data_file_path)/file) for file in matched_data_files]
         return spark.read.format("binaryFile").load(file_paths)
 
-    def _json_schema_to_spark_struct(self, schema_file_path: str, definitions: Dict = None) -> Tuple[dict, StructType]:
+    def _json_schema_to_spark_struct(self, schema_file_path: str, definitions: Optional[Dict] = None) -> Tuple[dict, StructType]:
         """
         Converts a JSON schema file to a PySpark StructType.
 
@@ -324,18 +324,10 @@ class DataFrameTransformer:
             # Step 1: Load the schema file
             schema_content = self.dbutils.fs.head(schema_file_path)
             json_schema = json.loads(schema_content)
+            print(json_schema)
 
             # Step 2: Retrieve or initialize definitions
-            for key in json_schema.keys():
-                if "defs" in key:
-                    definitions_key: str = key
-                    break
-                elif "definitions" in key:
-                    definitions_key: str = key
-                    break
-                else:
-                    definitions_key: str = "definitions"
-            definitions = definitions or json_schema.get(definitions_key, {})
+            definitions = definitions or json_schema.get("definitions", {})
 
             # Helper function to resolve $ref fields
             def resolve_ref(ref):
@@ -347,16 +339,6 @@ class DataFrameTransformer:
 
             # Helper function to parse field types
             def parse_type(field_props):
-                if "anyOf" in field_props:
-                    list_types = []
-                    for t in field_props["anyOf"]:
-                        if "type" in t.keys():
-                            if t["type"] == "null":
-                                continue
-                        list_types.append(t)
-                    assert len(list_types)==1, f"Too many valid data types were given to field property {field_props}. Expected only one not null type, but recieved {list_types}."
-                    field_props = list_types[0]
-
                 if field_props is None:
                     return StringType()
                 if isinstance(field_props, list):
@@ -404,7 +386,7 @@ class DataFrameTransformer:
             self.logger.log_end("_json_schema_to_spark_struct", success=False)
             raise ValueError(error_message)
 
-    def _handle_json_processing(self, params: dict, depth_level: int) -> Tuple[DataFrame, DataFrame]:
+    def _handle_json_processing(self, params: dict, depth_level: int) -> Tuple[DataFrame, DataFrame] | Tuple[None, None]:
         """
         Handles processing and flattening of JSON files.
 
@@ -440,6 +422,7 @@ class DataFrameTransformer:
 
         except Exception as e:
             self._handle_processing_error("_handle_json_processing", e)
+            return None, None
 
     def _handle_xml_processing(self, params: dict, root_name: str, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
         """
@@ -495,7 +478,7 @@ class DataFrameTransformer:
             self._handle_processing_error("_handle_xml_processing", f"{e} | Context: {error_context}")
             raise RuntimeError(f"Error in _handle_xml_processing: {e}")
 
-    def _handle_xlsx_processing(self, params: dict, sheet_name: str) -> Tuple[DataFrame, DataFrame]:
+    def _handle_xlsx_processing(self, params: dict, sheet_name: str) -> Tuple[Union[DataFrame, None], Union[DataFrame, None]]:
         """
         Handles processing of XLSX files.
 
@@ -525,6 +508,7 @@ class DataFrameTransformer:
             # Contextual error handling
             context = f"Sheet name: {sheet_name}, File path: {params.get('data_file_path')}"
             self._handle_processing_error("_handle_xlsx_processing", f"{e} | Context: {context}")
+            return None, None
 
     def _handle_processing_error(self, method_name: str, exception: Exception):
         """
@@ -539,7 +523,7 @@ class DataFrameTransformer:
         self.logger.log_end(method_name, success=False)
         raise RuntimeError(error_message)
 
-    def _process_json_data(self, params: dict, depth_level: int) -> Tuple[DataFrame, DataFrame]:
+    def _process_json_data(self, params: dict, depth_level: int) -> Union[Tuple[DataFrame, DataFrame], Tuple[None, None]]:
         """
         Processes and flattens JSON files.
 
@@ -629,6 +613,7 @@ class DataFrameTransformer:
         except Exception as e:
             error_context = f"Schema Path: {schema_file_path}, Data Path: {data_file_path}"
             self._handle_processing_error("_process_json_data", f"{e} | Context: {error_context}")
+            return None, None
 
     def _process_xml_data(self, matched_data_files: List[str], schema_path: str, matched_schema_files: List[dict], root_name: str, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
         """
@@ -649,7 +634,7 @@ class DataFrameTransformer:
 
         try:
             # Step 1: Resolve file paths
-            resolved_file_paths = [f"dbfs:{self.config.source_data_folder_path}/{file}" for file in matched_data_files]
+            resolved_file_paths = [f"dbfs:{self.config.source_data_folder_path}/{file}" if not self.unittest else str(Path(self.config.source_data_folder_path)/file) for file in matched_data_files]
             total_files = len(resolved_file_paths)
 
             # Initialize Spark session
@@ -781,7 +766,7 @@ class DataFrameTransformer:
             self.logger.log_end("_process_xml_data", success=False)
             raise RuntimeError(error_message)
 
-    def _process_xlsx_data(self, params: dict, sheet_name: str) -> Tuple[DataFrame, DataFrame]:
+    def _process_xlsx_data(self, params: dict, sheet_name: str) -> Optional[Tuple[DataFrame, DataFrame]]:
         """
         Processes XLSX files into DataFrames.
 
@@ -867,6 +852,7 @@ class DataFrameTransformer:
         except Exception as e:
             error_context = f"Sheet Name: {sheet_name}, Data Path: {data_file_path}"
             self._handle_processing_error("_process_xlsx_data", f"{e} | Context: {error_context}")
+            return None
 
     def _flatten_json_df(self, input_df: DataFrame, depth_level: int = None, root_level: int = 0) -> Tuple[DataFrame, List[Tuple[str, str, str]]]:
         """
@@ -1089,7 +1075,7 @@ class DataFrameTransformer:
         self.logger.log_end("_flatten_xlsx_df")
         return df_flattened, filtered_conversions
 
-    def process_and_flatten_data(self, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
+    def process_and_flatten_data(self, depth_level: Optional[int] = None, batch_size: int = 1000) -> Tuple[Union[DataFrame, None], Union[DataFrame, None]]:
         """
         Main function to process and flatten JSON, XML, or XLSX data.
 
@@ -1111,7 +1097,7 @@ class DataFrameTransformer:
             data_file_path = self.config.source_data_folder_path
             source_filename = self.config.source_filename
             use_schema = self.config.use_schema
-            schema_file_path = f"{self.config.source_schema_folder_path}/{self.validator.main_schema_name}" \
+            schema_file_path = str(Path(self.config.source_schema_folder_path)/self.validator.main_schema_name) \
                 if self.config.use_schema else None
 
             # Debug logging for essential paths
@@ -1169,3 +1155,4 @@ class DataFrameTransformer:
 
         except Exception as e:
             self._handle_processing_error("process_and_flatten_data", e)
+            return None, None

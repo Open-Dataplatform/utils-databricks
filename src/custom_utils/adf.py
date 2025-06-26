@@ -1,9 +1,9 @@
 """Functions to help communicating with ADF"""
 
 import json
+from typing import Any
 
-
-def get_parameter(dbutils, parameter_name: str, default_value='') -> str:
+def get_parameter(dbutils, parameter_name: str, default_value='') -> Any:
     """Creates a text widget and gets parameter value. If ran from ADF, the value is taken from there."""
     dbutils.widgets.text(parameter_name, default_value)
     return dbutils.widgets.get(parameter_name)

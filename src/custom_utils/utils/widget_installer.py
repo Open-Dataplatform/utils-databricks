@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from custom_utils.logging.logger import Logger
+from ..logging.logger import Logger
 
 class WidgetInstaller:
     def __init__(self, dbutils, logger: Logger, debug: bool = False):

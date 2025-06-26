@@ -3,17 +3,18 @@
 """Helper common functions for logging, parameter retrieval, and notebook control."""
 
 import os
-from custom_utils import adf
-from custom_utils.logging.logger import Logger  # Import Logger
+from typing import Any
+from . import adf
+from .logging.logger import Logger  # Import Logger
 
 # Initialize the Logger
 logger = Logger()
 
-def write_message(message):
+def write_message(message: Any):
     """Log or print a message."""
     print(message)
 
-def exit_notebook(message, dbutils=None):
+def exit_notebook(message: str, dbutils=None):
     """
     Exit the notebook with an error message. If `dbutils` is not available, raises a system exit.
     Args:
@@ -59,9 +60,6 @@ def get_param_value(dbutils, param_name, default_value=None, required=False):
     except Exception as e:
         if required:
             logger.log_message(f"Could not retrieve required widget '{param_name}': {e}", level="error")
-        else:
-            # Silently handle optional parameters
-            pass
 
     if not value:
         value = os.getenv(param_name.upper(), default_value)
@@ -70,7 +68,6 @@ def get_param_value(dbutils, param_name, default_value=None, required=False):
         # Log the error (optional) and raise a RuntimeError directly
         logger.log_error(f"Required parameter '{param_name}' is missing.")
         raise RuntimeError(f"Required parameter '{param_name}' is missing.")
-
     return value
 
 def get_key_columns_list(key_columns: str) -> list:

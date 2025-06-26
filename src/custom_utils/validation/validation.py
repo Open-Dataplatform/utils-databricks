@@ -2,9 +2,9 @@ import os
 import logging
 from typing import Tuple, Optional, List
 from pyspark.sql.utils import AnalysisException
-from custom_utils.logging.logger import Logger
-from custom_utils.config.config import Config
-from custom_utils.file_handler.file_handler import FileHandler
+from ..logging.logger import Logger
+from ..config.config import Config
+from ..file_handler.file_handler import FileHandler
 
 class Validator:
     """
@@ -81,6 +81,8 @@ class Validator:
 
     def _verify_file_folder(self) -> Tuple[str, Optional[str], List[str], List[str]]:
         data_directory_path = self.file_handler.normalize_path(self.config.source_data_folder_path)
+        if "unittest_data_path" in self.config.dbutils.widgets.__dict__["_widgets"]:
+            data_directory_path = self.config.source_data_folder_path
         self.logger.log_debug(f"Checking data source folder: {data_directory_path}")
 
         if not self.file_handler.directory_exists(data_directory_path):

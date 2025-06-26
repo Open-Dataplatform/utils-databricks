@@ -1,9 +1,9 @@
 import os
-from typing import Tuple
+from typing import Tuple, Union
 from pyspark.sql import SparkSession
-from custom_utils.logging.logger import Logger
-from custom_utils.helper import get_param_value
-from custom_utils.path_utils import generate_source_path, generate_schema_path
+from ..logging.logger import Logger
+from ..helper import get_param_value
+from ..path_utils import generate_source_path, generate_schema_path
 
 class Config:
     """
@@ -11,6 +11,14 @@ class Config:
     Includes structured logging for INFO and DEBUG levels.
     """
 
+    CONSTANT_WIDGETS = [
+        {"name": "SourceStorageAccount", "default": "dplandingstorage", "label": "Source Storage Account"},
+        {"name": "DestinationStorageAccount", "default": "dpuniformstorage", "label": "Destination Storage Account"},
+        {"name": "SourceContainer", "default": "None", "label": "Source Container"},
+        {"name": "SourceDatasetidentifier" , "default": "None", "label": "Source Dataset Identifier"},
+        {"name": "SourceFileName", "default": "None", "label": "Source File Name"},
+        {"name": "KeyColumns", "default": "None", "label": "Key Columns"},
+    ]
     WIDGET_CONFIG = {
         "json": [
             {"name": "FeedbackColumn", "default": "EventTimestamp", "label": "Feedback Column"},
@@ -37,12 +45,17 @@ class Config:
             debug (bool): If True, enables debug-level logging.
         """
         self.dbutils = dbutils or globals().get("dbutils", None)
-
         # ✅ Initialize logger with `debug`
         self.logger = Logger(debug=debug)
         
         # ✅ Ensure `self.debug` is consistent with the logger
         self.debug = self.logger.debug
+        
+        # Parameter to enable developer mode and unittesting. Should only be modified for unittesting purposes or local data fetching
+        if self.dbutils is not None and "unittest_data_path" in self.dbutils.widgets.__dict__["_widgets"]:
+            self._data_base_path: str = self.dbutils.widgets.get("unittest_data_path")
+        else:
+            self._data_base_path: str = ""
 
         try:
             self.logger.log_info("Starting Config Initialization")
@@ -85,17 +98,16 @@ class Config:
         """Dynamically creates widgets based on the selected file type."""
         # Create the FileType dropdown widget first
         self.dbutils.widgets.dropdown("FileType", "json", ["json", "xlsx", "xml"], "File Type")
-        self.dbutils.widgets.text("SourceStorageAccount", "", "Source Storage Account")
         self.file_type = get_param_value(self.dbutils, "FileType").lower()
-
         # Remove stale widgets after determining the current file type
         self._remove_widgets()
 
         # Add widgets based on the current file type
         widget_definitions = self.WIDGET_CONFIG.get(self.file_type, [])
+        widget_definitions.extend(self.CONSTANT_WIDGETS)
         for widget in widget_definitions:
-            self.dbutils.widgets.text(widget["name"], widget["default"], widget["label"])
-
+            if widget["name"] not in self.dbutils.widgets.__dict__["_widgets"]:
+                self.dbutils.widgets.text(widget["name"], widget["default"], widget["label"])
         self.logger.log_info(f"Widgets initialized for file type: {self.file_type}")
         self.logger.log_debug(f"Widget Definitions: {widget_definitions}")
 
@@ -105,7 +117,6 @@ class Config:
 
         # Get the current file type and the relevant widgets for it
         current_widget_names = {widget["name"] for widget in self.WIDGET_CONFIG.get(self.file_type, [])}
-
         for widget_group in self.WIDGET_CONFIG.values():
             for widget in widget_group:
                 widget_name = widget["name"]
@@ -162,20 +173,21 @@ class Config:
     def _generate_data_paths(self) -> Tuple[str, str]:
         """Generates paths for source and destination data folders."""
         self.logger.log_debug("Generating paths for source and destination data folders...")
-        source_path = generate_source_path(self.source_environment, self.source_datasetidentifier)
-        destination_path = generate_source_path(self.destination_environment, self.source_datasetidentifier)
+        source_path = generate_source_path(self.source_environment, self.source_datasetidentifier, self._data_base_path)
+        destination_path = generate_source_path(self.destination_environment, self.source_datasetidentifier, self._data_base_path)
         self.logger.log_debug(f"Source Path: {source_path}")
         self.logger.log_debug(f"Destination Path: {destination_path}")
         return source_path, destination_path
 
-    def _generate_schema_path(self) -> str:
+    def _generate_schema_path(self) -> Union[str| None]:
         """Generates the schema folder path if applicable."""
         if self.schema_folder_name:
-            schema_path = f"{generate_schema_path(self.source_environment, self.schema_folder_name, self.source_datasetidentifier)}".rstrip('/')
+            schema_path = f"{generate_schema_path(self.source_environment, self.schema_folder_name, self.source_datasetidentifier, self._data_base_path)}".rstrip('/')
             self.logger.log_debug(f"Schema Path: {schema_path}")
             return schema_path
         self.logger.log_debug("No schema folder specified; skipping schema path generation.")
         return None
+
 
     def _validate_config(self):
         """Performs validation of configuration parameters."""
