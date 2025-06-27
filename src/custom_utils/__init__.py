@@ -1,5 +1,5 @@
 # File: custom_utils/__init__.py
-__version__ = "0.7.9"
+__version__ = "1.0.0"
 # Attempt to retrieve dbutils from the global scope
 dbutils = globals().get("dbutils", None)
 
