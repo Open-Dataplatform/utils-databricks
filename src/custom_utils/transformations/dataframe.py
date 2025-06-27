@@ -324,10 +324,17 @@ class DataFrameTransformer:
             # Step 1: Load the schema file
             schema_content = self.dbutils.fs.head(schema_file_path)
             json_schema = json.loads(schema_content)
-            print(json_schema)
-
             # Step 2: Retrieve or initialize definitions
-            definitions = definitions or json_schema.get("definitions", {})
+            for key in json_schema.keys():
+                if "defs" in key:
+                    definitions_key: str = key
+                    break
+                elif "definitions" in key:
+                    definitions_key: str = key
+                    break
+                else:
+                    definitions_key: str = "definitions"
+            definitions = definitions or json_schema.get(definitions_key, {})
 
             # Helper function to resolve $ref fields
             def resolve_ref(ref):
@@ -339,6 +346,20 @@ class DataFrameTransformer:
 
             # Helper function to parse field types
             def parse_type(field_props):
+                if "anyOf" in field_props or "oneOf" in field_props:
+                    if "anyOf" in field_props:
+                        key = "anyOf"
+                    else:
+                        key = "oneOf"
+                    list_types = []
+                    for t in field_props[key]:
+                        if "type" in t.keys():
+                            if t["type"] == "null":
+                                continue
+                        list_types.append(t)
+                    assert len(list_types)==1, f"Too many valid data types were given to field property {field_props}. Expected only one not null type, but recieved {list_types}."
+                    field_props = list_types[0]
+
                 if field_props is None:
                     return StringType()
                 if isinstance(field_props, list):
