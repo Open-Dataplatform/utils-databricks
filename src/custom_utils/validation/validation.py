@@ -81,7 +81,7 @@ class Validator:
 
     def _verify_file_folder(self) -> Tuple[str, Optional[str], List[str], List[str]]:
         data_directory_path = self.file_handler.normalize_path(self.config.source_data_folder_path)
-        if "unittest_data_path" in self.config.dbutils.widgets.__dict__["_widgets"]:
+        if "unittest_data_path" in self.config.dbutils.widgets.getAll():
             data_directory_path = self.config.source_data_folder_path
         self.logger.log_debug(f"Checking data source folder: {data_directory_path}")
 

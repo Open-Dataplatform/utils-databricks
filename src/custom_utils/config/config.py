@@ -52,7 +52,7 @@ class Config:
         self.debug = self.logger.debug
         
         # Parameter to enable developer mode and unittesting. Should only be modified for unittesting purposes or local data fetching
-        if self.dbutils is not None and "unittest_data_path" in self.dbutils.widgets.__dict__["_widgets"]:
+        if self.dbutils is not None and "unittest_data_path" in self.dbutils.widgets.getAll():
             self._data_base_path: str = self.dbutils.widgets.get("unittest_data_path")
         else:
             self._data_base_path: str = ""
@@ -106,7 +106,7 @@ class Config:
         widget_definitions = self.WIDGET_CONFIG.get(self.file_type, [])
         widget_definitions.extend(self.CONSTANT_WIDGETS)
         for widget in widget_definitions:
-            if widget["name"] not in self.dbutils.widgets.__dict__["_widgets"]:
+            if widget["name"] not in self.dbutils.widgets.getAll():
                 self.dbutils.widgets.text(widget["name"], widget["default"], widget["label"])
         self.logger.log_info(f"Widgets initialized for file type: {self.file_type}")
         self.logger.log_debug(f"Widget Definitions: {widget_definitions}")
