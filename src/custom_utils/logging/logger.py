@@ -55,21 +55,6 @@ class Logger:
         """Set logging level based on debug flag."""
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
         self.debug = debug  # ✅ Ensure self.debug is properly updated
-        
-    def update_debug_mode(self, debug: bool, log_update: bool = True):
-        """
-        Dynamically updates the debug mode and adjusts the logger level accordingly.
-
-        Args:
-            debug (bool): If True, enables debug-level logging. Otherwise, sets it to info-level.
-            log_update (bool): If True, logs the update message (set to False inside __init__()).
-        """
-        self.debug = debug
-        self.set_level(debug)  # ✅ Adjust log level dynamically
-
-        # ✅ Log only if explicitly requested (to prevent duplicate logs in __init__()).
-        if log_update:
-            self.log_info(f"🔄 Debug mode updated. New debug state: {self.debug}")
 
     def update_debug_mode(self, debug: bool):
         """Update the debug mode and adjust the logger level."""
