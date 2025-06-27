@@ -43,7 +43,7 @@ class DataFrameTransformer:
 
         # Validate configuration and initialize dbutils
         self.dbutils = self.config.dbutils
-        self.unittest = False if not "unittest_data_path" in self.dbutils.widgets.__dict__["_widgets"] else True
+        self.unittest = False if not "unittest_data_path" in self.dbutils.widgets.getAll() else True
         self.logger.log_block("DataFrameTransformer Initialization", [
             f"Debug Mode: {self.debug}",
             f"Logger: {'Custom Logger' if logger else 'Config Logger'}",
