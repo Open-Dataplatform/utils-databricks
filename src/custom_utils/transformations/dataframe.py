@@ -591,13 +591,8 @@ class DataFrameTransformer:
             df_with_filename = df_binary.withColumn("json_string", F.col("content").cast("string")) 
 
             # Step 3: Parse JSON data
-            spark = SparkSession.builder.getOrCreate()
-            if schema:
-                df_parsed = df_with_filename.withColumn("json", F.from_json(F.col("json_string"), schema))
-                df_parsed = df_parsed.select(F.col("path"), F.col("json.*")).withColumnRenamed("path", "input_file_name")
-            else:
-                df_parsed = df_with_filename.withColumn("json", F.from_json(F.col("json_string")))
-                df_parsed = df_parsed.select(F.col("path"), F.col("json.*")).withColumnRenamed("path", "input_file_name")
+            df_parsed = df_with_filename.withColumn("json", F.from_json(F.col("json_string"), schema))
+            df_parsed = df_parsed.select(F.col("path"), F.col("json.*")).withColumnRenamed("path", "input_file_name")
 
             # Step 4: Combine metadata and reorder columns
             self.logger.log_debug("Adding input_file_name and reordering columns...")
