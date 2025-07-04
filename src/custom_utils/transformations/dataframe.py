@@ -544,6 +544,7 @@ class DataFrameTransformer:
         self.logger.log_end(method_name, success=False)
         raise RuntimeError(error_message)
 
+
     def _process_json_data(self, params: dict, depth_level: int) -> Union[Tuple[DataFrame, DataFrame], Tuple[None, None]]:
         """
         Processes and flattens JSON files.
@@ -587,20 +588,20 @@ class DataFrameTransformer:
             ], level="debug")
 
             # Step 2: Prepare JSON string and filename columns
-            df_with_filename = df_binary.withColumn("json_string", F.col("content").cast("string")) \
-                .withColumn("input_file_name", F.col("path"))
+            df_with_filename = df_binary.withColumn("json_string", F.col("content").cast("string")) 
 
             # Step 3: Parse JSON data
             spark = SparkSession.builder.getOrCreate()
             if schema:
-                df_parsed = spark.read.schema(schema).json(df_with_filename.select("json_string").rdd.map(lambda row: row.json_string))
+                df_parsed = df_with_filename.withColumn("json", F.from_json(F.col("json_string"), schema))
+                df_parsed = df_parsed.select(F.col("path"), F.col("json.*")).withColumnRenamed("path", "input_file_name")
             else:
-                df_parsed = spark.read.json(df_with_filename.select("json_string").rdd.map(lambda row: row.json_string))
+                df_parsed = df_with_filename.withColumn("json", F.from_json(F.col("json_string")))
+                df_parsed = df_parsed.select(F.col("path"), F.col("json.*")).withColumnRenamed("path", "input_file_name")
 
             # Step 4: Combine metadata and reorder columns
             self.logger.log_debug("Adding input_file_name and reordering columns...")
-            df_initial = df_parsed.withColumn("input_file_name", F.input_file_name())
-            df_initial = self._reorder_columns(df_initial)
+            df_initial = self._reorder_columns(df_parsed)
 
             # Print initial schema
             self.logger.log_dataframe_summary(df_initial, "Initial DataFrame", level="info")
