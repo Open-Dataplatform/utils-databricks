@@ -6,12 +6,14 @@ import logging
 import json
 import time
 import pandas as pd
+from threading import Thread
 from io import BytesIO
 from pyspark.sql.types import (
     ArrayType, StructField, StringType, BooleanType, DoubleType, IntegerType, LongType,
     TimestampType, DecimalType, DateType, BinaryType, StructType, FloatType, DataType
 )
 from pathlib import Path
+from tqdm import tqdm
 
 from ..logging.logger import Logger
 from ..config.config import Config
@@ -445,7 +447,7 @@ class DataFrameTransformer:
             self._handle_processing_error("_handle_json_processing", e)
             return None, None
 
-    def _handle_xml_processing(self, params: dict, root_name: str, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
+    def _handle_xml_processing(self, params: dict, root_name: str, depth_level: int = None) -> Tuple[DataFrame, DataFrame]:
         """
         Handles processing and flattening of XML files.
 
@@ -468,7 +470,6 @@ class DataFrameTransformer:
             f"📜 Matched Schema Files ({len(matched_schemas)}): {[schema['name'] for schema in matched_schemas]}",
             f"🔍 Root Name: {root_name}",
             f"🛠 Depth Level: {depth_level if depth_level is not None else 'No limit'}"
-            f"📦 Batch Size: {batch_size}"
         ], level="debug")
 
         # Extract parameters
@@ -480,11 +481,8 @@ class DataFrameTransformer:
             # Process XML data
             df_initial, df_flattened = self._process_xml_data(
                 matched_data_files=matched_data_files,
-                schema_path=schema_path,
-                matched_schema_files=matched_schema_files,
                 root_name=root_name,
                 depth_level=depth_level,
-                batch_size=batch_size
             )
 
             # Log success
@@ -544,6 +542,7 @@ class DataFrameTransformer:
         self.logger.log_end(method_name, success=False)
         raise RuntimeError(error_message)
 
+
     def _process_json_data(self, params: dict, depth_level: int) -> Union[Tuple[DataFrame, DataFrame], Tuple[None, None]]:
         """
         Processes and flattens JSON files.
@@ -587,20 +586,15 @@ class DataFrameTransformer:
             ], level="debug")
 
             # Step 2: Prepare JSON string and filename columns
-            df_with_filename = df_binary.withColumn("json_string", F.col("content").cast("string")) \
-                .withColumn("input_file_name", F.col("path"))
+            df_with_filename = df_binary.withColumn("json_string", F.col("content").cast("string")) 
 
             # Step 3: Parse JSON data
-            spark = SparkSession.builder.getOrCreate()
-            if schema:
-                df_parsed = spark.read.schema(schema).json(df_with_filename.select("json_string").rdd.map(lambda row: row.json_string))
-            else:
-                df_parsed = spark.read.json(df_with_filename.select("json_string").rdd.map(lambda row: row.json_string))
+            df_parsed = df_with_filename.withColumn("json", F.from_json(F.col("json_string"), schema))
+            df_parsed = df_parsed.select(F.col("path"), F.col("json.*")).withColumnRenamed("path", "input_file_name")
 
             # Step 4: Combine metadata and reorder columns
-            self.logger.log_debug("Adding input_file_name and reordering columns...")
-            df_initial = df_parsed.withColumn("input_file_name", F.input_file_name())
-            df_initial = self._reorder_columns(df_initial)
+            self.logger.log_debug("Reordering columns...")
+            df_initial = self._reorder_columns(df_parsed)
 
             # Print initial schema
             self.logger.log_dataframe_summary(df_initial, "Initial DataFrame", level="info")
@@ -636,17 +630,29 @@ class DataFrameTransformer:
             self._handle_processing_error("_process_json_data", f"{e} | Context: {error_context}")
             return None, None
 
-    def _process_xml_data(self, matched_data_files: List[str], schema_path: str, matched_schema_files: List[dict], root_name: str, depth_level: int = None, batch_size: int = 1000) -> Tuple[DataFrame, DataFrame]:
+    def _load_xml_file(self, file_path: list[str], root_name: str, spark):
+        try:
+            # Read XML batch
+            df_batch = spark.read.format("xml").options(rowTag=root_name).load(file_path).withColumn("input_file_name", F.lit(file_path))            
+            # Ensure batch data is valid before appending
+            if df_batch is not None and df_batch.count() > 0:
+                df_batch: pd.DataFrame = df_batch.toPandas()
+                self.batch_results.append(df_batch)
+            else:
+                self.logger.log_warning(f"⚠️ File {file_path} produced an empty DataFrame.")
+
+        except Exception as batch_error:
+            self.logger.log_error(f"❌ Error in File {file_path}: {batch_error}")
+            self.batch_results.append(None)
+
+    def _process_xml_data(self, matched_data_files: List[str], root_name: str, depth_level: int = None) -> Tuple[DataFrame, DataFrame]:
         """
         Processes XML files and flattens the data in batches.
 
         Args:
             matched_data_files (List[str]): List of matched XML file names.
-            schema_path (str): Path to the XML schema file.
-            matched_schema_files (List[dict]): List of matched schema files.
             root_name (str): Root name for the XML structure.
             depth_level (int, optional): Maximum depth level for flattening. Defaults to None.
-            batch_size (int, optional): Number of files to process per batch. Defaults to 1000.
 
         Returns:
             Tuple[DataFrame, DataFrame]: Initial parsed DataFrame and the flattened DataFrame.
@@ -656,65 +662,23 @@ class DataFrameTransformer:
         try:
             # Step 1: Resolve file paths
             resolved_file_paths = [f"dbfs:{self.config.source_data_folder_path}/{file}" if not self.unittest else str(Path(self.config.source_data_folder_path)/file) for file in matched_data_files]
-            total_files = len(resolved_file_paths)
 
             # Initialize Spark session
             spark = SparkSession.builder.getOrCreate()
-            batch_results = []
-            batch_times = []  # Store batch durations
-            total_batches = (total_files // batch_size) + (1 if total_files % batch_size > 0 else 0)
+            self.batch_results: list[pd.DataFrame|None] = []
+
 
             total_start_time = time.time()  # Track full process execution time
-
-            for i in range(0, total_files, batch_size):
-                batch_files = resolved_file_paths[i:i + batch_size]
-                batch_number = (i // batch_size) + 1
-                remaining_batches = total_batches - batch_number
-
-                # **PRINT ESTIMATED REMAINING TIME**
-                if batch_times:
-                    avg_batch_time = sum(batch_times) / len(batch_times)
-                    estimated_remaining_time = avg_batch_time * (remaining_batches + 1)
-                    self.logger.log_info(f"⏳ Estimated total remaining time: {estimated_remaining_time:.2f} seconds ({estimated_remaining_time / 60:.2f} minutes).")
-
-                self.logger.log_info(f"📦 Processing batch {batch_number}/{total_batches} - Batch files: {len(batch_files)}")
-
-                # Start time tracking
-                start_time = time.time()
-
-                try:
-                    # Log each file being processed inside the batch (debug level)
-                    file_start_time = time.time()  # Track time for each file
-                    for file_index, file in enumerate(batch_files, start=1):
-                        elapsed_time_per_file = (time.time() - file_start_time) / file_index if file_index > 1 else 0
-                        estimated_time_remaining_files = elapsed_time_per_file * (len(batch_files) - file_index)
-
-                        self.logger.log_debug(
-                            f"🔍 Processing file {file_index}/{len(batch_files)} in batch {batch_number}: {file}"
-                        )
-
-                    # Read XML batch
-                    df_batch = spark.read.format("xml").options(rowTag=root_name).load(",".join(batch_files))
-                    
-                    # Ensure batch data is valid before appending
-                    if df_batch is not None and df_batch.count() > 0:
-                        batch_results.append(df_batch)
-                    else:
-                        self.logger.log_warning(f"⚠️ Batch {batch_number} produced an empty DataFrame.")
-
-                except Exception as batch_error:
-                    self.logger.log_error(f"❌ Error in batch {batch_number}: {batch_error}")
-                    batch_results.append(None)
-
-                # End time tracking
-                elapsed_time = time.time() - start_time
-                batch_times.append(elapsed_time)
-
-                self.logger.log_info(f"✅ Batch {batch_number} completed in {elapsed_time:.2f} seconds.")
-
+            threads = [Thread(target=self._load_xml_file, args=(file_path, root_name, spark)) for file_path in resolved_file_paths]
+            for thread in threads:
+                thread.start()
+                
+            for thread in tqdm(threads, ascii=True, desc="Processing files:"):
+                thread.join()
             # **FILTER OUT None VALUES**
-            batch_results = [df for df in batch_results if df is not None]
-
+            batch_results = [df for df in self.batch_results if df is not None]
+            del self.batch_results
+            
             # **Ensure at least one DataFrame is available**
             if not batch_results:
                 raise RuntimeError("❌ No valid data was processed in any batch.")
@@ -726,9 +690,7 @@ class DataFrameTransformer:
             # **Iteratively Merge DataFrames**
             self.logger.log_info("🔄 Merging all processed batches into a single DataFrame...")
 
-            df_initial = batch_results[0]
-            for df in batch_results[1:]:
-                df_initial = df_initial.unionByName(df, allowMissingColumns=True)
+            df_initial = spark.createDataFrame(pd.concat(batch_results))
 
             # Step 2: Sanitize column names
             sanitized_columns = {col: self._sanitize_column_name(col) for col in df_initial.columns}
@@ -747,8 +709,7 @@ class DataFrameTransformer:
                 df_initial = df_initial.drop(*unwanted_columns)
 
             # Step 4: Reorder and add input_file_name
-            self.logger.log_debug("Adding input_file_name and reordering columns...")
-            df_initial = df_initial.withColumn("input_file_name", F.input_file_name())
+            self.logger.log_debug("Reordering columns...")
             df_initial = self._reorder_columns(df_initial)
 
             # Log initial DataFrame summary
@@ -1096,7 +1057,7 @@ class DataFrameTransformer:
         self.logger.log_end("_flatten_xlsx_df")
         return df_flattened, filtered_conversions
 
-    def process_and_flatten_data(self, depth_level: Optional[int] = None, batch_size: int = 1000) -> Tuple[Union[DataFrame, None], Union[DataFrame, None]]:
+    def process_and_flatten_data(self, depth_level: Optional[int] = None) -> Tuple[Union[DataFrame, None], Union[DataFrame, None]]:
         """
         Main function to process and flatten JSON, XML, or XLSX data.
 
@@ -1152,7 +1113,7 @@ class DataFrameTransformer:
                 # Handles processing and flattening of JSON files
                 "json": lambda: self._handle_json_processing(common_params, depth_level)[:2],
                 # Handles processing and flattening of XML files
-                "xml": lambda: self._handle_xml_processing(common_params, self.config.xml_root_name, depth_level, batch_size)[:2],
+                "xml": lambda: self._handle_xml_processing(common_params, self.config.xml_root_name, depth_level)[:2],
                 # Handles processing of XLSX files
                 "xlsx": lambda: self._handle_xlsx_processing(common_params, self.config.sheet_name)[:2]
             }
