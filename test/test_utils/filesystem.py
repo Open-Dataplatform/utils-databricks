@@ -25,7 +25,7 @@ class fs:
         pass
 
     @staticmethod       
-    def ls(init_path: str):
+    def ls(init_path: str) -> list[FileInfo]:
         if isinstance(init_path, str):
             path: Path = Path(init_path)
             if not path.exists():
@@ -44,13 +44,14 @@ class fs:
             raise RuntimeError(f"path should be a string but received {type(init_path)}")
 
     @staticmethod
-    def _path_to_fileinfo(path: Path) -> FileInfo:
+    def _path_to_fileinfo(path: Path) -> FileInfo|None:
         if path.is_file():
             path = path.expanduser().resolve()
             name: str = path.expanduser().resolve().parts[-1]
             size: int = path.stat().st_size
             modificationTime: float = path.stat().st_mtime
             return FileInfo(path=str(path), name=name, size=size, modificationTime=modificationTime)
+        return None
 
     @staticmethod
     def mkdirs(path: str):

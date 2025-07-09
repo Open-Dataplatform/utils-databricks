@@ -1,3 +1,5 @@
+from typing import Any, Callable
+from databricks.sdk.runtime import dbutils
 class Widgets:
     mandatory_widgets: list = ["SourceStorageAccount",
                                "DestinationStorageAccount",
@@ -11,31 +13,14 @@ class Widgets:
         self.widgets: dict[dict[str, Any]] = {} 
         for widget in Widgets.mandatory_widgets:
             self.text(widget, " ", widget)
+
+def get(self, key:str):
+    val = self.widgets.get(key, None)
+    return val.get("value")
+
+def getAll(self):
+    return self.widgets._widgets
         
-    def dropdown(self, name: str, default: str, values: list, label: str):
-        self.dropdowns[name] = {"default": default,
-                               "value": default,
-                               "values": values,
-                               "label" : label}
-        self.widgets[name] = self.dropdowns[name].copy()
-
-    def text(self, name: str, default: str, label: str):
-        self.texts[name] = {"default": default,
-                               "value": default,
-                               "label" : label}
-        self.widgets[name] = self.texts[name].copy()
-
-    def get(self, key:str):
-        val = self.widgets.get(key, None)
-        print(val)
-        return val.get("value")
-    
-    @staticmethod
-    def remove(*args):
-        pass
-    
-    def __str__(self):
-        return f"widgets: {self.widgets}"
-    
-    def __call__(self):
-        return self.widgets
+def set_getAll(obj: dbutils) -> None:
+    assert isinstance(obj, dbutils), f"only dbutils objects are allowed, received obejct of {type(obj)}"
+    dbutils.widgets.getAll = lambda : getAll(dbutils)
