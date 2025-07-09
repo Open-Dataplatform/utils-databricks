@@ -3,11 +3,13 @@ from typing import Any
 
 from databricks.sdk.runtime import dbutils
 from custom_utils import Config
+from ..test_utils.widgets import set_getAll
 
 class TestConfig:
     def setup_method(self, method: callable):
         print(f"Setting up {method}")
         self.dbutils: dbutils = dbutils
+        set_getAll(self.dbutils)
         self.debug: bool = False
         self.config = Config(dbutils=self.dbutils, debug=self.debug)
 
