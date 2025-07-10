@@ -13,7 +13,7 @@ class TestDataStorageManager:
         self.storage_manager: DataStorageManager = DataStorageManager(logger=None)
         self.dbutils: dbutils = dbutils
         set_getAll(self.dbutils)
-        self.dbutils.fs.ls = fs().ls
+        self.dbutils.fs.ls = lambda *args, **kwargs: fs().ls(*args, **kwargs)
         
         
     def teardown_method(self, method: callable):
