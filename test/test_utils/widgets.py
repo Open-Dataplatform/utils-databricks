@@ -22,5 +22,5 @@ def getAll(self):
     return self.widgets._widgets
         
 def set_getAll(obj: dbutils) -> None:
-    assert isinstance(obj, dbutils), f"only dbutils objects are allowed, received obejct of {type(obj)}"
-    dbutils.widgets.getAll = lambda : getAll(dbutils)
+    obj.widgets.getAll = lambda *args, **kwargs: getAll(dbutils, *args, **kwargs)
+

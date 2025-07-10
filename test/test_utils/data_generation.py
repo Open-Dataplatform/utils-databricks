@@ -111,10 +111,12 @@ def generate_files(data_dump_dir: Path, n_files: int = 2, n_data_points: int = 3
     data_dump_dir.mkdir(exist_ok=True, parents=True)
     schema_dir: Path = (data_dump_dir.parent/"schemachecks")/data_dump_dir.name
     schema_dir.mkdir(exist_ok=True, parents=True)
+    # 10 is an arbitrary random seed set by AJKKU
+    seed_base: int = 10 if n_files <= 10 else n_files
+    # Every second file is a duplicate. 2 is an arbitrary choice made by AJKKU
     if include_duplicates:
-        seed_base: int = 2 # Every second file is a duplicate. This is an arbitrary choice made by AJKKU
-    else:
-        seed_base: int = n_files
+        seed_base = 2
+
     for i in range(n_files):
         data: list[dict[str, Any]] = _generate_data(n=n_data_points, seed=i%seed_base)
         json_data: str = dumps(data, indent=4, cls=DateTimeEncoder)
