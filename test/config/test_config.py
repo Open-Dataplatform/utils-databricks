@@ -31,10 +31,3 @@ class TestConfig:
         initial_namespace = namespace.copy()
         self.config.unpack(namespace=namespace)
         assert initial_namespace != namespace
-        
-if __name__ == "__main__":
-    dbutils: dbutils = dbutils
-    debug: bool = True
-    dbutils.widgets.dropdown("FileType", "json", ["json", "xlsx", "xml"], "File Type")
-    print(dbutils.widgets.get("FileType"))
-    config = Config(dbutils=dbutils, debug=debug)

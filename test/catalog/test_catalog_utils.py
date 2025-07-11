@@ -1,5 +1,4 @@
 import pytest
-from typing import Any
 from pathlib import Path
 
 from uuid import uuid4
@@ -44,6 +43,3 @@ class TestDataStorageManager:
     def test_normalize_key_columns(self, key_columns, expected_returns):
         return_list: list[str] = self.storage_manager.normalize_key_columns(key_columns)
         assert return_list == expected_returns
-        
-    def test_create_or_replace_table(self):
-        pass

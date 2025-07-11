@@ -1,26 +1,19 @@
-from typing import Any, Callable
+from typing import Any
 from databricks.sdk.runtime import dbutils
-class Widgets:
-    mandatory_widgets: list = ["SourceStorageAccount",
-                               "DestinationStorageAccount",
-                               "SourceContainer",
-                               "SourceDatasetidentifier",
-                               "SourceFileName",
-                               "KeyColumns"]
-    def __init__(self):
-        self.dropdowns: dict[dict[str, Any]] = {}
-        self.texts: dict[dict[str, Any]] = {}
-        self.widgets: dict[dict[str, Any]] = {} 
-        for widget in Widgets.mandatory_widgets:
-            self.text(widget, " ", widget)
 
-def get(self, key:str):
-    val = self.widgets.get(key, None)
-    return val.get("value")
+def getAll(self) -> dict[str, Any]:
+    """Mimics getAll method from databricks.
 
-def getAll(self):
+    Returns:
+        dict[str, Any]:dict of all widgets in dbutils object.
+    """
     return self.widgets._widgets
         
 def set_getAll(obj: dbutils) -> None:
+    """Sets the getAll object in dbutils. Can be used for other methods.
+
+    Args:
+        obj (dbutils): dbutils object to receive the method.
+    """
     obj.widgets.getAll = lambda *args, **kwargs: getAll(dbutils, *args, **kwargs)
 
