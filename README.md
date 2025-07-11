@@ -17,3 +17,6 @@ Make sure to go through the next section after updating the version.
 ## Updating the template
 After you released a new version, make sure to update the version tag in the beginning of transformation_template.ipynb.
 Also make sure that all the used functions are still working in the new version.
+
+## Installing custom_utils locally to use the test Module
+Run "python -m pip install -e ." from the root directory.
