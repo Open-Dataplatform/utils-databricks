@@ -2,20 +2,16 @@ import pytest
 
 from typing import Any
 
-from .test_utils import dbutils
-from custom_utils.adf import (
-    get_parameter,
-    #get_config_parameter,
-    #get_source_config,
-    #get_destination_config,
-    is_executed_by_adf
-)
+from databricks.sdk.runtime import dbutils
+from .test_utils.widgets import set_getAll
+from custom_utils.adf import get_parameter
 
 class testadf:
     
     def setup_method(self, method: callable):
         print(f"Setting up {method}")
-        self.dbutils: dbutils = dbutils()
+        self.dbutils: dbutils = dbutils
+        set_getAll(self.dbutils)
         self.param_name: str = "TestParam"
 
     def teardown_method(self, method: callable):
@@ -28,8 +24,6 @@ class testadf:
         return_value: Any = get_parameter(dbutils=self.dbutils,
                                           parameter_name=self.param_name,
                                           default_value=value)
-        assert self.param_name in self.dbutils.widgets
+        assert self.param_name in self.dbutils.widgets.getAll()
         assert return_value == value
-
-    # def test_get_config_parameter(self):
         

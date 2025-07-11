@@ -8,7 +8,7 @@ from pathlib import Path
 import random
 from json import dumps, JSONEncoder
 from typing import Any
-from uuid import uuid4, UUID
+from uuid import UUID
 from time import sleep
 
 class DateTimeEncoder(JSONEncoder):
@@ -56,6 +56,8 @@ def _generate_data(n: int =100, seed: int = 42, include_date_time: bool = True, 
     return data
 
 def get_schema():
+    """Returns json schema string.
+    """
     schema_string: str = '''
 {
     "id": "https://example.com/address.schema.json",
@@ -108,6 +110,14 @@ def get_schema():
     
     
 def generate_files(data_dump_dir: Path, n_files: int = 2, n_data_points: int = 3, include_duplicates: bool = True):
+    """Generates json data files
+
+    Args:
+        data_dump_dir (Path): Path to directory to dump data.
+        n_files (int, optional): number of files to generate. Defaults to 2.
+        n_data_points (int, optional): Number of data points per file. Defaults to 3.
+        include_duplicates (bool, optional): Whether duplicate rows should be included in other files. Defaults to True.
+    """
     data_dump_dir.mkdir(exist_ok=True, parents=True)
     schema_dir: Path = (data_dump_dir.parent/"schemachecks")/data_dump_dir.name
     schema_dir.mkdir(exist_ok=True, parents=True)
@@ -116,7 +126,7 @@ def generate_files(data_dump_dir: Path, n_files: int = 2, n_data_points: int = 3
     # Every second file is a duplicate. 2 is an arbitrary choice made by AJKKU
     if include_duplicates:
         seed_base = 2
-
+    random.seed(seed_base)
     for i in range(n_files):
         data: list[dict[str, Any]] = _generate_data(n=n_data_points, seed=i%seed_base)
         json_data: str = dumps(data, indent=4, cls=DateTimeEncoder)
@@ -124,16 +134,10 @@ def generate_files(data_dump_dir: Path, n_files: int = 2, n_data_points: int = 3
         date_time: datetime = datetime.now()
         
         date_time_ext: str = date_time.strftime("%Y%m%dT%H%M%S"+str(round(date_time.microsecond/10000)).zfill(2))
-        uuid_ext: str = str(uuid4()).upper()
+        uuid_ext: str = str(UUID(bytes=bytes(random.getrandbits(8) for _ in range(16)))).upper()
         
         with open(data_dump_dir/f"custom_utils_test_data_{date_time_ext}_{uuid_ext}.json", "w") as f:
             f.write(json_data)
     schema: str = get_schema()
     with open(schema_dir/f"custom_utils_test_data_schema.json", "w") as f:
         f.write(schema)    
-
-
-if __name__ == '__main__':
-    
-    data_dump_path: Path = Path(__file__).parent/"test_data"
-    generate_files(data_dump_path)
