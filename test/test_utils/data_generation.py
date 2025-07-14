@@ -63,48 +63,54 @@ def get_schema():
     "id": "https://example.com/address.schema.json",
     "schema": "https://json-schema.org/draft/2020-12/schema",
     "description": "An address similar to http://microformats.org/wiki/h-card",
-    "type": "array",
-    "items": {
-        "type": "object",
-        "properties": {
-        "A": {
-        "type": "number"
-        },
-        "B": {
-        "type": "number"
-        },
-        "C": {
-        "type": "integer"
-        },
-        "D": {
-        "type": "number"
-        },
-        "E": {
-        "type": "string"
-        },
-        "F": {
-        "type": "string"
-        },
-        "G": {
-        "type": "string",
-        "format": "date-time"
-        },
-        "H": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string",
-                    "format": "uuid"
+    "type": "object",
+    "properties": {
+        "data": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                "A": {
+                "type": "number"
                 },
-                "value": {
-                    "type": "integer"
+                "B": {
+                "type": "number"
+                },
+                "C": {
+                "type": "integer"
+                },
+                "D": {
+                "type": "number"
+                },
+                "E": {
+                "type": "string"
+                },
+                "F": {
+                "type": "string"
+                },
+                "G": {
+                "type": "string",
+                "format": "date-time"
+                },
+                "H": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "value": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": ["id", "value"]
                 }
             },
-            "required": ["id", "value"]
+            "required": [ "A", "B", "C", "D", "E", "F", "G", "H"]
+            }
         }
     },
-    "required": [ "A", "B", "C", "D", "E", "F", "G", "H"]
-    }
+    "required": ["data"]
 }'''
     return schema_string
     
@@ -129,7 +135,7 @@ def generate_files(data_dump_dir: Path, n_files: int = 2, n_data_points: int = 3
     random.seed(seed_base)
     for i in range(n_files):
         data: list[dict[str, Any]] = _generate_data(n=n_data_points, seed=i%seed_base)
-        json_data: str = dumps(data, indent=4, cls=DateTimeEncoder)
+        json_data: str = dumps({"data": data}, indent=4, cls=DateTimeEncoder)
         sleep(0.1)
         date_time: datetime = datetime.now()
         

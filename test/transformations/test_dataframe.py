@@ -6,27 +6,34 @@ from databricks.sdk.runtime import dbutils
 from shutil import rmtree
 from pyspark.sql import DataFrame, Row, SparkSession
 from pyspark.sql.types import (
-    ArrayType, StructField, StringType, BooleanType, DoubleType, IntegerType, LongType,
-    TimestampType, DecimalType, DateType, BinaryType, StructType, FloatType, DataType
+    StructField,
+    StringType,
+    DoubleType,
+    DecimalType,
+    StructType,
+    ArrayType,
+    IntegerType
 )
+from pyspark.sql.functions import col
 from typing import Any, Generator
 import json
 
-from ..test_utils.data_generation import generate_files, get_schema
+from ..test_utils.data_generation import generate_files
 from ..test_utils.filesystem import fs
 from ..test_utils.widgets import set_getAll
 
-def equal_dataframes(df1: DataFrame, df2: DataFrame) -> bool:
+def equal_dataframes(df1: DataFrame, df2: DataFrame, order_by: str) -> bool:
     """Checks if two dataframes are equal
 
     Args:
         df1 (DataFrame): First dataframe.
         df2 (DataFrame): Second dataframe.
+        order_by (str): Column to order dataframes by.
 
     Returns:
         bool: True if dataframes are equal, else False.
     """
-    return (df1.schema == df2.schema) and (df1.orderBy(df1.A).collect() == df2.orderBy(df2.A).collect())
+    return (df1.schema == df2.schema) and (df1.orderBy(col(order_by)).collect() == df2.orderBy(col(order_by)).collect())
 
 def count_json_rows(data: list|dict) -> int:
     """Counts flattened structure of json data
@@ -63,7 +70,7 @@ def get_init_df() -> DataFrame:
         DataFrame: Static test data
     """
     spark = SparkSession.builder.getOrCreate()
-    data: list[dict[str, Any]] = [
+    data1: list[dict[str, list[dict[str, Any]]]] = [{"data" : [
             {
                 "A": 0.942,
                 "B": 0.421,
@@ -93,7 +100,10 @@ def get_init_df() -> DataFrame:
                 "F": "str_0",
                 "G": "2023-01-04T00:00:00",
                 "H": Row(id= "ceeb8cea-0317-48d7-a6b5-d3c8aba0009c", value= 7)
-            },
+            }]
+        }
+    ]
+    data2: list[dict[str, list[dict[str, Any]]]] = [{"data" : [                                            
             {
                 "A": 1.288,
                 "B": 0.764,
@@ -125,17 +135,27 @@ def get_init_df() -> DataFrame:
                 "H": Row(id= "f34aed05-6ad6-4a8e-aca4-192fa1feb9dc", value= 4)
             }
         ]
-    schema: StructType = StructType([StructField('A', DoubleType(), True), 
-                         StructField('B', DoubleType(), True), 
-                         StructField('C', LongType(), True), 
-                         StructField('D', DoubleType(), True), 
-                         StructField('E', StringType(), True), 
-                         StructField('F', StringType(), True), 
-                         StructField('G', StringType(), True), 
-                         StructField('H', StructType([StructField('id', StringType(), True), 
-                                                      StructField('value', LongType(), True)]), True)])
-    df: DataFrame = spark.createDataFrame(data, schema)
+    }]
+    schema: StructType = StructType([StructField('data', 
+                                                 ArrayType(StructType([
+                                                     StructField('A', DoubleType(), True), 
+                                                     StructField('B', DoubleType(), True), 
+                                                     StructField('C', IntegerType(), True), 
+                                                     StructField('D', DoubleType(), True), 
+                                                     StructField('E', StringType(), True), 
+                                                     StructField('F', StringType(), True), 
+                                                     StructField('G', StringType(), True), 
+                                                     StructField('H', StructType([
+                                                         StructField('id', StringType(), True), 
+                                                         StructField('value', IntegerType(), True)]), 
+                                                                 True)]), 
+                                                           True), 
+                                                 True)])
+    df1: DataFrame = spark.createDataFrame(data1, schema)
+    df2: DataFrame = spark.createDataFrame(data2, schema)
+    df: DataFrame = df1.union(df2)
     return df
+
 def get_flat_df() -> DataFrame:
     """Gets static flattened test data
 
@@ -145,85 +165,85 @@ def get_flat_df() -> DataFrame:
     spark = SparkSession.builder.getOrCreate()
     data: list[dict[str, Any]] = [
             {
-                "A": 0.942,
-                "B": 0.421,
-                "C": 33,
-                "D": 3.366,
-                "E": "milk",
-                "F": "str_6",
-                "G": "2023-01-02T00:00:00",
-                "H_id": "ebc8d44d-f77a-4b95-a4e8-3781234823c1",
-                "H_value": 1
+                "data_A": 0.942,
+                "data_B": 0.421,
+                "data_C": 33,
+                "data_D": 3.366,
+                "data_E": "milk",
+                "data_F": "str_6",
+                "data_G": "2023-01-02T00:00:00",
+                "data_H_id": "ebc8d44d-f77a-4b95-a4e8-3781234823c1",
+                "data_H_value": 1
             },
             {
-                "A": -1.397,
-                "B": 0.618,
-                "C": 32,
-                "D": 4.363,
-                "E": "water",
-                "F": "str_9",
-                "G": "2023-01-03T00:00:00",
-                "H_id": "e6254f19-ba12-46d9-af54-788f195a6f50",
-                "H_value": 9
+                "data_A": -1.397,
+                "data_B": 0.618,
+                "data_C": 32,
+                "data_D": 4.363,
+                "data_E": "water",
+                "data_F": "str_9",
+                "data_G": "2023-01-03T00:00:00",
+                "data_H_id": "e6254f19-ba12-46d9-af54-788f195a6f50",
+                "data_H_value": 9
             },
             {
-                "A": -0.43,
-                "B": 0.553,
-                "C": 56,
-                "D": 2.005,
-                "E": "oil",
-                "F": "str_0",
-                "G": "2023-01-04T00:00:00",
-                "H_id": "ceeb8cea-0317-48d7-a6b5-d3c8aba0009c",
-                "H_value": 7
+                "data_A": -0.43,
+                "data_B": 0.553,
+                "data_C": 56,
+                "data_D": 2.005,
+                "data_E": "oil",
+                "data_F": "str_0",
+                "data_G": "2023-01-04T00:00:00",
+                "data_H_id": "ceeb8cea-0317-48d7-a6b5-d3c8aba0009c",
+                "data_H_value": 7
             },
             {
-                "A": 1.288,
-                "B": 0.764,
-                "C": 32,
-                "D": 0.125,
-                "E": "sugar",
-                "F": "str_7",
-                "G": "2023-01-02T00:00:00",
-                "H_id": "78a661c9-3518-4c07-a4d5-636e9bc3c400",
-                "H_value": 7
+                "data_A": 1.288,
+                "data_B": 0.764,
+                "data_C": 32,
+                "data_D": 0.125,
+                "data_E": "sugar",
+                "data_F": "str_7",
+                "data_G": "2023-01-02T00:00:00",
+                "data_H_id": "78a661c9-3518-4c07-a4d5-636e9bc3c400",
+                "data_H_value": 7
             },
             {
-                "A": 1.449,
-                "B": 0.266,
-                "C": 29,
-                "D": 0.894,
-                "E": "flour",
-                "F": "str_5",
-                "G": "2023-01-03T00:00:00",
-                "H_id": "070506a6-8a02-40e1-a1af-37f86cb90787",
-                "H_value": 3
+                "data_A": 1.449,
+                "data_B": 0.266,
+                "data_C": 29,
+                "data_D": 0.894,
+                "data_E": "flour",
+                "data_F": "str_5",
+                "data_G": "2023-01-03T00:00:00",
+                "data_H_id": "070506a6-8a02-40e1-a1af-37f86cb90787",
+                "data_H_value": 3
             },
             {
-                "A": 0.203,
-                "B": 0.553,
-                "C": 44,
-                "D": 0.262,
-                "E": "egg",
-                "F": "str_7",
-                "G": "2023-01-04T00:00:00",
-                "H_id": "f34aed05-6ad6-4a8e-aca4-192fa1feb9dc",
-                "H_value": 4
+                "data_A": 0.203,
+                "data_B": 0.553,
+                "data_C": 44,
+                "data_D": 0.262,
+                "data_E": "egg",
+                "data_F": "str_7",
+                "data_G": "2023-01-04T00:00:00",
+                "data_H_id": "f34aed05-6ad6-4a8e-aca4-192fa1feb9dc",
+                "data_H_value": 4
             }
         ]
-    schema: StructType = StructType([StructField('A', DoubleType(), True), 
-                         StructField('B', DoubleType(), True), 
-                         StructField('C', LongType(), True), 
-                         StructField('D', DoubleType(), True), 
-                         StructField('E', StringType(), True), 
-                         StructField('F', StringType(), True), 
-                         StructField('G', StringType(), True), 
-                         StructField('H_id', StringType(), True), 
-                         StructField('H_value', LongType(), True)])
+    schema: StructType = StructType([StructField('data_A', DoubleType(), True), 
+                         StructField('data_B', DoubleType(), True), 
+                         StructField('data_C', IntegerType(), True), 
+                         StructField('data_D', DoubleType(), True), 
+                         StructField('data_E', StringType(), True), 
+                         StructField('data_F', StringType(), True), 
+                         StructField('data_G', StringType(), True), 
+                         StructField('data_H_id', StringType(), True), 
+                         StructField('data_H_value', IntegerType(), True)])
     df: DataFrame = spark.createDataFrame(data, schema)
-    df = df.withColumn("A",df.A.cast(DecimalType(38,18)))
-    df = df.withColumn("B",df.B.cast(DecimalType(38,18)))
-    df = df.withColumn("D",df.D.cast(DecimalType(38,18)))
+    df = df.withColumn("data_A",df.data_A.cast(DecimalType(38,18)))
+    df = df.withColumn("data_B",df.data_B.cast(DecimalType(38,18)))
+    df = df.withColumn("data_D",df.data_D.cast(DecimalType(38,18)))
     return df
 
 class TestDataFrameTransformer:
@@ -268,25 +288,25 @@ class TestDataFrameTransformer:
         assert isinstance(df_init, DataFrame) and isinstance(df_flat, DataFrame)
         df_init_test: DataFrame = df_init.drop("input_file_name")
         df_flat_test: DataFrame = df_flat.drop("input_file_name")
-        assert equal_dataframes(df_init_test, df_init_static)
-        assert equal_dataframes(df_flat_test, df_flat_static)
-        assert self._test_input_file_name(df_init)
-        assert self._test_input_file_name(df_flat)
+        assert equal_dataframes(df_init_test, df_init_static, "data")
+        assert equal_dataframes(df_flat_test, df_flat_static, "data_A")
+        assert self._test_input_file_name(df_init, flat_df = False)
+        assert self._test_input_file_name(df_flat, flat_df = True)
     
-    def _test_input_file_name(self, df: DataFrame) -> bool:
+    def _test_input_file_name(self, df: DataFrame, flat_df: bool = False) -> bool:
         assert "input_file_name" in df.columns
         paths: Generator[Path] = Path(self.data_path).glob('**/*.json')
-        local_file_prefix: str = "file:///"
+        local_file_prefix: str = "file:/"
         for path in paths:
-            with open(path, "rb") as f:
-                data = json.load(f)
-
-            json_count: int = count_json_rows(data)
             df_count: int = df.where(df.input_file_name == local_file_prefix+str(path).replace("\\", "/")).count()
-            print(path)
-            print(df.select("input_file_name").first())
-            print("----------------------------")
-            print(json_count, df_count)
-            if json_count != df_count:
-                return False
+            if flat_df:
+                with open(path, "rb") as f:
+                    data = json.load(f)
+
+                json_count: int = count_json_rows(data)
+                if json_count != df_count:
+                    return False
+            else:
+                if not df_count > 0:
+                    return False
         return True

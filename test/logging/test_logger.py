@@ -1,6 +1,4 @@
 import pytest
-import os
-from pathlib import Path
 from custom_utils import Logger
 
 class TestLogger:
