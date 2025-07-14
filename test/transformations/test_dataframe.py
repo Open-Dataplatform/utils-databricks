@@ -299,7 +299,7 @@ class TestDataFrameTransformer:
         local_file_prefix: str = "file:/"
         for path in paths:
             print(f"{path=}")
-            print(df.input_file_name.first())
+            print(df.select("input_file_name").first())
             df_count: int = df.where(df.input_file_name == local_file_prefix+str(path).replace("\\", "/")).count()
             if flat_df:
                 with open(path, "rb") as f:
