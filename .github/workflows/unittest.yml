@@ -34,7 +34,8 @@ jobs:
         python -m pip install databricks-sdk
         python -m pip install .
         if [ -f requirements_dev.txt ]; then pip install -r requirements_dev.txt; fi
-    - script: |
+    - name: Setup .databricks.cfg
+      run: |
         echo "[DEFAULT]" >> ~/.databrickscfg
         echo "host = ${{ vars.DATABRICKS_HOST }}" >> ~/.databrickscfg
         echo "token = ${{secrets.DATABRICKS_TOKEN}}" >> ~/.databrickscfg 
