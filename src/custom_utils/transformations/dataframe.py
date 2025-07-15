@@ -373,17 +373,20 @@ class DataFrameTransformer:
                 if isinstance(json_type, list):
                     json_type = next((t for t in json_type if t != "null"), None)
                 if json_type == "string":
+                    json_format: str = field_props.get("format")
+                    if json_format == "date-time":
+                        return TimestampType()
                     return StringType()
-                if json_type == "integer":
+                elif json_type == "integer":
                     return IntegerType()
-                if json_type == "boolean":
+                elif json_type == "boolean":
                     return BooleanType()
-                if json_type == "number":
+                elif json_type == "number":
                     return DoubleType()
-                if json_type == "array":
+                elif json_type == "array":
                     items = field_props.get("items")
                     return ArrayType(parse_type(items) if items else StringType())
-                if json_type == "object":
+                elif json_type == "object":
                     properties = field_props.get("properties", {})
                     return StructType([StructField(k, parse_type(v), True) for k, v in properties.items()])
                 return StringType()
@@ -541,7 +544,6 @@ class DataFrameTransformer:
         self.logger.log_error(error_message)
         self.logger.log_end(method_name, success=False)
         raise RuntimeError(error_message)
-
 
     def _process_json_data(self, params: dict, depth_level: int) -> Union[Tuple[DataFrame, DataFrame], Tuple[None, None]]:
         """

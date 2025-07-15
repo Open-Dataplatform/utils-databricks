@@ -127,6 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+*py.typed
 
 # IDE
 .idea/
@@ -140,3 +141,6 @@ log.conf
 
 # Sample program
 samples/
+
+# Test data
+*test_data*

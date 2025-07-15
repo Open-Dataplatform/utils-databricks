@@ -189,6 +189,8 @@ class Config:
         return None
 
 
+
+
     def _validate_config(self):
         """Performs validation of configuration parameters."""
         self.logger.log_debug("Validating configuration parameters...")
