@@ -132,7 +132,6 @@ class Logger:
             output_lines.append("📜 SQL Code")
             output_lines.append("-" * 100)
             output_lines.append(f"\n{highlighted_query.strip()}\n")
-            #output_lines.append(end_separator)
 
         # ✅ Log Python query with formatting
         if python_query:
@@ -142,7 +141,6 @@ class Logger:
             output_lines.append("🐍 Python Code")
             output_lines.append("-" * 100)
             output_lines.append(f"\n{highlighted_code.strip()}\n")
-            #output_lines.append(end_separator)
 
         print("\n".join(output_lines))
         print(end_separator + "\n")

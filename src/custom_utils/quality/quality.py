@@ -77,7 +77,7 @@ class DataQualityManager:
         key_columns: Union[str, List[str]], 
         order_by: Optional[Union[str, List[str]]] = None, 
         use_sql: bool = False
-    ) -> DataFrame:
+    ) -> DataFrame|None:
         """
         Handles multiple files by keeping the latest record per key based on 'input_file_name' and the specified 'order_by' columns.
 
@@ -125,6 +125,7 @@ class DataQualityManager:
             return df
         except AnalysisException as e:
             self.logger.log_error(f"Failed to handle multiple files: {e}")
+            return None
 
     def _check_for_duplicates(
         self,
@@ -134,7 +135,7 @@ class DataQualityManager:
         feedback_column: Optional[str] = None,
         remove_duplicates: bool = False,
         use_sql: bool = False
-    ) -> DataFrame:
+    ) -> DataFrame|None:
         """
         Checks for duplicate rows in the DataFrame.
 
@@ -235,6 +236,7 @@ class DataQualityManager:
             return df
         except Exception as e:
             self.logger.log_error(f"Failed to check for duplicates: {e}")
+            return None
 
     def _check_for_nulls(self, spark: SparkSession, df: DataFrame, critical_columns: List[str], use_python: bool = False):
         """Checks for null values in the specified critical columns using either SQL or Python."""
@@ -330,7 +332,7 @@ class DataQualityManager:
                 unmatched_count = referential_df.collect()[0]['unmatched_count']
 
                 if unmatched_count > 0:
-                    sself.logger.log_error(f"Referential integrity check failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
+                    self.logger.log_error(f"Referential integrity check failed: {unmatched_count} records in '{join_column}' do not match the reference data.")
                 else:
                     self.logger.log_message(f"Referential integrity check passed for column '{join_column}'.")
         except Exception as e:
@@ -429,7 +431,7 @@ class DataQualityManager:
         try:
             # Handling multiple files: Keeps the latest record based on `input_file_name` and `order_by`
             if 'Handling Multiple Files' in checks_to_perform:
-                df = self._handle_multiple_files(spark, df, key_columns, order_by=order_by, use_sql=not use_python)
+                df: DataFrame|None = self._handle_multiple_files(spark, df, key_columns, order_by=order_by, use_sql=not use_python)
 
             # Check for duplicates and optionally remove them
             # If feedback_column is provided, use it for ordering during duplicate removal, else fallback to order_by
@@ -437,7 +439,7 @@ class DataQualityManager:
             if 'Duplicate Check' in checks_to_perform:
                 try:
                     # Attempt to handle duplicates and potentially remove them
-                    df = self._check_for_duplicates(
+                    df: DataFrame|None = self._check_for_duplicates(
                         spark, df, key_columns, feedback_column=duplicate_order_column,
                         remove_duplicates=remove_duplicates, use_sql=not use_python
                     )

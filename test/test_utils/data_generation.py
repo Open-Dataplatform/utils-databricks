@@ -10,7 +10,11 @@ from json import dumps, JSONEncoder
 from typing import Any
 from uuid import UUID
 from time import sleep
-
+from dicttoxml import dicttoxml
+from xml.etree.ElementTree import ElementTree, fromstring, tostring
+import pandas as pd
+from xml.dom.minidom import parseString
+from .schema_strings import _get_schema_string
 class DateTimeEncoder(JSONEncoder):
         #Override the default method
         def default(self, obj):
@@ -22,6 +26,28 @@ class DateTimeEncoder(JSONEncoder):
             """
             if isinstance(obj, (date, datetime)):
                 return obj.isoformat()
+
+def _to_xml(data: dict[str, Any] | list[Any] | Any, root: str = "data") -> str:
+    """Turns object to xml string
+
+    Args:
+        data (dict[str, Any]): Data to convert
+
+    Returns:
+        str: xml formatted data str
+    """
+    # xml = f'<{root}>'
+    # if isinstance(data, dict):
+    #     for key, value in data.items():
+    #         xml += _to_xml(value, key)
+    # elif isinstance(data, list):
+    #     for item in data:
+    #         xml += _to_xml(item, 'item')
+    # else:
+    #     xml += str(data)
+    # xml += f'</{root}>'
+    xml: str = dicttoxml({"data": data}, attr_type=False, custom_root=root)
+    return parseString(xml).toprettyxml() #xml_data.to_xml()#parseString(xml).toprettyxml()
 
 def _generate_data(n: int =100, seed: int = 42, include_date_time: bool = True, dec: int = 3) -> list[dict[str, Any]]:
     '''
@@ -55,67 +81,17 @@ def _generate_data(n: int =100, seed: int = 42, include_date_time: bool = True, 
         data.append(row)
     return data
 
-def get_schema():
-    """Returns json schema string.
+def get_schema(format: str = "json"):
+    """Returns schema string for either json or xml.
     """
-    schema_string: str = '''
-{
-    "id": "https://example.com/address.schema.json",
-    "schema": "https://json-schema.org/draft/2020-12/schema",
-    "description": "An address similar to http://microformats.org/wiki/h-card",
-    "type": "object",
-    "properties": {
-        "data": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                "A": {
-                "type": "number"
-                },
-                "B": {
-                "type": "number"
-                },
-                "C": {
-                "type": "integer"
-                },
-                "D": {
-                "type": "number"
-                },
-                "E": {
-                "type": "string"
-                },
-                "F": {
-                "type": "string"
-                },
-                "G": {
-                "type": "string",
-                "format": "date-time"
-                },
-                "H": {
-                    "type": "object",
-                    "properties": {
-                        "id": {
-                            "type": "string",
-                            "format": "uuid"
-                        },
-                        "value": {
-                            "type": "integer"
-                        }
-                    },
-                    "required": ["id", "value"]
-                }
-            },
-            "required": [ "A", "B", "C", "D", "E", "F", "G", "H"]
-            }
-        }
-    },
-    "required": ["data"]
-}'''
-    return schema_string
+    return _get_schema_string(format=format)
+
+def _format_data(data: list[dict[str, Any]], format) -> str:
+    if format == "xml":
+        return _to_xml(data)
+    return dumps({"data": data}, indent=4, cls=DateTimeEncoder)
     
-    
-def generate_files(data_dump_dir: Path, n_files: int = 2, n_data_points: int = 3, include_duplicates: bool = True):
+def generate_files(data_dump_dir: Path, n_files: int = 2, n_data_points: int = 3, include_duplicates: bool = True, format: str = "json"):
     """Generates json data files
 
     Args:
@@ -123,7 +99,13 @@ def generate_files(data_dump_dir: Path, n_files: int = 2, n_data_points: int = 3
         n_files (int, optional): number of files to generate. Defaults to 2.
         n_data_points (int, optional): Number of data points per file. Defaults to 3.
         include_duplicates (bool, optional): Whether duplicate rows should be included in other files. Defaults to True.
+        format (str, optional): Either xml or json, determines output file of data.
     """
+    format = format.lower()
+    assert format in ("json", "xml"), f"format should be either xml or json but received {format}"
+    schema_suffix: str = "json"
+    if format == "xml":
+        schema_suffix = "xsd"
     data_dump_dir.mkdir(exist_ok=True, parents=True)
     schema_dir: Path = (data_dump_dir.parent/"schemachecks")/data_dump_dir.name
     schema_dir.mkdir(exist_ok=True, parents=True)
@@ -135,15 +117,15 @@ def generate_files(data_dump_dir: Path, n_files: int = 2, n_data_points: int = 3
     random.seed(seed_base)
     for i in range(n_files):
         data: list[dict[str, Any]] = _generate_data(n=n_data_points, seed=i%seed_base)
-        json_data: str = dumps({"data": data}, indent=4, cls=DateTimeEncoder)
+        formatted_data: str = _format_data(data, format)
         sleep(0.1)
         date_time: datetime = datetime.now()
         
         date_time_ext: str = date_time.strftime("%Y%m%dT%H%M%S"+str(round(date_time.microsecond/10000)).zfill(2))
         uuid_ext: str = str(UUID(bytes=bytes(random.getrandbits(8) for _ in range(16)))).upper()
         
-        with open(data_dump_dir/f"custom_utils_test_data_{date_time_ext}_{uuid_ext}.json", "w") as f:
-            f.write(json_data)
-    schema: str = get_schema()
-    with open(schema_dir/f"custom_utils_test_data_schema.json", "w") as f:
+        with open(data_dump_dir/f"custom_utils_test_data_{date_time_ext}_{uuid_ext}.{format}", "w") as f:
+            f.write(formatted_data)
+    schema: str = get_schema(format=format)
+    with open(schema_dir/f"custom_utils_test_data_{format}_schema.{schema_suffix}", "w") as f:
         f.write(schema)    
