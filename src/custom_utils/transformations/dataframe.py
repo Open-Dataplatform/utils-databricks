@@ -635,7 +635,9 @@ class DataFrameTransformer:
     def _load_xml_file(self, file_path: list[str], root_name: str, spark):
         try:
             # Read XML batch
-            df_batch = spark.read.format("xml").options(rowTag=root_name).load(file_path).withColumn("input_file_name", F.lit(file_path))            
+            df_batch = spark.read.format("xml").options(rowTag=root_name).load(file_path).withColumn("input_file_name", F.lit(file_path))
+            print("++++++++++++++++++++++++++++++++++++")
+            print(df_batch)
             # Ensure batch data is valid before appending
             if df_batch is not None and df_batch.count() > 0:
                 df_batch: pd.DataFrame = df_batch.toPandas()
@@ -669,7 +671,6 @@ class DataFrameTransformer:
             spark = SparkSession.builder.getOrCreate()
             self.batch_results: list[pd.DataFrame|None] = []
 
-
             total_start_time = time.time()  # Track full process execution time
             threads = [Thread(target=self._load_xml_file, args=(file_path, root_name, spark)) for file_path in resolved_file_paths]
             for thread in threads:
@@ -677,6 +678,8 @@ class DataFrameTransformer:
                 
             for thread in tqdm(threads, ascii=True, desc="Processing files:"):
                 thread.join()
+            print("###########")
+            print(self.batch_results)
             # **FILTER OUT None VALUES**
             batch_results = [df for df in self.batch_results if df is not None]
             del self.batch_results
