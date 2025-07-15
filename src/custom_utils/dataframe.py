@@ -1,5 +1,5 @@
 """Functions to modify Pyspark dataframes"""
-
+# TODO: This module seems not to be in use, why it could be deleted.
 from typing import List
 
 from pyspark.sql.types import ArrayType, StructType
