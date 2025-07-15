@@ -298,11 +298,8 @@ class TestDataFrameTransformer:
     def _test_input_file_name(self, df: DataFrame, flat_df: bool = False) -> bool:
         assert "input_file_name" in df.columns
         paths: Generator[Path] = Path(self.data_path).glob('**/*.json')
-        local_file_prefix: str = "file:"
         for path in paths:
             df_count: int = df.where(df.input_file_name.like("%"+str(path).replace('\\', '/'))).count()
-            # if df_count == 0:
-            #     df_count = df.where(df.input_file_name == local_file_prefix+"/"+str(path).replace("\\", "/")).count()
             if flat_df:
                 with open(path, "rb") as f:
                     data = json.load(f)
