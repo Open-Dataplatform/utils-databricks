@@ -1,0 +1,44 @@
+<?xml version="1.0" ?>
+<data>
+	<data>
+		<item>
+			<A>0.942</A>
+			<B>0.421</B>
+			<C>33</C>
+			<D>3.366</D>
+			<E>milk</E>
+			<F>str_6</F>
+			<G>2023-01-02T00:00:00</G>
+			<H>
+				<id>ebc8d44d-f77a-4b95-a4e8-3781234823c1</id>
+				<value>1</value>
+			</H>
+		</item>
+		<item>
+			<A>-1.397</A>
+			<B>0.618</B>
+			<C>32</C>
+			<D>4.363</D>
+			<E>water</E>
+			<F>str_9</F>
+			<G>2023-01-03T00:00:00</G>
+			<H>
+				<id>e6254f19-ba12-46d9-af54-788f195a6f50</id>
+				<value>9</value>
+			</H>
+		</item>
+		<item>
+			<A>-0.43</A>
+			<B>0.553</B>
+			<C>56</C>
+			<D>2.005</D>
+			<E>oil</E>
+			<F>str_0</F>
+			<G>2023-01-04T00:00:00</G>
+			<H>
+				<id>ceeb8cea-0317-48d7-a6b5-d3c8aba0009c</id>
+				<value>7</value>
+			</H>
+		</item>
+	</data>
+</data>

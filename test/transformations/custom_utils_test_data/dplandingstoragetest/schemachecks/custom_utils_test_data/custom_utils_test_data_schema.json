@@ -1,0 +1,54 @@
+
+{
+    "id": "https://example.com/address.schema.json",
+    "schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "An address similar to http://microformats.org/wiki/h-card",
+    "type": "object",
+    "properties": {
+        "data": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                "A": {
+                "type": "number"
+                },
+                "B": {
+                "type": "number"
+                },
+                "C": {
+                "type": "integer"
+                },
+                "D": {
+                "type": "number"
+                },
+                "E": {
+                "type": "string"
+                },
+                "F": {
+                "type": "string"
+                },
+                "G": {
+                "type": "string",
+                "format": "date-time"
+                },
+                "H": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "value": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": ["id", "value"]
+                }
+            },
+            "required": [ "A", "B", "C", "D", "E", "F", "G", "H"]
+            }
+        }
+    },
+    "required": ["data"]
+}
