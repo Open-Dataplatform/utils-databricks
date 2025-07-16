@@ -2,19 +2,14 @@ import pytest
 from pathlib import Path
 
 from uuid import uuid4
-from databricks.sdk.runtime import dbutils
 from custom_utils import DataStorageManager
-from ..test_utils.filesystem import fs
-from ..test_utils.widgets import set_getAll
+from ..test_utils.dbutils_mocker import dbutils_mocker, dbutils
 class TestDataStorageManager:
     def setup_method(self, method: callable):
         print(f"Setting up {method}")
         self.storage_manager: DataStorageManager = DataStorageManager(logger=None)
-        self.dbutils: dbutils = dbutils
-        set_getAll(self.dbutils)
-        self.dbutils.fs.ls = lambda *args, **kwargs: fs().ls(*args, **kwargs)
-        
-        
+        self.dbutils: dbutils_mocker = dbutils
+
     def teardown_method(self, method: callable):
         print(f"Tearing down {method}")
         del self.storage_manager

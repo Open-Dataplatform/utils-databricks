@@ -606,10 +606,10 @@ class DataFrameTransformer:
 
             # Print flattened schema
             self.logger.log_dataframe_summary(df_flattened, "Flattened DataFrame", level="info")
-            #self.logger.log_block("Flattened DataFrame schema", [
-            #    f"Loaded JSON flattened schema: {schema_file_path}"
-            #], level="info")
-            #df_flattened.printSchema()
+            self.logger.log_block("Flattened DataFrame schema", [
+               f"Loaded JSON flattened schema: {schema_file_path}"
+            ], level="info")
+            df_flattened.printSchema()
 
             # Step 6: Log results
             self.logger.log_block("JSON Processing Results (DEBUG)", [
@@ -1081,6 +1081,8 @@ class DataFrameTransformer:
             data_file_path = self.config.source_data_folder_path
             source_filename = self.config.source_filename
             use_schema = self.config.use_schema
+            if self.config.use_schema:
+                assert self.validator.main_schema_name is not None, f"Schema not found. Please check if schema name is correctly defined."
             schema_file_path = str(Path(self.config.source_schema_folder_path)/self.validator.main_schema_name) \
                 if self.config.use_schema else None
 

@@ -1,17 +1,14 @@
 import pytest
-
 from typing import Any
-
-from databricks.sdk.runtime import dbutils
-from .test_utils.widgets import set_getAll
 from custom_utils.adf import get_parameter
+
+from .test_utils.dbutils_mocker import dbutils_mocker, dbutils
 
 class testadf:
     
     def setup_method(self, method: callable):
         print(f"Setting up {method}")
-        self.dbutils: dbutils = dbutils
-        set_getAll(self.dbutils)
+        self.dbutils: dbutils_mocker = dbutils
         self.param_name: str = "TestParam"
 
     def teardown_method(self, method: callable):
