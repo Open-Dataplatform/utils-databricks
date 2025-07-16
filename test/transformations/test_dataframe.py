@@ -269,9 +269,9 @@ class TestDataFrameTransformer:
 
         self.dbutils.widgets.text("unittest_data_path", str(self.data_path.parent.parent))
         
-        # Overwriting ls and head with local implementations, whos outputs are the same as dbutils, but customized to local environment.
-        self.dbutils.fs.ls = fs().ls
-        self.dbutils.fs.head = fs().head
+        # # Overwriting ls and head with local implementations, whos outputs are the same as dbutils, but customized to local environment.
+        # self.dbutils.fs.ls = fs().ls
+        # self.dbutils.fs.head = fs().head
         generate_files(self.data_path)
         self.config = Config(dbutils=self.dbutils)
         self.config.unpack(globals())
