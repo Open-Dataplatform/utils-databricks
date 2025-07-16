@@ -1,15 +1,13 @@
 import pytest
 from typing import Any
 
-# from databricks.sdk.runtime import dbutils
 from custom_utils import Config
-from ..test_utils.dbutils_mocker import dbutils
+from ..test_utils.dbutils_mocker import dbutils_mocker, dbutils
 
 class TestConfig:
     def setup_method(self, method: callable):
         print(f"Setting up {method}")
-        self.dbutils = dbutils
-        # set_getAll(self.dbutils)
+        self.dbutils: dbutils_mocker = dbutils
         self.dbutils.widgets.dropdown("FileType", "json", ["json", "xml", "xlsx"])
         self.dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest")
         self.dbutils.widgets.text("DestinationStorageAccount", "dpuniformstoragetest")

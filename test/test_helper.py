@@ -6,10 +6,7 @@ from custom_utils.helper import (
     get_adf_parameter
 )
 
-# from .test_utils.widgets import set_getAll
-
-# from databricks.sdk.runtime import dbutils
-from .test_utils.dbutils_mocker import dbutils
+from .test_utils.dbutils_mocker import dbutils_mocker, dbutils
 
 class Testhelper:
     def setUp(self):
@@ -31,7 +28,7 @@ class Testhelper:
             exit_notebook(message)
         
     def test_get_adf_parameter(self):
-        dbutil = dbutils
+        dbutil: dbutils_mocker = dbutils
         param_name: str = "existing_param"
         return_value = get_adf_parameter(dbutils=dbutil, param_name=param_name)
         assert return_value == ''

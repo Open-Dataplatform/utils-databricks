@@ -2,13 +2,10 @@ import pytest
 from typing import Any
 
 from custom_utils import Validator, Config
-# from databricks.sdk.runtime import dbutils
-# from ..test_utils.widgets import set_getAll
-from ..test_utils.dbutils_mocker import dbutils
+from ..test_utils.dbutils_mocker import dbutils_mocker, dbutils
 class TestValidator:
     def setup_method(self):
-        self.dbutils = dbutils
-        # set_getAll(dbutils)
+        self.dbutils: dbutils_mocker = dbutils
         self.validator: Validator = Validator(config=Config(dbutils=self.dbutils))
     
     def teardown_method(self):
