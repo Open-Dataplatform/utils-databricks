@@ -1,15 +1,24 @@
 import pytest
 from typing import Any
 
-from databricks.sdk.runtime import dbutils
+# from databricks.sdk.runtime import dbutils
 from custom_utils import Config
-from ..test_utils.widgets import set_getAll
+from ..test_utils.dbutils_mocker import dbutils
 
 class TestConfig:
     def setup_method(self, method: callable):
         print(f"Setting up {method}")
-        self.dbutils: dbutils = dbutils
-        set_getAll(self.dbutils)
+        self.dbutils = dbutils
+        # set_getAll(self.dbutils)
+        self.dbutils.widgets.dropdown("FileType", "json", ["json", "xml", "xlsx"])
+        self.dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest")
+        self.dbutils.widgets.text("DestinationStorageAccount", "dpuniformstoragetest")
+        self.dbutils.widgets.text("SourceContainer", "landing")
+        self.dbutils.widgets.text("SourceDatasetidentifier", "custom_utils_test_data")
+        self.dbutils.widgets.text("SourceFileName", "custom_utils_test_data*")
+        self.dbutils.widgets.text("KeyColumns", "A")
+        self.dbutils.widgets.text("DepthLevel", "8")
+        self.dbutils.widgets.text("SchemaFolderName", "schemachecks")
         self.debug: bool = False
         self.config = Config(dbutils=self.dbutils, debug=self.debug)
 
@@ -31,3 +40,14 @@ class TestConfig:
         initial_namespace = namespace.copy()
         self.config.unpack(namespace=namespace)
         assert initial_namespace != namespace
+
+    def test_widgets_and_parameter_initialisation(self):
+        assert self.config.file_type == self.dbutils.get("FileType")
+        assert self.config.source_environment == self.dbutils.get("SourceStorageAccount")
+        assert self.config.destination_environment == self.dbutils.get("DestinationStorageAccount")
+        assert self.config.source_container == self.dbutils.get("SourceContainer")
+        assert self.config.source_datasetidentifier == self.dbutils.get("SourceDatasetidentifier")
+        assert self.config.source_filename == self.dbutils.get("SourceFileName")
+        assert self.config.key_columns == self.dbutils.get("KeyColumns")
+        assert self.config.depth_level == self.dbutils.get("DepthLevel")
+        assert self.config.schema_folder_name == self.dbutils.get("SchemaFolderName")

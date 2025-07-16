@@ -2,7 +2,7 @@ import pytest
 
 from pathlib import Path
 from custom_utils import DataFrameTransformer, Config
-from databricks.sdk.runtime import dbutils
+# from databricks.sdk.runtime import dbutils
 from shutil import rmtree
 from pyspark.sql import DataFrame, Row, SparkSession
 from pyspark.sql.types import (
@@ -21,8 +21,9 @@ from typing import Any, Generator
 import json
 
 from ..test_utils.data_generation import generate_files
-from ..test_utils.filesystem import fs
-from ..test_utils.widgets import set_getAll
+from ..test_utils.dbutils_mocker import dbutils
+#from ..test_utils.filesystem import fs
+#from ..test_utils.widgets import set_getAll
 
 def equal_dataframes(df1: DataFrame, df2: DataFrame, order_by: str) -> bool:
     """Checks if two dataframes are equal
@@ -251,8 +252,8 @@ def get_flat_df() -> DataFrame:
 class TestDataFrameTransformer:
     def setup_method(self):
         
-        self.dbutils: dbutils = dbutils
-        set_getAll(self.dbutils)
+        self.dbutils = dbutils
+        # set_getAll(self.dbutils)
         self.dbutils.widgets.dropdown("FileType", "json", ["json", "xml", "xlsx"])
         self.dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest")
         self.dbutils.widgets.text("DestinationStorageAccount", "dpuniformstoragetest")
