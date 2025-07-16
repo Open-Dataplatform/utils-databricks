@@ -1081,6 +1081,8 @@ class DataFrameTransformer:
             data_file_path = self.config.source_data_folder_path
             source_filename = self.config.source_filename
             use_schema = self.config.use_schema
+            if self.config.use_schema:
+                assert self.validator.main_schema_name is not None, f"Schema not found. Please check if schema name is correctly defined."
             schema_file_path = str(Path(self.config.source_schema_folder_path)/self.validator.main_schema_name) \
                 if self.config.use_schema else None
 
