@@ -4,7 +4,6 @@ from pathlib import Path
 from custom_utils import DataFrameTransformer, Config
 from shutil import rmtree
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col
 from typing import Generator
 import json
 
