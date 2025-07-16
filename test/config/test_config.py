@@ -49,5 +49,5 @@ class TestConfig:
         assert self.config.source_datasetidentifier == self.dbutils.widgets.get("SourceDatasetidentifier")
         assert self.config.source_filename == self.dbutils.widgets.get("SourceFileName")
         assert self.config.key_columns == self.dbutils.widgets.get("KeyColumns")
-        assert self.config.depth_level == self.dbutils.widgets.get("DepthLevel")
+        assert str(self.config.depth_level) == self.dbutils.widgets.get("DepthLevel")
         assert self.config.schema_folder_name == self.dbutils.widgets.get("SchemaFolderName")
