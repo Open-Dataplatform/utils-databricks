@@ -42,12 +42,12 @@ class TestConfig:
         assert initial_namespace != namespace
 
     def test_widgets_and_parameter_initialisation(self):
-        assert self.config.file_type == self.dbutils.get("FileType")
-        assert self.config.source_environment == self.dbutils.get("SourceStorageAccount")
-        assert self.config.destination_environment == self.dbutils.get("DestinationStorageAccount")
-        assert self.config.source_container == self.dbutils.get("SourceContainer")
-        assert self.config.source_datasetidentifier == self.dbutils.get("SourceDatasetidentifier")
-        assert self.config.source_filename == self.dbutils.get("SourceFileName")
-        assert self.config.key_columns == self.dbutils.get("KeyColumns")
-        assert self.config.depth_level == self.dbutils.get("DepthLevel")
-        assert self.config.schema_folder_name == self.dbutils.get("SchemaFolderName")
+        assert self.config.file_type == self.dbutils.widgets.get("FileType")
+        assert self.config.source_environment == self.dbutils.widgets.get("SourceStorageAccount")
+        assert self.config.destination_environment == self.dbutils.widgets.get("DestinationStorageAccount")
+        assert self.config.source_container == self.dbutils.widgets.get("SourceContainer")
+        assert self.config.source_datasetidentifier == self.dbutils.widgets.get("SourceDatasetidentifier")
+        assert self.config.source_filename == self.dbutils.widgets.get("SourceFileName")
+        assert self.config.key_columns == self.dbutils.widgets.get("KeyColumns")
+        assert self.config.depth_level == self.dbutils.widgets.get("DepthLevel")
+        assert self.config.schema_folder_name == self.dbutils.widgets.get("SchemaFolderName")
