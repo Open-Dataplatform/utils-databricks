@@ -141,6 +141,3 @@ log.conf
 
 # Sample program
 samples/
-
-# Test data
-*test_data*
