@@ -10,7 +10,7 @@ from json import dumps, JSONEncoder
 from typing import Any
 from uuid import UUID
 from time import sleep
-from dicttoxml import dicttoxml
+#from dicttoxml import dicttoxml
 from xml.etree.ElementTree import ElementTree, fromstring, tostring
 import pandas as pd
 from xml.dom.minidom import parseString
@@ -36,18 +36,18 @@ def _to_xml(data: dict[str, Any] | list[Any] | Any, root: str = "data") -> str:
     Returns:
         str: xml formatted data str
     """
-    # xml = f'<{root}>'
-    # if isinstance(data, dict):
-    #     for key, value in data.items():
-    #         xml += _to_xml(value, key)
-    # elif isinstance(data, list):
-    #     for item in data:
-    #         xml += _to_xml(item, 'item')
-    # else:
-    #     xml += str(data)
-    # xml += f'</{root}>'
-    xml: str = dicttoxml({"data": data}, attr_type=False, custom_root=root)
-    return parseString(xml).toprettyxml() #xml_data.to_xml()#parseString(xml).toprettyxml()
+    xml = f'<{root}> \n'
+    if isinstance(data, dict):
+        for key, value in data.items():
+            xml += _to_xml(value, key)
+    elif isinstance(data, list):
+        for item in data:
+            xml += _to_xml(item, 'item')
+    else:
+        xml += f"{data} \n"
+    xml += f'</{root} \n>'
+    #xml: str = dicttoxml({"data": data}, attr_type=False, custom_root=root)
+    return xml #parseString(xml).toprettyxml() #xml_data.to_xml()#parseString(xml).toprettyxml()
 
 def _generate_data(n: int =100, seed: int = 42, include_date_time: bool = True, dec: int = 3) -> list[dict[str, Any]]:
     '''

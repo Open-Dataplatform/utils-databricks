@@ -15,9 +15,9 @@ from ..test_utils.dbutils_mocker import dbutils_mocker, dbutils
 class TestDataFrameTransformer:
     #@pytest.fixture(scope="function", autouse=True)
     def setup_method(self):
-        
+        format: str = "xml"
         self.dbutils: dbutils_mocker = dbutils
-        self.dbutils.widgets.dropdown("FileType", "json", ["json", "xml", "xlsx"])
+        self.dbutils.widgets.dropdown("FileType", "xml", ["json", "xml", "xlsx"])
         self.dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest")
         self.dbutils.widgets.text("DestinationStorageAccount", "dpuniformstoragetest")
         self.dbutils.widgets.text("SourceContainer", "landing")
@@ -44,7 +44,7 @@ class TestDataFrameTransformer:
         #yield
 
     def teardown_method(self):
-        rmtree(self.data_path.parent.parent)
+        #rmtree(self.data_path.parent.parent)
         del self.transformer
         del self.config
         del self.dbutils
@@ -53,7 +53,9 @@ class TestDataFrameTransformer:
   
     def test_process_and_flatten_data(self):
         depth_level: int = ''
+        print("hej hej hej hej")
         df_init, df_flat = self.transformer.process_and_flatten_data(depth_level=depth_level)
+        print("ses ses ses ses ses ses ses ses ses ses ses")
         df_init_static: DataFrame = get_init_df()
         df_flat_static: DataFrame = get_flat_df()
         
