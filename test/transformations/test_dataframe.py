@@ -12,8 +12,11 @@ from ..test_utils.data_generation import generate_files
 from ..test_utils.dbutils_mocker import dbutils_mocker, dbutils
 
 class TestDataFrameTransformer:
+    """Tests json data transformation
+    Note xml and xlsx data transformations are not tested as it is comlicated to do,
+    because JAVA version on PC is old and cannot be upgraded due to user restrictions.
+    """
     def setup_method(self):
-        
         self.dbutils: dbutils_mocker = dbutils
         self.dbutils.widgets.dropdown("FileType", "json", ["json", "xml", "xlsx"])
         self.dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest")
@@ -55,6 +58,15 @@ class TestDataFrameTransformer:
         assert self._test_input_file_name(df_flat, flat_df = True)
     
     def _test_input_file_name(self, df: DataFrame, flat_df: bool = False) -> bool:
+        """Tests if input file name is in dataframe.
+
+        Args:
+            df (DataFrame): Dataframe
+            flat_df (bool, optional): True if dataframe is flattened. Defaults to False.
+
+        Returns:
+            bool: True if input_file_name is correct.
+        """
         assert "input_file_name" in df.columns
         paths: Generator[Path] = Path(self.data_path).glob('**/*.json')
         for path in paths:

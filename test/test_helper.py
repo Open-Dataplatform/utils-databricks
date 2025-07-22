@@ -3,15 +3,13 @@ from unittest.mock import patch
 from custom_utils.helper import (
     write_message,
     exit_notebook,
-    get_adf_parameter
+    get_adf_parameter,
+    get_key_columns_list
 )
 
 from .test_utils.dbutils_mocker import dbutils_mocker, dbutils
 
 class Testhelper:
-    def setUp(self):
-        return super().setUp()
-    
     @patch("builtins.print")
     def test_write_message(self, mock_print):
         text_string: str = "Hello"
@@ -35,4 +33,12 @@ class Testhelper:
         
         with pytest.raises(Exception) as cm:
             return_value = get_adf_parameter(dbutils=dbutils)
-        
+            
+    def test_get_key_columns_list(self):
+        key_columns: str = "uuid, timestamp, area"
+        return_list: list[str] = get_key_columns_list(key_columns=key_columns)
+        assert return_list == ["uuid", "timestamp", "area"]
+        with pytest.raises(ValueError) as excinfo_valueerror:
+            raise_return = get_key_columns_list('')
+            assert excinfo_valueerror == "ERROR: No KeyColumns defined!"
+            assert raise_return is None
