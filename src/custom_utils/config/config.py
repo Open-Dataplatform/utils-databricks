@@ -97,7 +97,8 @@ class Config:
     def _initialize_widgets(self):
         """Dynamically creates widgets based on the selected file type."""
         # Create the FileType dropdown widget first
-        self.dbutils.widgets.dropdown("FileType", "json", ["json", "xlsx", "xml"], "File Type")
+        if not "FileType" in self.dbutils.widgets.getAll():
+            self.dbutils.widgets.dropdown("FileType", "json", ["json", "xlsx", "xml"], "File Type")
         self.file_type = get_param_value(self.dbutils, "FileType").lower()
         # Remove stale widgets after determining the current file type
         self._remove_widgets()
