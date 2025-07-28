@@ -632,6 +632,14 @@ class DataFrameTransformer:
             return None, None
 
     def _load_xml_files(self, resolved_file_paths: list[str], i:int, root_name: str, batch_size:int):
+        """Load XML files
+
+        Args:
+            resolved_file_paths (list[str]): resolved file paths.
+            i (int): Batch index.
+            root_name (str): root name of xml tree.
+            batch_size (int): batch size.
+        """
         batch_files = resolved_file_paths[i:i + batch_size]
         batch_number = (i // batch_size) + 1
         remaining_batches = self.total_batches - batch_number
@@ -680,8 +688,6 @@ class DataFrameTransformer:
 
         Args:
             matched_data_files (List[str]): List of matched XML file names.
-            schema_path (str): Path to the XML schema file.
-            matched_schema_files (List[dict]): List of matched schema files.
             root_name (str): Root name for the XML structure.
             depth_level (int, optional): Maximum depth level for flattening. Defaults to None.
             batch_size (int, optional): Number of files to process per batch. Defaults to 1000.
@@ -839,20 +845,12 @@ class DataFrameTransformer:
 
             # Print initial schema
             self.logger.log_dataframe_summary(df_initial, "Initial DataFrame", level="info")
-            #self.logger.log_block("Initial DataFrame schema (DEBUG)", [
-            #    f"Loaded XLSX initial schema for sheet: {sheet_name}"
-            #], level="info")
-            #df_initial.printSchema()
 
             # Step 5: Flatten XLSX DataFrame and apply type conversions
             df_flattened, filtered_conversions = self._flatten_xlsx_df(df_initial)
 
             # Print flattened schema
             self.logger.log_dataframe_summary(df_flattened, "Flattened DataFrame", level="info")
-            #self.logger.log_block("Flattened DataFrame schema (DEBUG)", [
-            #    f"Loaded XLSX flattened schema for sheet: {sheet_name}"
-            #], level="info")
-            #df_flattened.printSchema()
 
             # Step 6: Log results
             self.logger.log_block("XLSX Processing Results (DEBUG)", [
