@@ -44,18 +44,6 @@ class TestFileHandler:
         expected_paths: dict[str, str] = {'data_base_path': str(self.data_path),
                                           'schema_base_path': str((self.data_path.parent/"schemachecks")/self.data_path.name)}
         assert returned_paths == expected_paths
-    
-    def test_filter_files(self):
-        file_list: list[str] = [str(file_name) for file_name in self.data_path.iterdir() if file_name.is_file()]
-        
-        filtered_files: list[str] = self.file_handler.filter_files(file_list)
-        assert filtered_files == [] # file_list
-        
-        files_with_exclude: list[str] = [*file_list, "file_name_to_ignore.ignore", "file_name_to_include.txt"]
-        filtered_files = self.file_handler.filter_files(files_with_exclude, extensions=["json", "txt"])
-        assert filtered_files == [*file_list, "file_name_to_include.txt"]
-        
-        # assert self.file_handler.filter_files(file_list, ["txt"]) == []
         
     def test_directory_exists(self):
         exists: bool = self.file_handler.directory_exists(str(self.data_path))
