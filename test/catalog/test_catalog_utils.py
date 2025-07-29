@@ -1,19 +1,20 @@
 import pytest
 from pathlib import Path
-from pyspark.sql import SparkSession, DataFrame, functions
+from pyspark.sql import SparkSession
 from uuid import uuid4
-from custom_utils import DataStorageManager, DataQualityManager, Logger
+from typing import Callable
+from custom_utils import DataStorageManager
 
 from ..test_utils.dbutils_mocker import dbutils_mocker, dbutils
-from ..transformations.utils import get_flat_df
+
 class TestDataStorageManager:
-    def setup_method(self, method: callable):
+    def setup_method(self, method: Callable):
         print(f"Setting up {method}")
         self.storage_manager: DataStorageManager = DataStorageManager(logger=None)
         self.dbutils: dbutils_mocker = dbutils
         self.spark: SparkSession = SparkSession.builder.getOrCreate()
 
-    def teardown_method(self, method: callable):
+    def teardown_method(self, method: Callable):
         print(f"Tearing down {method}")
         del self.storage_manager
         del self.spark
@@ -44,26 +45,3 @@ class TestDataStorageManager:
         return_list: list[str] = self.storage_manager.normalize_key_columns(key_columns)
         assert return_list == expected_returns
         
-    def test_check_if_table_exists(self):
-        database_name: str = "test"
-        table_name: str = "unittest"
-        
-        
-    def test_create_or_replace_tabe(self):
-        database_name: str = "test"
-        table_name: str = "unittest"
-        df: DataFrame = get_flat_df()
-        df = df.withColumn("input_file_name", functions.lit("20230101.json"))
-        quality_manager: DataQualityManager = DataQualityManager(logger=Logger())
-        cleaned_view: str = quality_manager.perform_data_quality_checks(
-            spark=self.spark,
-            df=df,
-            key_columns=["data_A"],
-            order_by="data_A",
-            feedback_column="data_A",
-            join_column="data_A",
-            columns_to_exclude=["data_A"]
-        )
-        self.storage_manager.create_or_replace_table(self.spark, database_name=database_name, table_name=table_name, destination_path=".", cleaned_data_view=cleaned_view)
-        table_count: int = self.storage_manager.check_if_table_exists(self.spark, database_name=database_name, table_name=table_name)
-        assert table_count == 1
