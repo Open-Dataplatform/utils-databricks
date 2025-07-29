@@ -640,6 +640,7 @@ class DataFrameTransformer:
             root_name (str): root name of xml tree.
             batch_size (int): batch size.
         """
+        spark = SparkSession.builder.getOrCreate()
         batch_files = resolved_file_paths[i:i + batch_size]
         batch_number = (i // batch_size) + 1
         remaining_batches = self.total_batches - batch_number
@@ -664,7 +665,7 @@ class DataFrameTransformer:
                 )
 
             # Read XML batch
-            df_batch = self.spark.read.format("xml").options(rowTag=root_name).load(",".join(batch_files))
+            df_batch = spark.read.format("xml").options(rowTag=root_name).load(",".join(batch_files))
             df_batch = df_batch.withColumn("input_file_name", F.input_file_name())
             # Ensure batch data is valid before appending
             if df_batch is not None and df_batch.count() > 0:
@@ -703,7 +704,6 @@ class DataFrameTransformer:
             total_files = len(resolved_file_paths)
 
             # Initialize Spark session
-            self.spark = SparkSession.builder.getOrCreate()
             self.batch_results = []
             self.batch_times = []  # Store batch durations
             self.total_batches = (total_files // batch_size) + (1 if total_files % batch_size > 0 else 0)
@@ -968,9 +968,6 @@ class DataFrameTransformer:
 
         type_mapping = self._get_type_mapping()
         converted_columns = []
-
-        #def sanitize_column_name(col_name):
-        #    return col_name.replace(":", "_").replace(".", "_").replace("__", "_")
 
         def apply_type_mapping(column_name, data_type):
             """Applies type mapping to array/struct columns."""

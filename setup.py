@@ -1,5 +1,5 @@
 import setuptools
 
 setuptools.setup(
-    install_requires=['pyspark', 'python-dateutil', 'tqdm']
+    install_requires=['pyspark', 'python-dateutil']
 )
