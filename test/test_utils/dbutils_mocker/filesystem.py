@@ -49,7 +49,7 @@ class fs:
         if isinstance(init_path, str):
             path: Path = Path(init_path)
             if not path.exists():
-                raise Exception("java.io.FileNotFoundException")
+                raise FileNotFoundError("java.io.FileNotFoundException")
             elif path.is_file():
                 return [fs._path_to_fileinfo(path)]
             elif path.is_dir():

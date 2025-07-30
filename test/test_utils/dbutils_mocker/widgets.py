@@ -43,6 +43,9 @@ class Widgets:
         options = [str(option) for option in options]
         self._widgets[param] = Dropdown(param, str(value), options, label)
         
+    def remove(self, param: str):
+        del self._widgets[param]
+        
     def getAll(self) -> dict[str, str]:
         """Returns all widget names and values
 

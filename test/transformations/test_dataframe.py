@@ -41,7 +41,8 @@ class TestDataFrameTransformer:
     def teardown_method(self):
         del self.transformer
         rmtree(self.data_path.parent.parent)
-        
+        del self.dbutils
+        del self.data_path
         
     def test_process_and_flatten_data(self):
         depth_level: int = ''
