@@ -19,7 +19,7 @@ class TestDataStorageManager:
         del self.storage_manager
         del self.spark
         del self.dbutils
-    
+
     def test_ensure_path_exists(self):
         existing_filepath: Path = Path(str(__file__))
         existing_dirpath: Path = existing_filepath.parent
