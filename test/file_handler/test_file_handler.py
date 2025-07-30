@@ -60,4 +60,4 @@ class TestFileHandler:
             
     def test_normalize_path(self):
         normalized_path: str = self.file_handler.normalize_path(str(self.data_path))
-        assert normalized_path == f"/{str(self.data_path).lstrip("/")}"
+        assert normalized_path == f"/{str(self.data_path).lstrip('/')}"
