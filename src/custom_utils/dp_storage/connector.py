@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 def _get_environment(dbutils) -> str:
     """If executed from ADF, it reads the environment parameter."""
+    env:str = ""
     if is_executed_by_adf(dbutils):
         env = dbutils.widgets.get('environment')
         assert (env == 'prod') or (env == 'test'), f"The environment parameter in ADF should be either 'test' or 'prod'. It was {env = }."

@@ -1,15 +1,15 @@
 import pytest
-from custom_utils.file_handler.file_handler import FileHandler
-from ..test_utils.dbutils_mocker import dbutils_mocker, dbutils
-from custom_utils import Config
-from ..test_utils.data_generation import generate_files
+from shutil import rmtree
 from datetime import datetime
+from pathlib import Path
+from custom_utils import Config
+from custom_utils.file_handler.file_handler import FileHandler
+
+from ..test_utils.dbutils_mocker import dbutils_mocker, dbutils
+from ..test_utils.data_generation import generate_files
 
 class TestFileHandler:
-    def setup_method(self, method: callable):
-        print(f"Setting up {method}")
-        
-        # Assuming Config is a class that needs to be instantiated for FileHandler
+    def setup_method(self):
         self.dbutils: dbutils_mocker = dbutils
         self.dbutils.widgets.dropdown("FileType", "json", ["json", "xml", "xlsx"])
         self.dbutils.widgets.text("SourceStorageAccount", "dplandingstoragetest")
@@ -30,11 +30,21 @@ class TestFileHandler:
         self.config = Config(dbutils=self.dbutils)
         self.config.unpack(globals())
         self.file_handler: FileHandler = FileHandler(config=self.config)
-
-    def teardown_method(self, method: callable):
-        print(f"Tearing down {method}")
+        
+    def teardown_method(self):
+        rmtree(self.data_path.parent.parent)
+        del self.config
         del self.file_handler
-
+        del self.dbutils
+        del self.data_path
+        
+    def test_manage_paths(self):
+        returned_paths: dict[str, str] = self.file_handler.manage_paths()
+        
+        expected_paths: dict[str, str] = {'data_base_path': str(self.data_path),
+                                          'schema_base_path': str((self.data_path.parent/"schemachecks")/self.data_path.name)}
+        assert returned_paths == expected_paths
+        
     def test_directory_exists(self):
         exists: bool = self.file_handler.directory_exists(str(self.data_path))
         assert exists == True
@@ -47,3 +57,7 @@ class TestFileHandler:
         with pytest.raises(Exception) as except_info:
             error: bool = self.file_handler.directory_exists(None)
             assert error == False
+            
+    def test_normalize_path(self):
+        normalized_path: str = self.file_handler.normalize_path(str(self.data_path))
+        assert normalized_path == f"/{str(self.data_path)}"
